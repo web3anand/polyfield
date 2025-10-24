@@ -1,36 +1,13 @@
-import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { PnLDataPoint } from "@shared/schema";
 
 interface PnLChartProps {
   data: PnLDataPoint[];
 }
 
-type TimeRange = "24H" | "7D" | "30D" | "ALL";
-
 export function PnLChart({ data }: PnLChartProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>("7D");
-
-  const filterDataByTimeRange = (range: TimeRange) => {
-    const now = Date.now();
-    const ranges = {
-      "24H": 24 * 60 * 60 * 1000,
-      "7D": 7 * 24 * 60 * 60 * 1000,
-      "30D": 30 * 24 * 60 * 60 * 1000,
-      "ALL": Infinity,
-    };
-    
-    return data.filter(point => {
-      const pointTime = new Date(point.timestamp).getTime();
-      return now - pointTime <= ranges[range];
-    });
-  };
-
-  const filteredData = filterDataByTimeRange(timeRange);
-  
-  const chartData = filteredData.map(point => ({
+  const chartData = data.map(point => ({
     date: new Date(point.timestamp).toLocaleDateString(undefined, { 
       month: 'short', 
       day: 'numeric' 
@@ -38,32 +15,21 @@ export function PnLChart({ data }: PnLChartProps) {
     value: point.value,
   }));
 
-  const isPositive = chartData.length > 0 && chartData[chartData.length - 1].value >= (chartData[0]?.value || 0);
+  const currentPnL = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
+  const isPositive = currentPnL >= 0;
 
   return (
     <Card className="p-6 hover-elevate">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">PnL Over Time</h2>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">Track your profit and loss</p>
-        </div>
-        <div className="flex gap-2">
-          {(["24H", "7D", "30D", "ALL"] as TimeRange[]).map((range) => (
-            <Button
-              key={range}
-              data-testid={`button-timerange-${range.toLowerCase()}`}
-              variant={timeRange === range ? "default" : "outline"}
-              size="sm"
-              onClick={() => setTimeRange(range)}
-              className="min-w-[60px]"
-            >
-              {range}
-            </Button>
-          ))}
+          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">All-Time PnL</p>
+          <p className={`text-3xl font-bold tabular-nums ${isPositive ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-chart-pnl">
+            {isPositive ? '+' : ''}${currentPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
         </div>
       </div>
 
-      <div className="h-[300px]" data-testid="chart-pnl">
+      <div className="h-[280px]" data-testid="chart-pnl">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
