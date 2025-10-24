@@ -12,6 +12,7 @@ import { UsernameInput } from "@/components/username-input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { Navbar } from "@/components/navbar";
 
 export default function Dashboard() {
   const [connectedUsername, setConnectedUsername] = useState("");
@@ -21,6 +22,10 @@ export default function Dashboard() {
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard/username", connectedUsername],
     enabled: !!connectedUsername,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const handleConnect = (username: string) => {
@@ -32,7 +37,7 @@ export default function Dashboard() {
   };
 
   const handleCopyAddress = async () => {
-    if (data?.profile.walletAddress) {
+    if (data?.profile?.walletAddress) {
       await navigator.clipboard.writeText(data.profile.walletAddress);
       setCopiedAddress(true);
       toast({
@@ -45,25 +50,33 @@ export default function Dashboard() {
 
   // Calculate total open positions value
   const getOpenPositionsValue = () => {
-    if (!data) return 0;
+    if (!data?.positions) return 0;
     return data.positions
-      .filter(p => p.status === "ACTIVE")
-      .reduce((total, pos) => total + (pos.size * pos.currentPrice), 0);
+      .filter((p: any) => p.status === "ACTIVE")
+      .reduce((total: number, pos: any) => total + (pos.size * pos.currentPrice), 0);
   };
 
   if (!connectedUsername) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
+        {/* Navbar */}
+        <Navbar />
+        
         {/* Hero Section */}
         <div className="flex-1 flex items-center justify-center px-4 py-12">
           <div className="w-full max-w-4xl space-y-12">
-            <div className="text-center space-y-4">
-              <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground">
-                POLYMARKET
+            {/* POLYFIELD Branding */}
+            <div className="text-center space-y-8">
+              <h1 className="text-6xl md:text-8xl font-black tracking-tight">
+                <span className="text-green-400 drop-shadow-lg">POLY</span>
+                <span className="italic font-light text-gray-300 ml-2">FIELD</span>
               </h1>
-              <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">
-                Real-time Tracking  •  Position Analytics
-              </p>
+              
+              <div className="text-center space-y-4">
+                <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">
+                  Real-time Tracking  •  Position Analytics
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-center">
@@ -111,17 +124,27 @@ export default function Dashboard() {
   }
 
   if (error) {
+    const isTimeout = error.message?.includes('timeout') || error.message?.includes('Request timeout');
+    const isUserNotFound = error.message?.includes('USER_NOT_FOUND') || error.message?.includes('User Not Found');
+    
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-6">
             <Card className="w-full max-w-lg p-6 text-center space-y-4 hover-elevate">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-destructive/10 mb-2">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-destructive/10 mb-2">
                 <Target className="w-8 h-8 text-destructive" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground">User Not Found</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                {isTimeout ? 'Request Timeout' : isUserNotFound ? 'User Not Found' : 'Error Loading Dashboard'}
+              </h2>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                Unable to find a Polymarket user with this username. Please check the username and try again.
+                {isTimeout 
+                  ? 'The dashboard is taking too long to load. This might be due to a large amount of data. Please try again.'
+                  : isUserNotFound
+                  ? 'Unable to find a Polymarket user with this username. Please check the username and try again.'
+                  : 'Something went wrong while loading the dashboard. Please try again later.'
+                }
               </p>
               <Button onClick={handleDisconnect} variant="outline" data-testid="button-disconnect">
                 Try Different Username
@@ -141,22 +164,25 @@ export default function Dashboard() {
     return null;
   }
 
+  // Type guard to ensure data has the expected structure
+  if (!data.profile || !data.stats || !data.pnlHistory || !data.positions || !data.recentTrades) {
+    return null;
+  }
+
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
   const openPositionsValue = getOpenPositionsValue();
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Navbar */}
+      <Navbar />
+      
       {/* Header with Search Bar */}
       <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center gap-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold tracking-tight text-foreground">
-                POLYMARKET
-              </h2>
-              <span className="text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary">
-                BETA
-              </span>
+              {/* POLYFEILD BETA moved to navbar */}
             </div>
             <div className="flex-1 max-w-md mx-4">
               <UsernameInput onSubmit={handleConnect} compact />
@@ -181,17 +207,17 @@ export default function Dashboard() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-foreground" data-testid="text-username">
-                  @{profile.username}
+                <h3 className="text-2xl font-black text-foreground tracking-tight" data-testid="text-username">
+                  {profile.username}
                 </h3>
                 {profile.walletAddress && (
                   <div className="flex items-center gap-2 mt-1">
-                    <code className="text-xs text-muted-foreground font-mono" data-testid="text-wallet-address">
+                    <code className="text-sm text-muted-foreground font-mono tracking-wider" data-testid="text-wallet-address">
                       {profile.walletAddress.slice(0, 6)}...{profile.walletAddress.slice(-4)}
                     </code>
                     <button
                       onClick={handleCopyAddress}
-                      className="hover-elevate p-1 rounded transition-all"
+                      className="hover-elevate p-1 transition-all"
                       data-testid="button-copy-address"
                       aria-label="Copy wallet address"
                     >
@@ -266,7 +292,7 @@ export default function Dashboard() {
           </div>
 
           {/* Active Positions */}
-          <PositionsTable positions={positions.filter(p => p.status === "ACTIVE")} />
+          <PositionsTable positions={positions.filter((p: any) => p.status === "ACTIVE")} />
 
           {/* Recent Activity */}
           <RecentActivity trades={recentTrades} />

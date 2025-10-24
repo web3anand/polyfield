@@ -27,7 +27,7 @@ export function PnLChart({ data }: PnLChartProps) {
   const isPositive = currentPnL >= 0;
 
   return (
-    <Card className="p-6 hover-elevate">
+    <Card className="p-6">
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">All-Time PnL</p>
@@ -37,7 +37,7 @@ export function PnLChart({ data }: PnLChartProps) {
         </div>
       </div>
 
-      <div className="h-[280px]" data-testid="chart-pnl">
+      <div className="h-[270px]" data-testid="chart-pnl">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>

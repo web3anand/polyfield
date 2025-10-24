@@ -18,8 +18,8 @@ export function DashboardSkeleton({ username, onDisconnect }: DashboardSkeletonP
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block">
                 <Skeleton className="h-3 w-24 mb-2" />
-                <p className="text-sm font-medium text-foreground">
-                  @{username}
+                <p className="text-2xl font-black text-foreground tracking-tight">
+                  {username}
                 </p>
               </div>
               <Button onClick={onDisconnect} variant="outline" size="sm">
@@ -49,7 +49,7 @@ export function DashboardSkeleton({ username, onDisconnect }: DashboardSkeletonP
           <Skeleton className="h-4 w-48 mb-4" />
           <div className="flex gap-4">
             {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="w-16 h-16 rounded-2xl" />
+              <Skeleton key={i} className="w-16 h-16" />
             ))}
           </div>
         </Card>

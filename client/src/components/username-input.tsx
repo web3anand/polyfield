@@ -82,9 +82,9 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => username.length >= 2 && setShowSuggestions(true)}
-              className={`h-9 text-sm pr-8 transition-all duration-200 ${
+              className={`h-10 text-sm pr-8 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
                 showSuggestions && (suggestions.length > 0 || (username.length >= 2 && !loadingSuggestions && suggestions.length === 0))
-                  ? 'rounded-b-none border-b-0'
+                  ? 'border-b-0'
                   : ''
               }`}
             />
@@ -98,54 +98,54 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                 <Search className="w-4 h-4 text-muted-foreground" />
               </div>
             )}
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50">
+                <div
+                  ref={suggestionsRef}
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                >
+                  <div className="p-1.5 space-y-0.5 max-h-60 overflow-y-auto scrollbar-hidden">
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        data-testid={`suggestion-${index}`}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className="w-full text-left px-2.5 py-1.5  hover-elevate transition-all duration-150 text-sm text-foreground"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showSuggestions && username.length >= 2 && !loadingSuggestions && suggestions.length === 0 && (
+              <div className="absolute top-full left-0 right-0 z-50">
+                <div
+                  ref={suggestionsRef}
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                >
+                  <div className="p-3">
+                    <p className="text-xs text-muted-foreground text-center">
+                      No users found
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <Button
             data-testid="button-connect"
             onClick={handleSubmit}
             disabled={!username.trim()}
             size="sm"
-            className="px-4"
+            className="px-4 h-10 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
           >
             Search
           </Button>
         </div>
-
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="relative flex gap-2 mt-0">
-            <div
-              ref={suggestionsRef}
-              className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200 absolute top-0 left-0 right-[4.5rem] z-50"
-            >
-              <div className="p-1.5 space-y-0.5 max-h-60 overflow-y-auto scrollbar-hidden">
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    data-testid={`suggestion-${index}`}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="w-full text-left px-2.5 py-1.5 rounded-md hover-elevate transition-all duration-150 text-sm text-foreground"
-                  >
-                    @{suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showSuggestions && username.length >= 2 && !loadingSuggestions && suggestions.length === 0 && (
-          <div className="relative flex gap-2 mt-0">
-            <div
-              ref={suggestionsRef}
-              className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200 absolute top-0 left-0 right-[4.5rem] z-50"
-            >
-              <div className="p-3">
-                <p className="text-xs text-muted-foreground text-center">
-                  No users found
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -164,9 +164,9 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => username.length >= 2 && setShowSuggestions(true)}
-              className={`h-14 text-base pr-10 transition-all duration-200 ${
+              className={`h-14 text-base pr-10 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
                 showSuggestions && (suggestions.length > 0 || (username.length >= 2 && !loadingSuggestions && suggestions.length === 0))
-                  ? 'rounded-b-none border-b-0'
+                  ? 'border-b-0'
                   : ''
               }`}
             />
@@ -180,56 +180,54 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                 <Search className="w-5 h-5 text-muted-foreground" />
               </div>
             )}
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50">
+                <div
+                  ref={suggestionsRef}
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                >
+                  <div className="p-2 space-y-1 max-h-60 overflow-y-auto scrollbar-hidden">
+                    {suggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        data-testid={`suggestion-${index}`}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className="w-full text-left px-3 py-2  hover-elevate transition-all duration-150 text-sm text-foreground"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showSuggestions && username.length >= 2 && !loadingSuggestions && suggestions.length === 0 && (
+              <div className="absolute top-full left-0 right-0 z-50">
+                <div
+                  ref={suggestionsRef}
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                >
+                  <div className="p-4">
+                    <p className="text-sm text-muted-foreground text-center">
+                      No users found. Try a different username.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <Button
             data-testid="button-connect"
             onClick={handleSubmit}
             disabled={!username.trim()}
             size="lg"
-            className="px-8"
+            className="px-8 h-14 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
           >
             Search
           </Button>
         </div>
-
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="relative flex gap-3">
-            <div
-              ref={suggestionsRef}
-              className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200"
-            >
-              <div className="p-2 space-y-1 max-h-60 overflow-y-auto scrollbar-hidden">
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    data-testid={`suggestion-${index}`}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="w-full text-left px-3 py-2 rounded-md hover-elevate transition-all duration-150 text-sm text-foreground"
-                  >
-                    @{suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="w-[6rem]"></div>
-          </div>
-        )}
-
-        {showSuggestions && username.length >= 2 && !loadingSuggestions && suggestions.length === 0 && (
-          <div className="relative flex gap-3">
-            <div
-              ref={suggestionsRef}
-              className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200"
-            >
-              <div className="p-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  No users found. Try a different username.
-                </p>
-              </div>
-            </div>
-            <div className="w-[6rem]"></div>
-          </div>
-        )}
       </div>
       <p className="text-xs text-muted-foreground text-center">
         Start typing to see suggestions

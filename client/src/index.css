@@ -80,7 +80,7 @@
   --font-serif: 'Inter', sans-serif;
   --font-mono: Menlo, monospace;
 
-  --radius: 0.4rem;
+  --radius: 0rem;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00);
@@ -125,61 +125,61 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 0 0% 2%;
+  --background: 0 0% 0%;
 
   --foreground: 0 0% 95%;
 
-  --border: 0 0% 12%;
+  --border: 0 0% 8%;
 
-  --card: 0 0% 6%;
+  --card: 0 0% 2%;
 
   --card-foreground: 0 0% 95%;
 
-  --card-border: 0 0% 10%;
+  --card-border: 0 0% 6%;
 
-  --sidebar: 20 14% 8%;
+  --sidebar: 0 0% 4%;
 
-  --sidebar-foreground: 45 25% 85%;
+  --sidebar-foreground: 0 0% 85%;
 
-  --sidebar-border: 20 14% 15%;
+  --sidebar-border: 0 0% 8%;
 
   --sidebar-primary: 9 75% 61%;
 
   --sidebar-primary-foreground: 0 0% 100%;
 
-  --sidebar-accent: 25 45% 20%;
+  --sidebar-accent: 0 0% 8%;
 
-  --sidebar-accent-foreground: 45 25% 85%;
+  --sidebar-accent-foreground: 0 0% 85%;
 
   --sidebar-ring: 9 75% 61%;
 
-  --popover: 20 14% 4%;
+  --popover: 0 0% 2%;
 
-  --popover-foreground: 45 25% 91%;
+  --popover-foreground: 0 0% 91%;
 
-  --popover-border: 20 14% 8%;
+  --popover-border: 0 0% 6%;
 
   --primary: 142 76% 36%;
 
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 20%;
+  --secondary: 0 0% 8%;
 
   --secondary-foreground: 0 0% 95%;
 
-  --muted: 0 0% 15%;
+  --muted: 0 0% 6%;
 
   --muted-foreground: 0 0% 60%;
 
-  --accent: 25 45% 20%;
+  --accent: 0 0% 8%;
 
-  --accent-foreground: 45 25% 85%;
+  --accent-foreground: 0 0% 85%;
 
   --destructive: 356.3033 90.5579% 54.3137%;
 
   --destructive-foreground: 0 0% 100%;
 
-  --input: 20 14% 18%;
+  --input: 0 0% 6%;
   --ring: 9 75% 61%;
 
   --chart-1: 203.8863 88.2845% 53.1373%;
@@ -251,9 +251,6 @@
     display: none;
   }
 
-  .no-default-hover-elevate {}
-
-  .no-default-active-elevate {}
 
   .toggle-elevate::before,
   .toggle-elevate-2::before {
@@ -261,7 +258,7 @@
     pointer-events: none;
     position: absolute;
     inset: 0px;
-    border-radius: inherit;
+    border-radius: 0;
     z-index: -1;
   }
 
@@ -289,7 +286,7 @@
     pointer-events: none;
     position: absolute;
     inset: 0px;
-    border-radius: inherit;
+    border-radius: 0;
     z-index: 999;
   }
 
@@ -309,5 +306,65 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+
+
+  /* Custom styled outcome badges - base styles for YES/NO/UP/DOWN only */
+  .outcome-badge-dotted {
+    border-style: solid !important;
+    border-width: 2px !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    padding: 6px 12px !important;
+    border-radius: 0px !important;
+    min-width: 50px !important;
+    width: 50px !important; /* Fixed width for all badges */
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: nowrap !important; /* Prevent text wrapping */
+  }
+  
+  /* Classic text styling for other outcomes (not YES/NO/UP/DOWN) */
+  .outcome-badge-dotted:not([data-outcome="YES"]):not([data-outcome="Yes"]):not([data-outcome="yes"]):not([data-outcome="NO"]):not([data-outcome="No"]):not([data-outcome="no"]):not([data-outcome="UP"]):not([data-outcome="Up"]):not([data-outcome="up"]):not([data-outcome="DOWN"]):not([data-outcome="Down"]):not([data-outcome="down"]) {
+    background-color: transparent !important;
+    border: none !important;
+    color: #6b7280 !important; /* Muted gray text */
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    font-size: 12px !important;
+    letter-spacing: 0.5px !important;
+    padding: 0 !important;
+    min-width: auto !important;
+    width: auto !important;
+    height: auto !important;
+    display: inline !important;
+  }
+  
+  /* Green background for UP and YES */
+  .outcome-badge-dotted[data-outcome="YES"],
+  .outcome-badge-dotted[data-outcome="Yes"],
+  .outcome-badge-dotted[data-outcome="yes"],
+  .outcome-badge-dotted[data-outcome="UP"],
+  .outcome-badge-dotted[data-outcome="Up"],
+  .outcome-badge-dotted[data-outcome="up"] {
+    background-color: #22c55e !important; /* Green */
+    border-color: #22c55e !important;
+    color: white !important; /* White text on green */
+  }
+  
+  /* Red background for NO and DOWN */
+  .outcome-badge-dotted[data-outcome="NO"],
+  .outcome-badge-dotted[data-outcome="No"],
+  .outcome-badge-dotted[data-outcome="no"],
+  .outcome-badge-dotted[data-outcome="DOWN"],
+  .outcome-badge-dotted[data-outcome="Down"],
+  .outcome-badge-dotted[data-outcome="down"] {
+    background-color: #ef4444 !important; /* Red */
+    border-color: #ef4444 !important;
+    color: white !important; /* White text on red */
   }
 }

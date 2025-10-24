@@ -23,7 +23,7 @@ export function VolumeMetrics({ totalVolume, trades }: VolumeMetricsProps) {
   ];
 
   return (
-    <Card className="p-6 hover-elevate">
+    <Card className="p-6">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-foreground">Trading Volume</h2>
         <p className="text-xs text-muted-foreground uppercase tracking-wide">Volume breakdown by position type</p>
