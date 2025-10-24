@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Wallet, TrendingUp, Target, Flame, Trophy, Clock } from "lucide-react";
 import type { DashboardData } from "@shared/schema";
 import { StatCard } from "@/components/stat-card";
-import { AchievementBanner } from "@/components/achievement-banner";
 import { PnLChart } from "@/components/pnl-chart";
 import { PositionsTable } from "@/components/positions-table";
 import { VolumeMetrics } from "@/components/volume-metrics";
@@ -82,7 +81,7 @@ export default function Dashboard() {
     return null;
   }
 
-  const { stats, pnlHistory, positions, recentTrades, achievements } = data;
+  const { stats, pnlHistory, positions, recentTrades } = data;
 
   return (
     <div className="min-h-screen bg-background">
@@ -139,9 +138,6 @@ export default function Dashboard() {
               </p>
             </Card>
         </div>
-
-        {/* Achievement Banner */}
-        <AchievementBanner achievements={achievements} />
 
         {/* PnL Chart + Quick Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
