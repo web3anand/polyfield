@@ -80,7 +80,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                 key={option}
                 onClick={() => setSortBy(option)}
                 data-testid={`option-sort-${option}`}
-                className={sortBy === option ? "bg-accent" : ""}
+                className={sortBy === option ? "bg-primary/10 text-primary font-medium" : ""}
               >
                 {sortLabels[option]}
               </DropdownMenuItem>
