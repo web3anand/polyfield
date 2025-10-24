@@ -462,92 +462,76 @@ function calculateStats(
   };
 }
 
-// Generate PnL history from trades using true FIFO matching
-function generatePnLHistory(positions: Position[], trades: Trade[]): PnLDataPoint[] {
-  if (trades.length === 0) {
+// Generate PnL history from activity ledger (authoritative cash balance tracking)
+function generatePnLHistory(activity: any[]): PnLDataPoint[] {
+  if (activity.length === 0) {
     return [{
       timestamp: new Date().toISOString(),
       value: 0,
     }];
   }
 
-  // Sort all trades by timestamp for chronological processing
-  const sortedTrades = [...trades].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  // Sort activity by timestamp
+  const sortedActivity = [...activity].sort((a, b) => {
+    const timeA = new Date(a.timestamp > 1e12 ? a.timestamp : a.timestamp * 1000).getTime();
+    const timeB = new Date(b.timestamp > 1e12 ? b.timestamp : b.timestamp * 1000).getTime();
+    return timeA - timeB;
+  });
 
-  // Track FIFO queue of buy lots per market
-  // Each lot: { price: number, remainingSize: number }
-  const fifoBuyLots: Record<string, Array<{ price: number; remainingSize: number }>> = {};
-
-  // Calculate PnL for each trade chronologically
-  const tradeWithPnL: Array<{ timestamp: string; pnl: number }> = [];
-
-  for (const trade of sortedTrades) {
-    const key = `${trade.marketName}_${trade.outcome}`;
-    
-    if (!fifoBuyLots[key]) {
-      fifoBuyLots[key] = [];
-    }
-
-    let tradePnL = 0;
-
-    if (trade.type === "BUY") {
-      // Add new buy lot to FIFO queue
-      fifoBuyLots[key].push({
-        price: trade.price,
-        remainingSize: trade.size,
-      });
-    } else {
-      // SELL: Match against oldest buy lots (FIFO)
-      let remainingSellSize = trade.size;
-      
-      while (remainingSellSize > 0 && fifoBuyLots[key].length > 0) {
-        const oldestLot = fifoBuyLots[key][0];
-        const matchSize = Math.min(remainingSellSize, oldestLot.remainingSize);
-        
-        // Calculate realized PnL for this match
-        tradePnL += (trade.price - oldestLot.price) * matchSize;
-        
-        // Update lot and remove if fully consumed
-        oldestLot.remainingSize -= matchSize;
-        if (oldestLot.remainingSize <= 0) {
-          fifoBuyLots[key].shift(); // Remove first element (FIFO)
-        }
-        
-        remainingSellSize -= matchSize;
-      }
-      
-      // Log warning if unmatched sell (shouldn't happen in normal Polymarket flow)
-      if (remainingSellSize > 0) {
-        console.log(`⚠️ Warning: Unmatched sell of ${remainingSellSize} shares for ${trade.marketName} (${trade.outcome})`);
-      }
-    }
-
-    tradeWithPnL.push({
-      timestamp: trade.timestamp,
-      pnl: tradePnL,
-    });
-  }
-
-  // Build cumulative PnL history
+  // Track running cash balance and net deposits over time
+  let cashBalance = 0;
+  let deposits = 0;
+  let withdrawals = 0;
   const history: PnLDataPoint[] = [];
-  let cumulativePnL = 0;
 
-  for (const point of tradeWithPnL) {
-    cumulativePnL += point.pnl;
+  for (const event of sortedActivity) {
+    const type = event.type?.toUpperCase();
+    const usdcSize = parseFloat(event.usdcSize || "0");
+    const side = event.side?.toUpperCase();
+
+    // Track deposits and withdrawals
+    if (type === "DEPOSIT" || (type === "CONVERSION" && usdcSize > 0)) {
+      deposits += Math.abs(usdcSize);
+      cashBalance += Math.abs(usdcSize);
+    } else if (type === "WITHDRAW") {
+      withdrawals += Math.abs(usdcSize);
+      cashBalance -= Math.abs(usdcSize);
+    }
+    // Track trades (BUY spends cash, SELL adds cash)
+    else if (type === "TRADE") {
+      if (side === "BUY") {
+        cashBalance -= usdcSize;
+      } else if (side === "SELL") {
+        cashBalance += usdcSize;
+      }
+    }
+    // Track redeems and rewards (add cash)
+    else if (type === "REDEEM" || type === "REWARD" || type === "CLAIM") {
+      cashBalance += usdcSize;
+    }
+    // Track fees (subtract from cash)
+    else if (type === "FEE") {
+      cashBalance -= Math.abs(usdcSize);
+    }
+
+    // Add data point (showing realized PnL = cash balance - net deposits)
+    const netDeposits = deposits - withdrawals;
+    const realizedPnL = cashBalance - netDeposits;
+    
+    const timestamp = new Date(event.timestamp > 1e12 ? event.timestamp : event.timestamp * 1000).toISOString();
+    
     history.push({
-      timestamp: point.timestamp,
-      value: parseFloat(cumulativePnL.toFixed(2)),
+      timestamp,
+      value: parseFloat(realizedPnL.toFixed(2)),
     });
   }
 
-  // Add unrealized PnL from open positions
-  const unrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
-  if (history.length > 0 && unrealizedPnL !== 0) {
+  // Add current point if we have history
+  if (history.length > 0) {
+    const lastValue = history[history.length - 1].value;
     history.push({
       timestamp: new Date().toISOString(),
-      value: parseFloat((cumulativePnL + unrealizedPnL).toFixed(2)),
+      value: lastValue,
     });
   }
 
@@ -881,7 +865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const stats = calculateStats(positions, trades, activity);
-      const pnlHistory = generatePnLHistory(positions, trades);
+      const pnlHistory = generatePnLHistory(activity);
       const achievements = calculateAchievements(stats, trades);
 
       const dashboardData: DashboardData = {
