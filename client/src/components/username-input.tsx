@@ -19,6 +19,11 @@ export function UsernameInput({ onSubmit }: UsernameInputProps) {
     queryKey: ["/api/users/search", username],
     enabled: username.length >= 2 && showSuggestions,
     staleTime: 30000,
+    queryFn: async () => {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(username)}`);
+      if (!res.ok) throw new Error('Failed to fetch suggestions');
+      return res.json();
+    },
   });
 
   useEffect(() => {
