@@ -2,13 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
 import { z } from "zod";
-import type { 
-  DashboardData, 
-  Position, 
-  Trade, 
-  Achievement, 
-  PnLDataPoint, 
-  PortfolioStats 
+import type {
+  DashboardData,
+  Position,
+  Trade,
+  Achievement,
+  PnLDataPoint,
+  PortfolioStats,
 } from "@shared/schema";
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
@@ -17,48 +17,132 @@ const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 // Helper to search for a user by username and get their wallet address
 async function findUserByUsername(username: string): Promise<string> {
   try {
-    // Use Polymarket public search API
+    console.log(`Searching for user: ${username}`);
+
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-      params: { 
+      params: {
         q: username,
       },
       timeout: 5000,
     });
 
-    console.log(`API response for ${username}:`, JSON.stringify(response.data, null, 2));
+    // Log the full response structure for debugging
+    console.log("API Response status:", response.status);
+    console.log("API Response data keys:", Object.keys(response.data || {}));
 
-    // Check if profiles were returned
-    if (response.data && response.data.profiles && Array.isArray(response.data.profiles)) {
-      console.log(`Found ${response.data.profiles.length} profiles`);
-      
-      // Search for exact username match (case-insensitive)
-      for (const profile of response.data.profiles) {
-        console.log(`Profile: name=${profile.name}, proxyWallet=${profile.proxyWallet}`);
-        if (profile.name && profile.name.toLowerCase() === username.toLowerCase()) {
-          const address = profile.proxyWallet;
-          if (address) {
-            console.log(`Found exact match with wallet: ${address}`);
-            return address;
+    // Try multiple possible response structures
+    let profiles: any[] = [];
+
+    // Check different possible response structures
+    if (Array.isArray(response.data)) {
+      // Response is directly an array
+      profiles = response.data;
+      console.log("Profiles found in root array, count:", profiles.length);
+    } else if (
+      response.data?.profiles &&
+      Array.isArray(response.data.profiles)
+    ) {
+      // Response has profiles array
+      profiles = response.data.profiles;
+      console.log("Profiles found in data.profiles, count:", profiles.length);
+    } else if (
+      response.data?.data?.profiles &&
+      Array.isArray(response.data.data.profiles)
+    ) {
+      // Response has nested data.profiles
+      profiles = response.data.data.profiles;
+      console.log(
+        "Profiles found in data.data.profiles, count:",
+        profiles.length,
+      );
+    } else if (response.data?.results && Array.isArray(response.data.results)) {
+      // Response has results array
+      profiles = response.data.results;
+      console.log("Profiles found in data.results, count:", profiles.length);
+    }
+
+    if (profiles.length > 0) {
+      console.log(
+        "First profile structure:",
+        JSON.stringify(profiles[0], null, 2),
+      );
+
+      // Try different field names for username and wallet
+      const possibleNameFields = [
+        "name",
+        "username",
+        "displayName",
+        "handle",
+        "pseudonym",
+      ];
+      const possibleWalletFields = [
+        "proxyWallet",
+        "wallet",
+        "address",
+        "walletAddress",
+      ];
+
+      // Search for exact match
+      for (const profile of profiles) {
+        let profileName: string | undefined;
+        let walletAddress: string | undefined;
+
+        // Find the username field
+        for (const field of possibleNameFields) {
+          if (profile[field]) {
+            profileName = profile[field];
+            break;
+          }
+        }
+
+        // Find the wallet field
+        for (const field of possibleWalletFields) {
+          if (profile[field]) {
+            walletAddress = profile[field];
+            break;
+          }
+        }
+
+        if (
+          profileName &&
+          walletAddress &&
+          profileName.toLowerCase() === username.toLowerCase()
+        ) {
+          console.log(
+            `✓ Exact match found: ${profileName} -> ${walletAddress}`,
+          );
+          return walletAddress;
+        }
+      }
+
+      // If no exact match, return first profile with wallet
+      for (const profile of profiles) {
+        for (const field of possibleWalletFields) {
+          if (profile[field]) {
+            const wallet = profile[field];
+            const name =
+              possibleNameFields.map((f) => profile[f]).find(Boolean) ||
+              "unknown";
+            console.log(`→ Using first match: ${name} -> ${wallet}`);
+            return wallet;
           }
         }
       }
-      
-      // If no exact match but we have results, return first match
-      if (response.data.profiles.length > 0 && response.data.profiles[0].proxyWallet) {
-        console.log(`Using first match with wallet: ${response.data.profiles[0].proxyWallet}`);
-        return response.data.profiles[0].proxyWallet;
-      }
     }
 
-    console.log(`No profiles or wallet addresses found for ${username}`);
-    // If no profiles found, throw user not found
+    console.log("✗ No profiles found with wallet address");
     throw new Error("USER_NOT_FOUND");
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      console.error("Profile search API error:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message,
+      });
+
       if (error.response?.status === 404) {
         throw new Error("USER_NOT_FOUND");
       }
-      // Network or API error - rethrow to bubble up
       throw error;
     }
     if ((error as Error).message === "USER_NOT_FOUND") {
@@ -70,87 +154,121 @@ async function findUserByUsername(username: string): Promise<string> {
 
 // Helper to fetch user positions from Polymarket
 async function fetchUserPositions(address: string): Promise<Position[]> {
-  const response = await axios.get(`${POLYMARKET_DATA_API}/positions`, {
-    params: { user: address },
-    timeout: 5000,
-  });
+  try {
+    const response = await axios.get(`${POLYMARKET_DATA_API}/positions`, {
+      params: { user: address },
+      timeout: 5000,
+    });
 
-  if (!response.data || !Array.isArray(response.data)) {
-    return [];
+    if (!response.data || !Array.isArray(response.data)) {
+      console.log("No positions data returned");
+      return [];
+    }
+
+    console.log(`Found ${response.data.length} positions`);
+
+    return response.data.map((pos: any, index: number) => ({
+      id: pos.asset || pos.id || `pos-${index}`,
+      marketName: pos.title || pos.market?.question || "Unknown Market",
+      marketId:
+        pos.conditionId || pos.market?.condition_id || `market-${index}`,
+      outcome: pos.outcome || "Unknown",
+      entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
+      currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
+      size: parseFloat(pos.size || "0"),
+      unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
+      status: parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED",
+      openedAt: pos.created_at
+        ? new Date(pos.created_at).toISOString()
+        : new Date().toISOString(),
+      closedAt: pos.closed_at
+        ? new Date(pos.closed_at).toISOString()
+        : undefined,
+    }));
+  } catch (error) {
+    console.error("Error fetching positions:", error);
+    throw error;
   }
-
-  return response.data.map((pos: any, index: number) => ({
-    id: pos.asset || pos.id || `pos-${index}`,
-    marketName: pos.title || pos.market?.question || "Unknown Market",
-    marketId: pos.conditionId || pos.market?.condition_id || `market-${index}`,
-    outcome: pos.outcome || "Unknown",
-    entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
-    currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
-    size: parseFloat(pos.size || "0"),
-    unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
-    status: parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED",
-    openedAt: new Date(pos.created_at || Date.now()).toISOString(),
-    closedAt: pos.closed_at ? new Date(pos.closed_at).toISOString() : undefined,
-  }));
 }
 
 // Helper to fetch user trading activity
 async function fetchUserTrades(address: string): Promise<Trade[]> {
-  const response = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
-    params: { 
-      user: address,
-      limit: 100,
-    },
-    timeout: 5000,
-  });
+  try {
+    const response = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
+      params: {
+        user: address,
+        limit: 100,
+      },
+      timeout: 5000,
+    });
 
-  if (!response.data || !Array.isArray(response.data)) {
-    return [];
+    if (!response.data || !Array.isArray(response.data)) {
+      console.log("No trades data returned");
+      return [];
+    }
+
+    console.log(`Found ${response.data.length} trades`);
+
+    return response.data.map((trade: any, index: number) => ({
+      id: trade.transactionHash || trade.id || `trade-${index}`,
+      // Handle both seconds and milliseconds timestamps
+      timestamp: new Date(
+        trade.timestamp > 1e12 ? trade.timestamp : trade.timestamp * 1000,
+      ).toISOString(),
+      marketName: trade.title || trade.market || "Unknown Market",
+      type: trade.side === "BUY" || trade.side === "buy" ? "BUY" : "SELL",
+      outcome: trade.outcome || "Unknown",
+      price: parseFloat(trade.price || "0"),
+      size: parseFloat(trade.size || "0"),
+      profit: undefined, // Trades endpoint doesn't provide profit
+    }));
+  } catch (error) {
+    console.error("Error fetching trades:", error);
+    throw error;
   }
-
-  return response.data.map((trade: any, index: number) => ({
-    id: trade.transactionHash || trade.id || `trade-${index}`,
-    timestamp: new Date((trade.timestamp || Date.now()) * 1000).toISOString(),
-    marketName: trade.title || trade.market || "Unknown Market",
-    type: trade.side === "BUY" || trade.side === "buy" ? "BUY" : "SELL",
-    outcome: trade.outcome || "Unknown",
-    price: parseFloat(trade.price || "0"),
-    size: parseFloat(trade.size || "0"),
-    profit: trade.profit ? parseFloat(trade.profit) : undefined,
-  }));
 }
 
 // Calculate portfolio statistics
-function calculateStats(positions: Position[], trades: Trade[]): PortfolioStats {
-  const activePositions = positions.filter(p => p.status === "ACTIVE");
+function calculateStats(
+  positions: Position[],
+  trades: Trade[],
+): PortfolioStats {
+  const activePositions = positions.filter((p) => p.status === "ACTIVE");
+
   const totalValue = activePositions.reduce((sum, pos) => {
-    return sum + (pos.currentPrice * pos.size);
+    return sum + pos.currentPrice * pos.size;
   }, 0);
 
   const totalPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
-  
+
   const totalVolume = trades.reduce((sum, trade) => {
-    return sum + (trade.price * trade.size);
+    return sum + trade.price * trade.size;
   }, 0);
 
-  const closedTrades = trades.filter(t => t.profit !== undefined);
-  const winningTrades = closedTrades.filter(t => t.profit! > 0);
-  const winRate = closedTrades.length > 0 
-    ? (winningTrades.length / closedTrades.length) * 100 
-    : 0;
+  // Calculate win metrics from positions
+  const positionsWithPnL = positions.filter((p) => p.unrealizedPnL !== 0);
+  const winningPositions = positions.filter((p) => p.unrealizedPnL > 0);
+  const winRate =
+    positionsWithPnL.length > 0
+      ? (winningPositions.length / positionsWithPnL.length) * 100
+      : 0;
 
-  const profits = closedTrades.map(t => t.profit || 0);
-  const bestTrade = profits.length > 0 ? Math.max(...profits) : 0;
-  const worstTrade = profits.length > 0 ? Math.min(...profits) : 0;
+  const pnls = positions.map((p) => p.unrealizedPnL);
+  const bestTrade = pnls.length > 0 ? Math.max(...pnls) : 0;
+  const worstTrade = pnls.length > 0 ? Math.min(...pnls) : 0;
 
-  // Calculate win streak
+  // Calculate win streak from positions
+  const sortedPositions = [...positions].sort(
+    (a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime(),
+  );
+
   let currentStreak = 0;
   let maxStreak = 0;
-  for (const trade of closedTrades.reverse()) {
-    if (trade.profit && trade.profit > 0) {
+  for (const pos of sortedPositions) {
+    if (pos.unrealizedPnL > 0) {
       currentStreak++;
       maxStreak = Math.max(maxStreak, currentStreak);
-    } else {
+    } else if (pos.unrealizedPnL < 0) {
       currentStreak = 0;
     }
   }
@@ -168,35 +286,37 @@ function calculateStats(positions: Position[], trades: Trade[]): PortfolioStats 
   };
 }
 
-// Generate PnL history from trades
-function generatePnLHistory(trades: Trade[]): PnLDataPoint[] {
-  if (trades.length === 0) {
-    return [{
-      timestamp: new Date().toISOString(),
-      value: 0,
-    }];
+// Generate PnL history from positions
+function generatePnLHistory(positions: Position[]): PnLDataPoint[] {
+  if (positions.length === 0) {
+    return [
+      {
+        timestamp: new Date().toISOString(),
+        value: 0,
+      },
+    ];
   }
 
-  const sortedTrades = [...trades]
-    .filter(t => t.profit !== undefined)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const sortedPositions = [...positions].sort(
+    (a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime(),
+  );
 
   const history: PnLDataPoint[] = [];
   let cumulativePnL = 0;
 
-  for (const trade of sortedTrades) {
-    cumulativePnL += trade.profit || 0;
+  for (const position of sortedPositions) {
+    cumulativePnL += position.unrealizedPnL;
     history.push({
-      timestamp: trade.timestamp,
+      timestamp: position.openedAt,
       value: parseFloat(cumulativePnL.toFixed(2)),
     });
   }
 
-  // If no history, add a starting point
-  if (history.length === 0) {
+  // Add current point
+  if (history.length > 0) {
     history.push({
       timestamp: new Date().toISOString(),
-      value: 0,
+      value: parseFloat(cumulativePnL.toFixed(2)),
     });
   }
 
@@ -204,7 +324,10 @@ function generatePnLHistory(trades: Trade[]): PnLDataPoint[] {
 }
 
 // Calculate achievements based on stats
-function calculateAchievements(stats: PortfolioStats, trades: Trade[]): Achievement[] {
+function calculateAchievements(
+  stats: PortfolioStats,
+  trades: Trade[],
+): Achievement[] {
   return [
     {
       id: "first_trade",
@@ -263,7 +386,7 @@ function calculateAchievements(stats: PortfolioStats, trades: Trade[]): Achievem
   ];
 }
 
-// Generate demo data for testing when Polymarket API returns no data
+// Generate demo data for testing
 function generateDemoData(): DashboardData {
   const now = Date.now();
   const positions: Position[] = [
@@ -383,22 +506,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users/search", async (req, res) => {
     try {
       const query = req.query.q as string;
-      
+
       if (!query || query.length < 2) {
         return res.json([]);
       }
 
-      // Use Polymarket public search API
-      const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-        params: { 
-          q: query,
+      const response = await axios.get(
+        `${POLYMARKET_GAMMA_API}/public-search`,
+        {
+          params: {
+            q: query,
+          },
+          timeout: 3000,
         },
-        timeout: 3000,
-      });
+      );
 
-      if (response.data && response.data.profiles && Array.isArray(response.data.profiles)) {
-        const usernames = response.data.profiles
-          .map((profile: any) => profile.name)
+      // Try multiple response structures
+      let profiles: any[] = [];
+
+      if (Array.isArray(response.data)) {
+        profiles = response.data;
+      } else if (
+        response.data?.profiles &&
+        Array.isArray(response.data.profiles)
+      ) {
+        profiles = response.data.profiles;
+      } else if (
+        response.data?.data?.profiles &&
+        Array.isArray(response.data.data.profiles)
+      ) {
+        profiles = response.data.data.profiles;
+      } else if (
+        response.data?.results &&
+        Array.isArray(response.data.results)
+      ) {
+        profiles = response.data.results;
+      }
+
+      if (profiles.length > 0) {
+        const possibleNameFields = [
+          "name",
+          "username",
+          "displayName",
+          "handle",
+          "pseudonym",
+        ];
+        const usernames = profiles
+          .map((profile: any) => {
+            for (const field of possibleNameFields) {
+              if (profile[field]) return profile[field];
+            }
+            return null;
+          })
           .filter(Boolean)
           .slice(0, 10);
         return res.json(usernames);
@@ -411,56 +570,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/dashboard/username/:username - Fetch dashboard data by Polymarket username
+  // GET /api/dashboard/username/:username - Fetch dashboard data by username
   app.get("/api/dashboard/username/:username", async (req, res) => {
     try {
       const { username } = req.params;
 
-      // Validate username format (alphanumeric, underscores, hyphens)
-      const usernameSchema = z.string().regex(/^[a-zA-Z0-9_-]+$/, "Invalid username format");
+      const usernameSchema = z
+        .string()
+        .regex(/^[a-zA-Z0-9_-]+$/, "Invalid username format");
       const validatedUsername = usernameSchema.parse(username);
 
-      console.log(`Looking up wallet address for username: ${validatedUsername}`);
+      console.log(`\n=== Fetching dashboard for: ${validatedUsername} ===`);
 
       let walletAddress: string;
       try {
-        // Find the wallet address for this username
         walletAddress = await findUserByUsername(validatedUsername);
-        console.log(`Found wallet address ${walletAddress} for username ${validatedUsername}`);
+        console.log(`✓ Wallet found: ${walletAddress}`);
       } catch (error: any) {
         if (error.message === "USER_NOT_FOUND") {
-          return res.status(404).json({ 
-            error: "User not found. Please check the username and try again." 
+          return res.status(404).json({
+            error: "User not found. Please check the username and try again.",
           });
         }
-        throw error; // Rethrow API errors
+        throw error;
       }
 
-      // Fetch real data from Polymarket APIs
       let positions: Position[] = [];
       let trades: Trade[] = [];
       let useDemoData = false;
-      
+
       try {
         [positions, trades] = await Promise.all([
           fetchUserPositions(walletAddress),
           fetchUserTrades(walletAddress),
         ]);
       } catch (error) {
-        // Handle various API errors by falling back to demo data
         if (axios.isAxiosError(error)) {
           const status = error.response?.status;
-          console.log(`Polymarket CLOB API error: ${error.message}, status: ${status}`);
-          
-          // For auth errors (401/403) or not found (404), use demo data
-          // This handles cases where the API requires auth or user has no public data
+          console.log(`API error: status ${status}`);
+
           if (status === 401 || status === 403 || status === 404) {
-            console.log(`API returned ${status} for ${validatedUsername}, using demo data`);
+            console.log("→ Using demo data");
             useDemoData = true;
           } else {
-            // Other API errors (500, etc) - return 503
-            return res.status(503).json({ 
-              error: "Unable to reach Polymarket API. Please try again later." 
+            return res.status(503).json({
+              error: "Unable to reach Polymarket API. Please try again later.",
             });
           }
         } else {
@@ -468,16 +622,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // If user has legitimately no data or API is unauthorized, use demo data for better UX
       if (useDemoData || (positions.length === 0 && trades.length === 0)) {
-        console.log(`Showing demo data for ${validatedUsername}`);
+        console.log("→ Returning demo data");
         const demoData = generateDemoData();
         return res.json(demoData);
       }
 
-      // Calculate stats and achievements from real data
       const stats = calculateStats(positions, trades);
-      const pnlHistory = generatePnLHistory(trades);
+      const pnlHistory = generatePnLHistory(positions);
       const achievements = calculateAchievements(stats, trades);
 
       const dashboardData: DashboardData = {
@@ -488,28 +640,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         achievements,
       };
 
+      console.log(
+        `✓ Dashboard ready - ${stats.totalTrades} trades, $${stats.totalVolume.toFixed(2)} volume`,
+      );
+      console.log("=== Complete ===\n");
+
       res.json(dashboardData);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
-      
+
       if (error instanceof z.ZodError) {
-        res.status(400).json({ 
-          error: "Invalid username format. Please use only letters, numbers, underscores, and hyphens." 
+        res.status(400).json({
+          error:
+            "Invalid username format. Please use only letters, numbers, underscores, and hyphens.",
         });
       } else {
-        res.status(500).json({ 
-          error: "Failed to fetch dashboard data. Please try again later." 
+        res.status(500).json({
+          error: "Failed to fetch dashboard data. Please try again later.",
         });
       }
     }
   });
 
-  // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }
