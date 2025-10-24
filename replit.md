@@ -22,24 +22,27 @@ Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography
 - Recharts for data visualization
 
 **Design System:**
-- Custom color scheme defined in CSS variables for both light and dark modes
+- Custom color scheme defined in CSS variables for both light and dark modes (lighter.gg dark aesthetic)
 - "New York" style variant from Shadcn UI
-- Clean typography using Inter font family (lighter.gg aesthetic)
-- Minimal card treatments with subtle borders and p-6 padding with hover-elevate
-- Responsive grid layouts (3-column desktop, 2-column tablet, single-column mobile)
+- Clean typography using Inter font family (400, 500, 600, 700 weights)
+- Minimal card treatments with subtle borders and consistent p-6 padding with hover-elevate
+- Responsive grid layouts with consistent spacing:
+  - Desktop: gap-6 for all major grids (stats, chart section, positions)
+  - Mobile: gap-4 for compact layouts
+- Color palette: text-chart-2 for positive PnL (green), text-destructive for negative (red), text-primary for selected states
 - Consistent spacing using Tailwind's spacing units (text-xl headings, text-xs uppercase labels)
 
 **Component Structure:**
 - Dashboard page as the main view with username connection flow
 - Modular components for different data visualizations:
-  - Achievement banner with badge carousel
-  - PnL chart with time range filtering
-  - Positions table showing active trades
-  - Volume metrics with pie chart breakdown
-  - Recent activity feed
-  - Stat cards for quick metrics
+  - PnL chart showing all-time performance (no time filters) with dynamic value in top corner
+  - Positions table with sorting (PnL, Size, Market) and scrollable view (max 5 visible rows)
+  - Recent activity feed with scrollable trade history
+  - Stat cards showing key metrics (Portfolio Value, All-Time PnL, Win Rate, Total Trades)
+  - Sidebar stat cards (Win Streak, Best Trade, Active Positions, Trading Volume)
 - Loading skeleton states for progressive UI rendering
-- Username input with search suggestions
+- Username input with live autocomplete search suggestions
+- Profile picture display in header using Avatar component
 
 **State Management:**
 - React Query handles server state with infinite stale time and no automatic refetching
@@ -62,11 +65,18 @@ Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography
 - Polymarket Gamma API integration for user search with profile lookup
 
 **Data Flow:**
-1. Client submits Polymarket username
+1. Client submits Polymarket username with live autocomplete
 2. Backend searches Gamma API (with `search_profiles=true`) to resolve username to proxy wallet address
-3. Backend fetches trading data from Data API using wallet address (`user` parameter)
-4. Backend transforms and aggregates data into dashboard format (handles field mappings: avgPrice, curPrice, cashPnl, title)
-5. Client receives structured dashboard data and renders visualizations
+3. Backend fetches trading data from Data API using wallet address:
+   - `/activity` endpoint: Complete ledger for cash balance calculation (deposits, withdrawals, trades, redeems, rewards, fees)
+   - `/positions` endpoint: Active positions with unrealized PnL
+   - `/trades` endpoint: Trade history for activity feed
+4. Backend calculates PnL from activity ledger (authoritative source):
+   - Cash balance = Σ(all activity deltas)
+   - Realized PnL = cash balance - net deposits
+   - All-time PnL = realized PnL + unrealized PnL from open positions
+5. Backend generates PnL history chart data from chronological activity events
+6. Client receives structured dashboard data and renders visualizations with accurate PnL values
 
 **Error Handling:**
 - Axios interceptors for API communication

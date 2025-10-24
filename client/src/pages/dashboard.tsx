@@ -120,7 +120,7 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="container mx-auto px-6 py-8 space-y-8">
         {/* Key Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
             <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Portfolio Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
@@ -129,7 +129,7 @@ export default function Dashboard() {
             </Card>
             <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">All-Time PnL</p>
-              <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-primary' : 'text-destructive'}`} data-testid="text-total-pnl">
+              <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
