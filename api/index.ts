@@ -14,7 +14,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/users/search', async (req, res) => {
   try {
-    const query = req.query.q;
+    const query = req.query.q as string;
     if (!query || query.length < 2) {
       return res.json([]);
     }
@@ -36,7 +36,7 @@ app.get('/api/users/search', async (req, res) => {
 
     if (profiles.length > 0) {
       const possibleNameFields = ['name', 'username', 'displayName', 'handle', 'pseudonym'];
-      const usernames = profiles.map((profile) => {
+      const usernames = profiles.map((profile: any) => {
         for (const field of possibleNameFields) {
           if (profile[field]) return profile[field];
         }
