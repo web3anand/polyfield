@@ -34,11 +34,11 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8">
-            <div className="text-center space-y-6">
-              <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground">
+            <div className="text-center space-y-4">
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
                 POLYMARKET
               </h1>
-              <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase">
+              <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
                 Real-time Tracking  •  Position Analytics
               </p>
             </div>
@@ -56,12 +56,12 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-6">
-            <Card className="w-full max-w-lg p-8 text-center space-y-4">
+            <Card className="w-full max-w-lg p-6 text-center space-y-4 hover-elevate">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-destructive/10 mb-2">
                 <Target className="w-8 h-8 text-destructive" />
               </div>
-              <h2 className="text-2xl font-bold text-foreground">User Not Found</h2>
-              <p className="text-muted-foreground">
+              <h2 className="text-xl font-semibold text-foreground">User Not Found</h2>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">
                 Unable to find a Polymarket user with this username. Please check the username and try again.
               </p>
               <Button onClick={handleDisconnect} variant="outline" data-testid="button-disconnect">
@@ -114,27 +114,27 @@ export default function Dashboard() {
       <div className="container mx-auto px-6 py-8 space-y-8">
         {/* Key Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="p-6">
-              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Total Portfolio Value</p>
-              <p className="text-3xl md:text-4xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
+            <Card className="p-6 hover-elevate">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Portfolio Value</p>
+              <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
                 ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6">
-              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">All-Time PnL</p>
-              <p className={`text-3xl md:text-4xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-primary' : 'text-destructive'}`} data-testid="text-total-pnl">
+            <Card className="p-6 hover-elevate">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">All-Time PnL</p>
+              <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-primary' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6">
-              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Win Rate</p>
-              <p className="text-3xl md:text-4xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
+            <Card className="p-6 hover-elevate">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Win Rate</p>
+              <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
                 {stats.winRate.toFixed(1)}%
               </p>
             </Card>
-            <Card className="p-6">
-              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Total Trades</p>
-              <p className="text-3xl md:text-4xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
+            <Card className="p-6 hover-elevate">
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Trades</p>
+              <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
                 {stats.totalTrades.toLocaleString()}
               </p>
             </Card>
