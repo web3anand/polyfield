@@ -241,6 +241,16 @@
     pointer-events: none;
   }
 
+  /* Hide scrollbars while keeping scroll functionality */
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
   .no-default-hover-elevate {}
 
   .no-default-active-elevate {}

@@ -18,7 +18,7 @@ export function RecentActivity({ trades }: RecentActivityProps) {
         <p className="text-xs text-muted-foreground uppercase tracking-wide">Your latest trades and positions</p>
       </div>
 
-      <ScrollArea className="h-[400px] pr-4" data-testid="activity-feed">
+      <ScrollArea className="h-[400px] pr-4 scrollbar-hidden" data-testid="activity-feed">
         <div className="space-y-3">
           {recentTrades.map((trade, index) => {
             const isBuy = trade.type === "BUY";
