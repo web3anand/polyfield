@@ -22,6 +22,7 @@ async function findUserByUsername(username: string): Promise<string> {
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
       params: {
         q: username,
+        search_profiles: true,
       },
       timeout: 5000,
     });
@@ -516,6 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
           params: {
             q: query,
+            search_profiles: true,
           },
           timeout: 3000,
         },
