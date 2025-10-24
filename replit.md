@@ -7,7 +7,7 @@ A gamified dashboard application for Polymarket traders that visualizes trading 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
-Design aesthetic: Lighter.gg inspired - sleek dark theme, clean typography, minimal gaming elements, sharp contrasts, professional trading interface.
+Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography, minimal design, sharp contrasts, professional trading interface.
 
 ## System Architecture
 
@@ -24,10 +24,10 @@ Design aesthetic: Lighter.gg inspired - sleek dark theme, clean typography, mini
 **Design System:**
 - Custom color scheme defined in CSS variables for both light and dark modes
 - "New York" style variant from Shadcn UI
-- Gaming-inspired typography using Inter and Rajdhani fonts
-- Glassmorphic card treatments with elevation system
+- Clean typography using Inter font family (lighter.gg aesthetic)
+- Minimal card treatments with subtle borders and p-6 padding with hover-elevate
 - Responsive grid layouts (3-column desktop, 2-column tablet, single-column mobile)
-- Consistent spacing using Tailwind's spacing units (3, 4, 6, 8, 12, 16)
+- Consistent spacing using Tailwind's spacing units (text-xl headings, text-xs uppercase labels)
 
 **Component Structure:**
 - Dashboard page as the main view with username connection flow
@@ -57,22 +57,25 @@ Design aesthetic: Lighter.gg inspired - sleek dark theme, clean typography, mini
 **API Design:**
 - RESTful endpoints under `/api` prefix
 - Username-based dashboard data retrieval: `/api/dashboard/username/:username`
-- User search functionality: `/api/users/search?q=:query`
-- Polymarket CLOB API integration for fetching trading data
-- Polymarket Gamma API integration for user search
+- User search functionality: `/api/users/search?q=:query&search_profiles=true`
+- Polymarket Data API integration for fetching positions and trades
+- Polymarket Gamma API integration for user search with profile lookup
 
 **Data Flow:**
 1. Client submits Polymarket username
-2. Backend searches Gamma API to resolve username to wallet address
-3. Backend fetches trading data from CLOB API using wallet address
-4. Backend transforms and aggregates data into dashboard format
+2. Backend searches Gamma API (with `search_profiles=true`) to resolve username to proxy wallet address
+3. Backend fetches trading data from Data API using wallet address (`user` parameter)
+4. Backend transforms and aggregates data into dashboard format (handles field mappings: avgPrice, curPrice, cashPnl, title)
 5. Client receives structured dashboard data and renders visualizations
 
 **Error Handling:**
 - Axios interceptors for API communication
-- User-friendly error messages for "user not found" scenarios
+- Graceful fallback to demo data when:
+  - Username doesn't exist in Polymarket (USER_NOT_FOUND)
+  - API returns 401/403/404 errors (authentication/authorization failures)
+- Real users with no trading activity show actual empty state (not demo data)
 - Network error propagation to client layer
-- Request logging middleware with timing information
+- Request logging middleware with timing information and detailed debugging
 
 ### Database and Storage
 
@@ -95,8 +98,11 @@ The application uses Drizzle ORM with PostgreSQL configuration (drizzle.config.t
 ### External Dependencies
 
 **Third-Party APIs:**
-- **Polymarket CLOB API** (https://clob.polymarket.com): Fetches user trading data, positions, and transaction history
+- **Polymarket Data API** (https://data-api.polymarket.com): Fetches user positions and trades using wallet addresses
+  - `/positions?user=<address>` - Returns position data with fields: asset, title, conditionId, outcome, avgPrice, curPrice, size, cashPnl
+  - `/trades?user=<address>&limit=100` - Returns trade history with fields: transactionHash, timestamp, title, side, outcome, price, size
 - **Polymarket Gamma API** (https://gamma-api.polymarket.com): Resolves usernames to wallet addresses via public search endpoint
+  - `/public-search?q=<username>&search_profiles=true` - Returns user profiles with proxyWallet addresses
 
 **UI Component Libraries:**
 - **Radix UI**: Unstyled, accessible component primitives (accordion, dialog, dropdown, tabs, toast, tooltip, etc.)
@@ -120,4 +126,4 @@ The application uses Drizzle ORM with PostgreSQL configuration (drizzle.config.t
 - **date-fns**: Date formatting and manipulation
 
 **Fonts:**
-- Google Fonts: Inter (400, 500, 600, 700) for body text, Rajdhani (600, 700) for gaming-style headings
+- Google Fonts: Inter (400, 500, 600, 700) for all typography (lighter.gg clean aesthetic)
