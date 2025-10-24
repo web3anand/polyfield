@@ -1,119 +1,121 @@
-# Gamified Polymarket Dashboard - Design Guidelines
+# Polymarket Trading Dashboard - Design Guidelines (lighter.gg Inspired)
 
 ## Design Approach
 
-**Reference-Based Approach**: Gaming UI + Modern Fintech
+**Reference-Based**: lighter.gg Gaming Platform + Modern Trading Interfaces
 
-Drawing inspiration from:
-- **Gaming Dashboards**: Steam, Epic Games (achievement systems, progress indicators, stat cards)
-- **Modern Trading Platforms**: Robinhood (simplified data presentation), Coinbase (clean crypto aesthetics)
-- **Fantasy Sports**: DraftKings, FanDuel (engaging stats, leaderboard vibes)
+Inspired by:
+- **lighter.gg**: Premium dark UI, clean data hierarchy, sophisticated card treatments
+- **Trading Platforms**: Refined minimalism with data-first presentation
+- **Modern Gaming**: Sharp contrasts, subtle depth, professional aesthetics
 
 **Core Principles**:
-1. Data clarity meets gaming excitement
-2. Achievement-driven engagement
-3. Visual hierarchy that celebrates wins and learning from losses
-4. Immediate value recognition (stats above the fold)
+1. Dark sophistication with breathing room
+2. Data clarity through hierarchy and whitespace
+3. Premium feel via subtle depth and refined typography
+4. Professional gaming aesthetic without gamification gimmicks
 
 ---
 
 ## Layout Structure
 
-### Hero Section (Compact Dashboard Header)
-- **Height**: 30-40vh (not full viewport - this is a data dashboard)
-- **Content**: Wallet connection input, total portfolio value with animated counter, quick stats (Win Rate %, Total Trades, All-Time PnL)
-- **Layout**: Centered content with glassmorphic card treatment containing key metrics
-- **No background image needed** - focus on data and gradients
+### Header Section
+- **Height**: Auto (compact, data-focused)
+- **Content**: Logo/brand left, prominent centered search bar (50% width desktop), wallet connect right
+- **Treatment**: Minimal padding with bottom border separator
+- **Search Bar**: Large (h-12), rounded-xl, placeholder "Search by username or wallet address"
 
 ### Main Dashboard Grid
-**Desktop Layout**: 3-column grid with varied card heights
-**Tablet**: 2-column adaptive grid
+**Desktop**: 3-column grid (66% / 33% split for primary/sidebar content)
+**Tablet**: 2-column adaptive
 **Mobile**: Single column stack
 
-**Section Order**:
-1. **Achievement Banner** (full-width): Badge carousel showing milestones (First Trade, 10-Win Streak, Volume Milestones)
-2. **PnL Graph Card** (2/3 width): Interactive line chart with time period toggles
-3. **Quick Stats Sidebar** (1/3 width): Stacked stat cards with icons and progress bars
-4. **Active Positions Table** (full-width): Live positions with unrealized PnL
-5. **Trading Volume Metrics** (1/2 width): Circular progress chart + breakdown
-6. **Recent Activity Feed** (1/2 width): Scrollable position history with outcome badges
-7. **Leaderboard Peek** (full-width): "Top Traders This Week" comparison card
+**Section Flow**:
+1. **Key Metrics Row** (full-width): 4-card horizontal grid showing Total PnL, Win Rate, Total Volume, Active Positions
+2. **Performance Chart** (2/3 width): Large PnL graph with time period toggles
+3. **Quick Stats Sidebar** (1/3 width): Recent activity feed with compact position cards
+4. **Positions Table** (full-width): Active trades with live data
+5. **Analytics Grid** (full-width): 3-column grid of metric cards (Trading Volume, Best Performers, Market Exposure)
+6. **Historical Performance** (full-width): Timeline view of closed positions with outcome badges
 
 ### Spacing System
-Use Tailwind spacing units: **3, 4, 6, 8, 12, 16**
+Tailwind units: **4, 6, 8, 12, 16, 20**
+- Page padding: px-8 py-6 (desktop), px-4 py-4 (mobile)
 - Card padding: p-6 (desktop), p-4 (mobile)
 - Grid gaps: gap-6 (desktop), gap-4 (mobile)
-- Section spacing: mb-8 between major sections
-- Component spacing: space-y-4 for stacked elements
+- Section margins: mb-12 between major sections
+- Component spacing: space-y-4 internal stacking
 
 ---
 
 ## Typography
 
-### Font Selection
-**Primary**: 'Inter' (Google Fonts) - clean, modern data presentation
-**Accent**: 'Rajdhani' (Google Fonts) - gaming-inspired for stats/numbers
+### Fonts
+**Primary**: 'Inter' (Google Fonts) - all text
+**Monospace**: 'Menlo' fallback for numerical data (prices, addresses)
 
 ### Hierarchy
-- **Hero Stats**: text-5xl font-bold (Rajdhani)
-- **Section Headers**: text-2xl font-semibold (Inter)
-- **Card Titles**: text-lg font-medium
-- **Stat Labels**: text-sm uppercase tracking-wide
-- **Big Numbers**: text-4xl font-bold (Rajdhani) with tabular-nums
-- **Body Text**: text-base (Inter)
-- **Micro Copy**: text-xs
+- **Large Stats**: text-4xl font-bold tracking-tight
+- **Section Headers**: text-xl font-semibold
+- **Card Titles**: text-base font-medium
+- **Stat Labels**: text-sm font-medium tracking-wide
+- **Data Values**: text-2xl font-semibold (use tabular-nums)
+- **Body Text**: text-sm
+- **Supporting Text**: text-xs opacity-70
 
 ---
 
 ## Component Library
 
-### Stat Cards
-- Rounded corners (rounded-2xl)
-- Border treatment with subtle glow effect
-- Icon (from Heroicons - use CDN) at top-left
-- Large number display with trend indicator (↑↓)
-- Label below with supporting metric
+### Stat Cards (Key Metrics)
+- Sharp corners (rounded-lg, not rounded-xl)
+- Subtle border with card background
+- Label at top (text-sm, muted foreground)
+- Large value display (text-3xl font-bold)
+- Trend indicator below (small percentage with arrow icon)
 - Padding: p-6
+- Min height for consistency
 
-### Achievement Badges
-- Circular or hexagonal shape (aspect-square)
-- Icon-based with border ring
-- Label below badge
-- Locked vs unlocked states (opacity treatment)
-- Horizontal scroll container on mobile
+### Search Bar (Hero Element)
+- Prominent size: h-12 w-full max-w-2xl
+- Rounded-xl with border treatment
+- Search icon (Heroicons) prefix inside field
+- Placeholder: "Search trader by username or wallet address..."
+- Focus state: border color transitions to primary
 
-### PnL Graph
-- Use Chart.js library (via CDN)
-- Area chart with gradient fill below line
-- Interactive tooltips on hover
-- Time range selector buttons (24H, 7D, 30D, ALL)
-- Grid lines for readability
-- Axis labels with proper formatting
+### Trading Positions Table
+- Minimal borders (border-b on rows only)
+- Sticky header with semi-transparent background
+- Columns: Market, Entry Price, Current, Size, PnL, Status
+- Alternating row treatment (subtle muted background)
+- Status badges: rounded-md px-2.5 py-0.5 text-xs font-medium
+- Mobile: Transform to stacked cards with horizontal scroll for overflow data
 
-### Positions Table
-- Striped rows for readability
-- Sticky header on scroll
-- Columns: Market Name, Entry Price, Current Price, Size, Unrealized PnL, Status
-- Status badges (rounded-full px-3 py-1)
-- Mobile: Card-based layout instead of table
+### Performance Chart Card
+- Large card (p-6) with header section
+- Time period buttons: flex gap-2, rounded-md toggle group
+- Chart.js integration (via CDN)
+- Gridline styling matches theme (muted, low opacity)
+- Tooltip on hover with precise values
 
-### Progress Bars
-- Rounded-full design
-- Height: h-3
-- Animated fill on load
-- Percentage label overlay or adjacent
-- Use for: Volume milestones, Win rate, Trading streaks
+### Activity Feed Cards (Sidebar)
+- Compact cards (p-4) in scrollable container
+- Market name + outcome icon at top
+- PnL value prominently displayed
+- Timestamp at bottom (text-xs muted)
+- Hover state: subtle background shift
+
+### Metric Cards (Analytics Grid)
+- Title + icon header
+- Large central value or visualization
+- Supporting stats below (2-3 sub-metrics)
+- Consistent height across row
 
 ### Buttons
-Primary Action: rounded-xl px-6 py-3 font-semibold
-Secondary: outlined variant with border-2
-Icon Buttons: Square (w-10 h-10) for chart controls
-
-### Input Fields (Wallet Connection)
-- Large, prominent input: h-14 rounded-xl
-- Placeholder: "Enter wallet address or connect"
-- Connect button integrated or adjacent
-- Icon prefix (wallet icon from Heroicons)
+**Primary**: rounded-lg px-4 py-2 font-medium (primary background)
+**Secondary**: outlined with border-2
+**Icon Only**: w-9 h-9 rounded-md for chart controls
+**Search/Connect**: h-10 px-6 rounded-lg
 
 ---
 
@@ -121,95 +123,97 @@ Icon Buttons: Square (w-10 h-10) for chart controls
 
 ### Charts (Chart.js via CDN)
 **PnL Line Chart**:
-- Smooth curves (tension: 0.4)
-- Gradient area fill
-- Responsive legend
-- Crosshair on hover
+- Area gradient fill using chart-1 color
+- Clean axis labels (foreground at 70% opacity)
+- No background grid (minimal aesthetic)
+- Smooth curves (tension: 0.3)
+- Interactive crosshair on hover
 
-**Volume Donut Chart**:
-- Centered stat in middle
-- Legend on side (desktop) or below (mobile)
-- Interactive segments
+**Donut/Distribution Charts**:
+- Use chart colors (chart-1 through chart-5)
+- Legend positioned right (desktop), bottom (mobile)
+- Center label with primary stat
 
 **Trend Indicators**:
-- Arrow icons (↑↓) next to percentages
-- Sparkline mini-charts for quick trends
+- Inline arrows (↑↓) with value
+- Use chart-2 (green) for positive, destructive for negative
+- Small sparklines (w-16 h-8) for mini-trends
 
 ---
 
 ## Iconography
 
-**Library**: Heroicons (via CDN)
-**Usage**:
-- Trophy icons for achievements
-- Chart icons for graph sections
-- Wallet icon for connection
-- Fire icon for hot streaks
-- Target icon for accuracy metrics
-- Clock icon for time-based stats
+**Library**: Heroicons (Outline variant via CDN)
+**Common Icons**:
+- MagnifyingGlass (search)
+- Wallet (connection)
+- ChartBar (analytics)
+- ArrowTrending (trends)
+- Clock (time/history)
+- CheckCircle/XCircle (outcomes)
 
-Icon sizing: w-6 h-6 (cards), w-5 h-5 (inline), w-8 h-8 (achievement badges)
+**Sizing**: w-5 h-5 (default), w-4 h-4 (small inline), w-6 h-6 (card headers)
 
 ---
 
-## Animation & Interactivity
+## Animations
 
-**Minimal, Purposeful Animations**:
-- Stat counter animation on load (count-up effect)
-- Progress bar fill animation (duration-1000)
-- Card hover: slight scale (scale-105) and shadow increase
-- Smooth transitions on all interactive elements (transition-all duration-300)
-- Achievement badge pulse on unlock
-- **No complex scroll animations** - keep performance high for data updates
+**Minimal, Performance-Focused**:
+- Smooth transitions on interactive elements (transition-colors duration-200)
+- Hover scale on cards (hover:scale-[1.01])
+- Loading skeletons for data fetch (pulse animation)
+- Chart animations on initial render only
+- No scroll-triggered animations
 
 ---
 
 ## Accessibility
 
-- High contrast text on all backgrounds
-- Keyboard navigation for all interactive elements
-- ARIA labels on stat cards and charts
-- Focus states visible on all inputs and buttons
-- Table headers properly structured with scope attributes
-- Color not sole indicator (use icons + text for profit/loss states)
-
----
-
-## Special Elements
-
-### Wallet Connection State
-**Disconnected**: Large input field with connect button
-**Connected**: Condensed header showing abbreviated address with disconnect option
-
-### Empty States
-- Friendly illustrations (simple line art)
-- Clear CTA: "Connect wallet to view your stats"
-- Supporting text explaining what users will see
-
-### Loading States
-- Skeleton screens for stat cards
-- Loading spinner for chart data
-- Shimmer effect on placeholder elements
+- Minimum contrast ratios met with provided theme
+- Keyboard navigation for all controls
+- ARIA labels on data visualizations
+- Focus-visible states on all interactive elements
+- Table semantic markup with proper headers
+- Screen reader text for icon-only buttons
 
 ---
 
 ## Mobile Optimization
 
-- Hamburger menu for navigation if multi-page
-- Horizontal scroll for achievement badges
-- Stacked stat cards (single column)
-- Simplified table → card view
-- Bottom sheet for detailed position info
-- Sticky CTA for wallet connection
+- Sticky header with search (collapsible on scroll)
+- Stack metric cards (single column)
+- Horizontal scroll for tables (touch-friendly)
+- Bottom sheet modals for detailed position views
+- Larger touch targets (min h-11 for buttons)
+- Condensed wallet address display
 
 ---
 
 ## Images
 
-**No hero background image needed** - this is a data-focused dashboard where the information IS the visual centerpiece.
+**No Hero Background**: This is a data dashboard - the information is the visual focus.
 
-**Icon/Badge Graphics**: Achievement badges use Heroicons library, no custom illustrations needed. Focus on clean, data-forward design where numbers and charts create the visual impact.
+**Profile/Logo Graphics**: Use placeholder avatar circles for trader profiles in activity feed. Brand logo in header uses simple SVG or text treatment. All visual interest comes from data visualization and thoughtful spacing, not imagery.
 
 ---
 
-This gamified dashboard balances the excitement of gaming achievements with the clarity required for financial data, creating an engaging experience that encourages users to track and improve their trading performance.
+## Special States
+
+### Empty States
+- Centered content with search icon
+- Heading: "Enter a username to view trading stats"
+- Supporting text explaining functionality
+- No illustrations needed - keep minimal
+
+### Loading States
+- Skeleton screens matching card layouts
+- Shimmer effect on placeholders
+- Spinner for chart data loading
+
+### Error States
+- Inline error messages below search
+- Clear action guidance ("Wallet not found - verify address")
+
+---
+
+This design creates a premium, professional trading dashboard that prioritizes data clarity, spacious layouts, and sophisticated dark aesthetics inspired by lighter.gg's refined gaming interface approach.

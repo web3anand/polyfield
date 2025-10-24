@@ -34,43 +34,17 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8">
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 mb-4">
-                <Trophy className="w-10 h-10 text-primary" />
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold font-gaming text-foreground">
-                Polymarket Dashboard
+            <div className="text-center space-y-6">
+              <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground">
+                POLYMARKET
               </h1>
-              <p className="text-lg text-muted-foreground max-w-md">
-                Enter your Polymarket username to view your trading stats, PnL graphs, and achievements
+              <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase">
+                Real-time Tracking  •  Position Analytics
               </p>
             </div>
 
             <UsernameInput onSubmit={handleConnect} />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl mt-12">
-              <div className="text-center space-y-2">
-                <TrendingUp className="w-8 h-8 text-primary mx-auto" />
-                <h3 className="font-semibold text-foreground">Track PnL</h3>
-                <p className="text-sm text-muted-foreground">
-                  Visualize your profit & loss over time
-                </p>
-              </div>
-              <div className="text-center space-y-2">
-                <Trophy className="w-8 h-8 text-primary mx-auto" />
-                <h3 className="font-semibold text-foreground">Earn Achievements</h3>
-                <p className="text-sm text-muted-foreground">
-                  Unlock badges as you trade
-                </p>
-              </div>
-              <div className="text-center space-y-2">
-                <Target className="w-8 h-8 text-primary mx-auto" />
-                <h3 className="font-semibold text-foreground">Monitor Positions</h3>
-                <p className="text-sm text-muted-foreground">
-                  Track active and historical positions
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -112,70 +86,60 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-b from-primary/5 to-background border-b border-border">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-              Dashboard
-            </h1>
+      {/* Header */}
+      <div className="border-b border-border">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <div className="text-right hidden md:block">
-                <p className="text-xs text-muted-foreground">Viewing Profile</p>
-                <p className="text-sm font-medium text-foreground">
-                  @{connectedUsername}
-                </p>
-              </div>
-              <Button
-                data-testid="button-disconnect-header"
-                onClick={handleDisconnect}
-                variant="outline"
-                size="sm"
-              >
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                POLYMARKET
+              </h2>
+              <span className="text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary">
+                BETA
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                @{connectedUsername}
+              </span>
+              <Button variant="ghost" size="sm" onClick={handleDisconnect} data-testid="button-disconnect">
                 Disconnect
               </Button>
             </div>
           </div>
-
-          <Card className="p-6 md:p-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="md:col-span-1">
-                <p className="text-sm text-muted-foreground mb-2">Total Portfolio Value</p>
-                <p className="text-4xl md:text-5xl font-bold font-gaming text-foreground tabular-nums" data-testid="text-portfolio-value">
-                  ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">All-Time PnL</p>
-                <p className={`text-2xl md:text-3xl font-bold font-gaming tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
-                  {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Win Rate</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl md:text-3xl font-bold font-gaming tabular-nums text-foreground" data-testid="text-win-rate">
-                    {stats.winRate.toFixed(1)}%
-                  </p>
-                  <Target className="w-5 h-5 text-primary" />
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Total Trades</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl md:text-3xl font-bold font-gaming tabular-nums text-foreground" data-testid="text-total-trades">
-                    {stats.totalTrades.toLocaleString()}
-                  </p>
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                </div>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
 
-      {/* Main Dashboard Grid */}
-      <div className="container mx-auto px-4 py-8 space-y-8">
+      {/* Main Content */}
+      <div className="container mx-auto px-6 py-8 space-y-8">
+        {/* Key Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-6">
+              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Total Portfolio Value</p>
+              <p className="text-3xl md:text-4xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
+                ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </Card>
+            <Card className="p-6">
+              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">All-Time PnL</p>
+              <p className={`text-3xl md:text-4xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-primary' : 'text-destructive'}`} data-testid="text-total-pnl">
+                {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </Card>
+            <Card className="p-6">
+              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Win Rate</p>
+              <p className="text-3xl md:text-4xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
+                {stats.winRate.toFixed(1)}%
+              </p>
+            </Card>
+            <Card className="p-6">
+              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Total Trades</p>
+              <p className="text-3xl md:text-4xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
+                {stats.totalTrades.toLocaleString()}
+              </p>
+            </Card>
+        </div>
+
         {/* Achievement Banner */}
         <AchievementBanner achievements={achievements} />
 
