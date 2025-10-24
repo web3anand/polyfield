@@ -17,9 +17,9 @@ const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 // Helper to search for a user by username and get their wallet address
 async function findUserByUsername(username: string): Promise<string> {
   try {
-    // Use Polymarket public search API
+    // Use Polymarket public search API (uses 'q' parameter)
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-      params: { query: username },
+      params: { q: username },
       timeout: 5000,
     });
 
@@ -372,9 +372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      // Use Polymarket public search API
+      // Use Polymarket public search API (uses 'q' parameter)
       const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-        params: { query, limit: 10 },
+        params: { q: query, limit: 10 },
         timeout: 3000,
       });
 
