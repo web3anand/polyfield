@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -79,7 +79,6 @@
   --font-sans: 'Inter', sans-serif;
   --font-serif: 'Inter', sans-serif;
   --font-mono: Menlo, monospace;
-  --font-gaming: 'Rajdhani', sans-serif;
 
   --radius: 0.4rem;
 
@@ -126,17 +125,17 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 20 14% 4%;
+  --background: 0 0% 2%;
 
-  --foreground: 45 25% 91%;
+  --foreground: 0 0% 95%;
 
-  --border: 20 14% 15%;
+  --border: 0 0% 12%;
 
-  --card: 20 14% 8%;
+  --card: 0 0% 6%;
 
-  --card-foreground: 45 25% 85%;
+  --card-foreground: 0 0% 95%;
 
-  --card-border: 20 14% 12%;
+  --card-border: 0 0% 10%;
 
   --sidebar: 20 14% 8%;
 
@@ -160,17 +159,17 @@
 
   --popover-border: 20 14% 8%;
 
-  --primary: 9 75% 61%;
+  --primary: 142 76% 36%;
 
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 30 15% 52%;
+  --secondary: 0 0% 20%;
 
-  --secondary-foreground: 0 0% 100%;
+  --secondary-foreground: 0 0% 95%;
 
-  --muted: 20 14% 15%;
+  --muted: 0 0% 15%;
 
-  --muted-foreground: 45 15% 46%;
+  --muted-foreground: 0 0% 60%;
 
   --accent: 25 45% 20%;
 
@@ -300,9 +299,5 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
-  }
-
-  .font-gaming {
-    font-family: var(--font-gaming);
   }
 }

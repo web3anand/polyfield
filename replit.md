@@ -7,6 +7,7 @@ A gamified dashboard application for Polymarket traders that visualizes trading 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Design aesthetic: Lighter.gg inspired - sleek dark theme, clean typography, minimal gaming elements, sharp contrasts, professional trading interface.
 
 ## System Architecture
 
