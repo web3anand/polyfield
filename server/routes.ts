@@ -443,16 +443,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fetchUserTrades(walletAddress),
         ]);
       } catch (error) {
-        // If API returns 401 (unauthorized), fall back to demo data
+        // Handle various API errors by falling back to demo data
         if (axios.isAxiosError(error)) {
           const status = error.response?.status;
           console.log(`Polymarket CLOB API error: ${error.message}, status: ${status}`);
           
-          if (status === 401 || status === 403) {
-            console.log(`API authentication error for ${validatedUsername}, using demo data`);
+          // For auth errors (401/403) or not found (404), use demo data
+          // This handles cases where the API requires auth or user has no public data
+          if (status === 401 || status === 403 || status === 404) {
+            console.log(`API returned ${status} for ${validatedUsername}, using demo data`);
             useDemoData = true;
           } else {
-            // Other API errors - return 503
+            // Other API errors (500, etc) - return 503
             return res.status(503).json({ 
               error: "Unable to reach Polymarket API. Please try again later." 
             });
