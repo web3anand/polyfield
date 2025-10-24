@@ -25,13 +25,19 @@ async function findUserByUsername(username: string): Promise<string> {
       timeout: 5000,
     });
 
+    console.log(`API response for ${username}:`, JSON.stringify(response.data, null, 2));
+
     // Check if profiles were returned
     if (response.data && response.data.profiles && Array.isArray(response.data.profiles)) {
+      console.log(`Found ${response.data.profiles.length} profiles`);
+      
       // Search for exact username match (case-insensitive)
       for (const profile of response.data.profiles) {
+        console.log(`Profile: name=${profile.name}, proxyWallet=${profile.proxyWallet}`);
         if (profile.name && profile.name.toLowerCase() === username.toLowerCase()) {
           const address = profile.proxyWallet;
           if (address) {
+            console.log(`Found exact match with wallet: ${address}`);
             return address;
           }
         }
@@ -39,10 +45,12 @@ async function findUserByUsername(username: string): Promise<string> {
       
       // If no exact match but we have results, return first match
       if (response.data.profiles.length > 0 && response.data.profiles[0].proxyWallet) {
+        console.log(`Using first match with wallet: ${response.data.profiles[0].proxyWallet}`);
         return response.data.profiles[0].proxyWallet;
       }
     }
 
+    console.log(`No profiles or wallet addresses found for ${username}`);
     // If no profiles found, throw user not found
     throw new Error("USER_NOT_FOUND");
   } catch (error) {
