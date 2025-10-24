@@ -72,6 +72,7 @@ export const userProfileSchema = z.object({
   username: z.string(),
   profileImage: z.string().optional(),
   bio: z.string().optional(),
+  walletAddress: z.string().optional(),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
