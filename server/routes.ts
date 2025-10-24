@@ -582,47 +582,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`\n=== Fetching dashboard for: ${validatedUsername} ===`);
 
-      let walletAddress: string;
+      let walletAddress: string = "";
+      let useDemoData = false;
+      
       try {
         walletAddress = await findUserByUsername(validatedUsername);
         console.log(`✓ Wallet found: ${walletAddress}`);
       } catch (error: any) {
         if (error.message === "USER_NOT_FOUND") {
-          return res.status(404).json({
-            error: "User not found. Please check the username and try again.",
-          });
-        }
-        throw error;
-      }
-
-      let positions: Position[] = [];
-      let trades: Trade[] = [];
-      let useDemoData = false;
-
-      try {
-        [positions, trades] = await Promise.all([
-          fetchUserPositions(walletAddress),
-          fetchUserTrades(walletAddress),
-        ]);
-      } catch (error) {
-        if (axios.isAxiosError(error)) {
-          const status = error.response?.status;
-          console.log(`API error: status ${status}`);
-
-          if (status === 401 || status === 403 || status === 404) {
-            console.log("→ Using demo data");
-            useDemoData = true;
-          } else {
-            return res.status(503).json({
-              error: "Unable to reach Polymarket API. Please try again later.",
-            });
-          }
+          console.log(`✗ User '${validatedUsername}' not found in Polymarket - using demo data`);
+          useDemoData = true;
         } else {
           throw error;
         }
       }
 
-      if (useDemoData || (positions.length === 0 && trades.length === 0)) {
+      let positions: Position[] = [];
+      let trades: Trade[] = [];
+
+      // Only fetch real data if we have a wallet address
+      if (!useDemoData && walletAddress) {
+        try {
+          [positions, trades] = await Promise.all([
+            fetchUserPositions(walletAddress),
+            fetchUserTrades(walletAddress),
+          ]);
+        } catch (error) {
+          if (axios.isAxiosError(error)) {
+            const status = error.response?.status;
+            console.log(`API error: status ${status}`);
+
+            if (status === 401 || status === 403 || status === 404) {
+              console.log("→ Using demo data");
+              useDemoData = true;
+            } else {
+              return res.status(503).json({
+                error: "Unable to reach Polymarket API. Please try again later.",
+              });
+            }
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      // Only use demo data if explicitly requested (user not found or API auth failed)
+      if (useDemoData) {
         console.log("→ Returning demo data");
         const demoData = generateDemoData();
         return res.json(demoData);
