@@ -1,0 +1,141 @@
+GET
+Search markets, events, and profiles
+GET
+/
+public-search
+
+Send
+Search markets, events, and profiles
+
+Query
+q
+
+string
+required
+imdaybot
+cache
+
+boolean
+
+select cache
+events_status
+
+string
+enter events_status
+limit_per_type
+
+integer
+enter limit_per_type
+page
+
+integer
+enter page
+events_tag
+
+string[]
+
+Add an item
+keep_closed_markets
+
+integer
+enter keep_closed_markets
+sort
+
+string
+enter sort
+ascending
+
+boolean
+
+select ascending
+search_tags
+
+boolean
+
+true
+search_profiles
+
+boolean
+
+true
+recurrence
+
+string
+enter recurrence
+exclude_tag_id
+
+integer[]
+
+Add an item
+optimized
+
+boolean
+
+true
+200 - OK
+
+Body
+Download
+
+Copy
+{
+  "events": [],
+  "hasMore": false,
+  "profiles": [
+    {
+      "name": "imdaybot",
+      "pseudonym": "Wrong-Slapstick",
+      "displayUsernamePublic": true,
+      "profileImage": "https://polymarket-upload.s3.us-east-2.amazonaws.com/profile-image-3472478-49f3654d-d895-4726-937a-e381ab33addc.jpg",
+      "bio": "never fade",
+      "proxyWallet": "0x24c8496751f9567b99ae0c62254a15f31003978d"
+    }
+  ],
+  "tags": null
+}
+Search markets, events, and profiles
+
+
+Copy
+
+Ask AI
+curl --request GET \
+  --url 'https://gamma-api.polymarket.com/public-search?q=imdaybot&search_tags=true&optimized=true&search_profiles=true'
+
+200
+
+Copy
+
+Ask AI
+{
+  "events": [
+    {
+      "id": "<string>",
+      "ticker": "<string>",
+      "slug": "<string>",
+      "title": "<string>",
+      "subtitle": "<string>",
+      "description": "<string>",
+      "resolutionSource": "<string>",
+      "startDate": "2023-11-07T05:31:56Z",
+      "creationDate": "2023-11-07T05:31:56Z",
+      "endDate": "2023-11-07T05:31:56Z",
+      "image": "<string>",
+      "icon": "<string>",
+      "active": true,
+      "closed": true,
+      "archived": true,
+      "new": true,
+      "featured": true,
+      "restricted": true,
+      "liquidity": 123,
+      "volume": 123,
+      "openInterest": 123,
+      "sortBy": "<string>",
+      "category": "<string>",
+      "subcategory": "<string>",
+      "isTemplate": true,
+      "templateVariables": "<string>",
+      "published_at": "<string>",
+      "createdBy": "<string>",
+      "updatedBy": "<string>",
