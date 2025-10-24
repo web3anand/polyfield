@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Wallet, TrendingUp, Target, Flame, Trophy, Clock } from "lucide-react";
+import { TrendingUp, Target, Trophy, Clock, Copy, Check } from "lucide-react";
 import type { DashboardData } from "@shared/schema";
 import { StatCard } from "@/components/stat-card";
 import { PnLChart } from "@/components/pnl-chart";
@@ -11,9 +11,12 @@ import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { UsernameInput } from "@/components/username-input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const [connectedUsername, setConnectedUsername] = useState("");
+  const [copiedAddress, setCopiedAddress] = useState(false);
+  const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard/username", connectedUsername],
@@ -28,23 +31,80 @@ export default function Dashboard() {
     setConnectedUsername("");
   };
 
+  const handleCopyAddress = async () => {
+    if (data?.profile.walletAddress) {
+      await navigator.clipboard.writeText(data.profile.walletAddress);
+      setCopiedAddress(true);
+      toast({
+        title: "Address Copied",
+        description: "Wallet address copied to clipboard",
+      });
+      setTimeout(() => setCopiedAddress(false), 2000);
+    }
+  };
+
+  // Calculate total open positions value
+  const getOpenPositionsValue = () => {
+    if (!data) return 0;
+    return data.positions
+      .filter(p => p.status === "ACTIVE")
+      .reduce((total, pos) => total + (pos.size * pos.currentPrice), 0);
+  };
+
   if (!connectedUsername) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8">
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Hero Section */}
+        <div className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-4xl space-y-12">
             <div className="text-center space-y-4">
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+              <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground">
                 POLYMARKET
               </h1>
-              <p className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
+              <p className="text-sm font-medium text-muted-foreground tracking-wider uppercase">
                 Real-time Tracking  •  Position Analytics
               </p>
             </div>
 
-            <UsernameInput onSubmit={handleConnect} />
+            <div className="flex justify-center">
+              <UsernameInput onSubmit={handleConnect} />
+            </div>
 
+            {/* Feature Stats */}
+            <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-8">
+              <div className="text-center space-y-2">
+                <div className="text-3xl md:text-4xl font-bold text-chart-2 tabular-nums">
+                  LIVE
+                </div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Real-time Data
+                </div>
+              </div>
+              <div className="text-center space-y-2 border-l border-r border-border">
+                <div className="text-3xl md:text-4xl font-bold text-primary tabular-nums">
+                  100%
+                </div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Accurate PnL
+                </div>
+              </div>
+              <div className="text-center space-y-2">
+                <div className="text-3xl md:text-4xl font-bold text-chart-1 tabular-nums">
+                  FREE
+                </div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Always Free
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Footer Note */}
+        <div className="border-t border-border py-6">
+          <p className="text-center text-xs text-muted-foreground">
+            Track any Polymarket trader's performance  •  View positions & PnL history  •  Analyze trading patterns
+          </p>
         </div>
       </div>
     );
@@ -82,13 +142,14 @@ export default function Dashboard() {
   }
 
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
+  const openPositionsValue = getOpenPositionsValue();
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border">
+      {/* Header with Search Bar */}
+      <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-4">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold tracking-tight text-foreground">
                 POLYMARKET
@@ -97,34 +158,64 @@ export default function Dashboard() {
                 BETA
               </span>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-8 h-8" data-testid="avatar-profile">
-                  <AvatarImage src={profile.profileImage} alt={profile.username} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                    {profile.username.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm text-muted-foreground">
-                  @{profile.username}
-                </span>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleDisconnect} data-testid="button-disconnect">
-                Disconnect
-              </Button>
+            <div className="flex-1 max-w-md mx-4">
+              <UsernameInput onSubmit={handleConnect} compact />
             </div>
+            <Button variant="ghost" size="sm" onClick={handleDisconnect} data-testid="button-disconnect">
+              Disconnect
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-6 py-8 space-y-8">
-        {/* Key Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+      {/* Dashboard Content with Upward Animation */}
+      <div className="animate-in slide-in-from-bottom-8 duration-500">
+        {/* Profile Section */}
+        <div className="border-b border-border bg-card/50">
+          <div className="container mx-auto px-6 py-6">
+            <div className="flex items-center gap-4">
+              <Avatar className="w-16 h-16" data-testid="avatar-profile">
+                <AvatarImage src={profile.profileImage} alt={profile.username} />
+                <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
+                  {profile.username.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-foreground" data-testid="text-username">
+                  @{profile.username}
+                </h3>
+                {profile.walletAddress && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="text-xs text-muted-foreground font-mono" data-testid="text-wallet-address">
+                      {profile.walletAddress.slice(0, 6)}...{profile.walletAddress.slice(-4)}
+                    </code>
+                    <button
+                      onClick={handleCopyAddress}
+                      className="hover-elevate p-1 rounded transition-all"
+                      data-testid="button-copy-address"
+                      aria-label="Copy wallet address"
+                    >
+                      {copiedAddress ? (
+                        <Check className="w-3.5 h-3.5 text-chart-2" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="container mx-auto px-6 py-8 space-y-8">
+          {/* Key Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
             <Card className="p-6 hover-elevate">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Portfolio Value</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Open Positions Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
-                ${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
             <Card className="p-6 hover-elevate">
@@ -145,47 +236,41 @@ export default function Dashboard() {
                 {stats.totalTrades.toLocaleString()}
               </p>
             </Card>
-        </div>
-
-        {/* PnL Chart + Quick Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <PnLChart data={pnlHistory} />
           </div>
-          <div className="space-y-4">
-            <StatCard
-              icon={<Flame className="w-6 h-6" />}
-              label="Win Streak"
-              value={stats.winStreak}
-              suffix="wins"
-              color="text-chart-3"
-            />
-            <StatCard
-              icon={<TrendingUp className="w-6 h-6" />}
-              label="Best Trade"
-              value={`$${stats.bestTrade.toFixed(2)}`}
-              color="text-chart-2"
-            />
-            <StatCard
-              icon={<Trophy className="w-6 h-6" />}
-              label="Active Positions"
-              value={stats.activePositions}
-              color="text-primary"
-            />
-            <StatCard
-              icon={<Clock className="w-6 h-6" />}
-              label="Trading Volume"
-              value={`$${(stats.totalVolume / 1000).toFixed(1)}K`}
-              color="text-chart-1"
-            />
+
+          {/* PnL Chart + Quick Stats */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <PnLChart data={pnlHistory} />
+            </div>
+            <div className="space-y-4">
+              <StatCard
+                icon={<TrendingUp className="w-6 h-6" />}
+                label="Best Trade"
+                value={`$${stats.bestTrade.toFixed(2)}`}
+                color="text-chart-2"
+              />
+              <StatCard
+                icon={<Trophy className="w-6 h-6" />}
+                label="Active Positions"
+                value={stats.activePositions}
+                color="text-primary"
+              />
+              <StatCard
+                icon={<Clock className="w-6 h-6" />}
+                label="Trading Volume"
+                value={`$${(stats.totalVolume / 1000).toFixed(1)}K`}
+                color="text-chart-1"
+              />
+            </div>
           </div>
+
+          {/* Active Positions */}
+          <PositionsTable positions={positions.filter(p => p.status === "ACTIVE")} />
+
+          {/* Recent Activity */}
+          <RecentActivity trades={recentTrades} />
         </div>
-
-        {/* Active Positions */}
-        <PositionsTable positions={positions.filter(p => p.status === "ACTIVE")} />
-
-        {/* Recent Activity */}
-        <RecentActivity trades={recentTrades} />
       </div>
     </div>
   );

@@ -7,7 +7,18 @@ A gamified dashboard application for Polymarket traders that visualizes trading 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
-Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography, minimal design, sharp contrasts, professional trading interface.
+Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography, minimal design, sharp contrasts, professional trading interface with game-style aesthetics.
+
+## Recent Changes (October 2025)
+
+- **Header Redesign**: Implemented persistent sticky search bar at top for quick user switching
+- **Profile Section**: Moved profile info below header with larger avatar, username, and wallet address display
+- **Wallet Address**: Added copyable wallet address with visual feedback (check icon on copy)
+- **Layout Optimization**: Removed Win Streak card for cleaner focus on key metrics
+- **Portfolio Metric**: Changed "Total Portfolio Value" to "Open Positions Value" showing only active position values
+- **Animations**: Added upward slide-in transition when dashboard loads for smooth UX
+- **Search Enhancement**: Created compact mode for header search bar with autocomplete
+- **Hidden Scrollbars**: Applied across positions table and activity feed for cleaner aesthetic
 
 ## System Architecture
 
@@ -34,15 +45,18 @@ Design aesthetic: Lighter.gg inspired - sleek dark theme, clean Inter typography
 
 **Component Structure:**
 - Dashboard page as the main view with username connection flow
+- Persistent search bar in sticky header for quick user switching
+- Profile section with avatar, username, and wallet address (with copy functionality)
 - Modular components for different data visualizations:
   - PnL chart showing all-time performance (no time filters) with dynamic value in top corner
   - Positions table with sorting (PnL, Size, Market) and scrollable view (max 5 visible rows)
   - Recent activity feed with scrollable trade history
-  - Stat cards showing key metrics (Portfolio Value, All-Time PnL, Win Rate, Total Trades)
-  - Sidebar stat cards (Win Streak, Best Trade, Active Positions, Trading Volume)
+  - Key stat cards showing: Open Positions Value, All-Time PnL, Win Rate, Total Trades
+  - Sidebar stat cards: Best Trade, Active Positions, Trading Volume
 - Loading skeleton states for progressive UI rendering
-- Username input with live autocomplete search suggestions
-- Profile picture display in header using Avatar component
+- Username input with live autocomplete search suggestions (compact and full modes)
+- Upward slide-in animation when dashboard loads
+- Profile picture display with wallet address and copy button
 
 **State Management:**
 - React Query handles server state with infinite stale time and no automatic refetching
