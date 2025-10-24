@@ -12,8 +12,16 @@
       "dest": "/server/index.ts"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/public/assets/$1"
+    },
+    {
+      "src": "/favicon.png",
+      "dest": "/public/favicon.png"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/public/index.html"
     }
   ]
 }
