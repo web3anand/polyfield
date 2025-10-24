@@ -117,7 +117,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                     </td>
                     <td className="py-4 px-4">
                       <Badge 
-                        variant={position.outcome === "YES" ? "default" : "secondary"}
+                        variant="outline"
                         data-testid={`badge-outcome-${index}`}
                       >
                         {position.outcome}
@@ -161,7 +161,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-foreground flex-1">{position.marketName}</p>
-                  <Badge variant={position.outcome === "YES" ? "default" : "secondary"}>
+                  <Badge variant="outline">
                     {position.outcome}
                   </Badge>
                 </div>
