@@ -15,10 +15,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "functions": {
-    "server/index.ts": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  ]
 }
