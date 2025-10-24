@@ -259,18 +259,28 @@ function calculateBalanceFromActivity(activity: any[]): { cashBalance: number; r
   let deposits = 0;
   let withdrawals = 0;
 
+  console.log(`\n📊 Processing ${activity.length} activity events for balance calculation`);
+  
+  // Group events by type for debugging
+  const eventTypes: Record<string, number> = {};
+
   for (const event of activity) {
     const type = event.type?.toUpperCase();
     const usdcSize = parseFloat(event.usdcSize || "0");
     const side = event.side?.toUpperCase();
 
+    // Count event types
+    eventTypes[type || 'UNKNOWN'] = (eventTypes[type || 'UNKNOWN'] || 0) + 1;
+
     // Track deposits and withdrawals
-    if (type === "DEPOSIT" || type === "CONVERSION" && usdcSize > 0) {
+    if (type === "DEPOSIT" || (type === "CONVERSION" && usdcSize > 0)) {
       deposits += Math.abs(usdcSize);
       cashBalance += Math.abs(usdcSize);
+      console.log(`  💰 DEPOSIT: +$${Math.abs(usdcSize).toFixed(2)} → Balance: $${cashBalance.toFixed(2)}`);
     } else if (type === "WITHDRAW") {
       withdrawals += Math.abs(usdcSize);
       cashBalance -= Math.abs(usdcSize);
+      console.log(`  💸 WITHDRAW: -$${Math.abs(usdcSize).toFixed(2)} → Balance: $${cashBalance.toFixed(2)}`);
     }
     // Track trades (BUY spends cash, SELL adds cash)
     else if (type === "TRADE") {
@@ -283,6 +293,7 @@ function calculateBalanceFromActivity(activity: any[]): { cashBalance: number; r
     // Track redeems and rewards (add cash)
     else if (type === "REDEEM" || type === "REWARD" || type === "CLAIM") {
       cashBalance += usdcSize;
+      console.log(`  🎁 ${type}: +$${usdcSize.toFixed(2)} → Balance: $${cashBalance.toFixed(2)}`);
     }
     // Track fees (subtract from cash)
     else if (type === "FEE") {
@@ -293,10 +304,95 @@ function calculateBalanceFromActivity(activity: any[]): { cashBalance: number; r
   const netDeposits = deposits - withdrawals;
   const realizedPnL = cashBalance - netDeposits;
 
+  console.log(`\n📈 Activity Summary:`);
+  console.log(`  Event types:`, eventTypes);
+  console.log(`  Total deposits: $${deposits.toFixed(2)}`);
+  console.log(`  Total withdrawals: $${withdrawals.toFixed(2)}`);
+  console.log(`  Net deposits: $${netDeposits.toFixed(2)}`);
+  console.log(`  Final cash balance: $${cashBalance.toFixed(2)}`);
+  console.log(`  Realized PnL: $${realizedPnL.toFixed(2)}`);
+
   return {
     cashBalance: parseFloat(cashBalance.toFixed(2)),
     realizedPnL: parseFloat(realizedPnL.toFixed(2)),
     netDeposits: parseFloat(netDeposits.toFixed(2)),
+  };
+}
+
+// Calculate realized PnL from buy/sell trade pairs
+function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number; winRate: number; bestTrade: number; worstTrade: number; winStreak: number } {
+  // Group trades by market and outcome
+  const marketPositions: Record<string, { buys: Trade[], sells: Trade[] }> = {};
+  
+  for (const trade of trades) {
+    const key = `${trade.marketName}_${trade.outcome}`;
+    if (!marketPositions[key]) {
+      marketPositions[key] = { buys: [], sells: [] };
+    }
+    if (trade.type === "BUY") {
+      marketPositions[key].buys.push(trade);
+    } else {
+      marketPositions[key].sells.push(trade);
+    }
+  }
+
+  let totalRealizedPnL = 0;
+  const tradePnLs: number[] = [];
+  let wins = 0;
+  let losses = 0;
+  let currentStreak = 0;
+  let maxStreak = 0;
+
+  // Match buys with sells to calculate realized PnL
+  for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
+    let remainingBuySize = 0;
+    let avgBuyPrice = 0;
+    let totalBuyCost = 0;
+
+    // Calculate FIFO cost basis from buys
+    for (const buy of buys.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())) {
+      totalBuyCost += buy.price * buy.size;
+      remainingBuySize += buy.size;
+      avgBuyPrice = totalBuyCost / remainingBuySize;
+    }
+
+    // Match with sells
+    for (const sell of sells.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())) {
+      const sizeToMatch = Math.min(sell.size, remainingBuySize);
+      if (sizeToMatch > 0) {
+        const pnl = (sell.price - avgBuyPrice) * sizeToMatch;
+        totalRealizedPnL += pnl;
+        tradePnLs.push(pnl);
+        
+        if (pnl > 0) {
+          wins++;
+          currentStreak++;
+          maxStreak = Math.max(maxStreak, currentStreak);
+        } else if (pnl < 0) {
+          losses++;
+          currentStreak = 0;
+        }
+        
+        remainingBuySize -= sizeToMatch;
+        totalBuyCost -= avgBuyPrice * sizeToMatch;
+        if (remainingBuySize > 0) {
+          avgBuyPrice = totalBuyCost / remainingBuySize;
+        }
+      }
+    }
+  }
+
+  const totalTrades = wins + losses;
+  const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+  const bestTrade = tradePnLs.length > 0 ? Math.max(...tradePnLs) : 0;
+  const worstTrade = tradePnLs.length > 0 ? Math.min(...tradePnLs) : 0;
+
+  return {
+    realizedPnL: parseFloat(totalRealizedPnL.toFixed(2)),
+    winRate: parseFloat(winRate.toFixed(1)),
+    bestTrade: parseFloat(bestTrade.toFixed(2)),
+    worstTrade: parseFloat(worstTrade.toFixed(2)),
+    winStreak: maxStreak,
   };
 }
 
@@ -309,7 +405,10 @@ function calculateStats(
   const activePositions = positions.filter((p) => p.status === "ACTIVE");
 
   // Calculate balance from activity ledger
-  const { cashBalance, realizedPnL, netDeposits } = calculateBalanceFromActivity(activity);
+  const { cashBalance, realizedPnL: ledgerRealizedPnL, netDeposits } = calculateBalanceFromActivity(activity);
+
+  // Calculate realized PnL from matched buy/sell trades
+  const tradeMetrics = calculateRealizedPnLFromTrades(trades);
 
   // Portfolio value = cash + value of active positions
   const positionValue = activePositions.reduce((sum, pos) => {
@@ -318,41 +417,29 @@ function calculateStats(
   
   const totalValue = cashBalance + positionValue;
 
-  // All-time PnL = realized PnL + unrealized PnL from active positions
+  // All-time PnL: Use ledger-based if available (more accurate), otherwise use trade matching
   const unrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
-  const totalPnL = realizedPnL + unrealizedPnL;
+  const totalPnL = (ledgerRealizedPnL !== 0 ? ledgerRealizedPnL : tradeMetrics.realizedPnL) + unrealizedPnL;
 
   const totalVolume = trades.reduce((sum, trade) => {
     return sum + trade.price * trade.size;
   }, 0);
 
-  // Calculate win metrics from positions
-  const positionsWithPnL = positions.filter((p) => p.unrealizedPnL !== 0);
-  const winningPositions = positions.filter((p) => p.unrealizedPnL > 0);
-  const winRate =
-    positionsWithPnL.length > 0
-      ? (winningPositions.length / positionsWithPnL.length) * 100
-      : 0;
+  // Use trade-based metrics if we have trades, otherwise fall back to positions
+  const winRate = trades.length > 0 ? tradeMetrics.winRate : 0;
+  const bestTrade = trades.length > 0 ? tradeMetrics.bestTrade : (positions.length > 0 ? Math.max(...positions.map(p => p.unrealizedPnL)) : 0);
+  const worstTrade = trades.length > 0 ? tradeMetrics.worstTrade : (positions.length > 0 ? Math.min(...positions.map(p => p.unrealizedPnL)) : 0);
+  const winStreak = trades.length > 0 ? tradeMetrics.winStreak : 0;
 
-  const pnls = positions.map((p) => p.unrealizedPnL);
-  const bestTrade = pnls.length > 0 ? Math.max(...pnls) : 0;
-  const worstTrade = pnls.length > 0 ? Math.min(...pnls) : 0;
-
-  // Calculate win streak from positions
-  const sortedPositions = [...positions].sort(
-    (a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime(),
-  );
-
-  let currentStreak = 0;
-  let maxStreak = 0;
-  for (const pos of sortedPositions) {
-    if (pos.unrealizedPnL > 0) {
-      currentStreak++;
-      maxStreak = Math.max(maxStreak, currentStreak);
-    } else if (pos.unrealizedPnL < 0) {
-      currentStreak = 0;
-    }
-  }
+  console.log(`\n💼 Portfolio Summary:`);
+  console.log(`  Cash balance: $${cashBalance.toFixed(2)}`);
+  console.log(`  Position value: $${positionValue.toFixed(2)}`);
+  console.log(`  Total value: $${totalValue.toFixed(2)}`);
+  console.log(`  Realized PnL (ledger): $${ledgerRealizedPnL.toFixed(2)}`);
+  console.log(`  Realized PnL (trades): $${tradeMetrics.realizedPnL.toFixed(2)}`);
+  console.log(`  Unrealized PnL: $${unrealizedPnL.toFixed(2)}`);
+  console.log(`  All-time PnL: $${totalPnL.toFixed(2)}`);
+  console.log(`  Win rate: ${winRate.toFixed(1)}%`);
 
   return {
     totalValue,
@@ -363,7 +450,7 @@ function calculateStats(
     bestTrade,
     worstTrade,
     activePositions: activePositions.length,
-    winStreak: maxStreak,
+    winStreak,
   };
 }
 
