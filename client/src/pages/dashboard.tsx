@@ -10,6 +10,7 @@ import { RecentActivity } from "@/components/recent-activity";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { UsernameInput } from "@/components/username-input";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function Dashboard() {
   const [connectedUsername, setConnectedUsername] = useState("");
@@ -80,7 +81,7 @@ export default function Dashboard() {
     return null;
   }
 
-  const { stats, pnlHistory, positions, recentTrades } = data;
+  const { profile, stats, pnlHistory, positions, recentTrades } = data;
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,9 +98,17 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
-                @{connectedUsername}
-              </span>
+              <div className="flex items-center gap-3">
+                <Avatar className="w-8 h-8" data-testid="avatar-profile">
+                  <AvatarImage src={profile.profileImage} alt={profile.username} />
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                    {profile.username.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-muted-foreground">
+                  @{profile.username}
+                </span>
+              </div>
               <Button variant="ghost" size="sm" onClick={handleDisconnect} data-testid="button-disconnect">
                 Disconnect
               </Button>

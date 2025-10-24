@@ -14,8 +14,8 @@ import type {
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 
-// Helper to search for a user by username and get their wallet address
-async function findUserByUsername(username: string): Promise<string> {
+// Helper to search for a user by username and get their wallet address and profile
+async function findUserByUsername(username: string): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
   try {
     console.log(`Searching for user: ${username}`);
 
@@ -112,7 +112,11 @@ async function findUserByUsername(username: string): Promise<string> {
           console.log(
             `✓ Exact match found: ${profileName} -> ${walletAddress}`,
           );
-          return walletAddress;
+          return {
+            wallet: walletAddress,
+            profileImage: profile.profileImage || profile.profile_image,
+            bio: profile.bio,
+          };
         }
       }
 
@@ -125,7 +129,11 @@ async function findUserByUsername(username: string): Promise<string> {
               possibleNameFields.map((f) => profile[f]).find(Boolean) ||
               "unknown";
             console.log(`→ Using first match: ${name} -> ${wallet}`);
-            return wallet;
+            return {
+              wallet,
+              profileImage: profile.profileImage || profile.profile_image,
+              bio: profile.bio,
+            };
           }
         }
       }
@@ -713,6 +721,11 @@ function generateDemoData(): DashboardData {
   const achievements = calculateAchievements(stats, trades);
 
   return {
+    profile: {
+      username: "demo_user",
+      profileImage: undefined,
+      bio: "Demo account for preview",
+    },
     stats,
     pnlHistory,
     positions,
@@ -804,10 +817,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`\n=== Fetching dashboard for: ${validatedUsername} ===`);
 
       let walletAddress: string = "";
+      let profileImage: string | undefined;
+      let bio: string | undefined;
       let useDemoData = false;
       
       try {
-        walletAddress = await findUserByUsername(validatedUsername);
+        const userProfile = await findUserByUsername(validatedUsername);
+        walletAddress = userProfile.wallet;
+        profileImage = userProfile.profileImage;
+        bio = userProfile.bio;
         console.log(`✓ Wallet found: ${walletAddress}`);
       } catch (error: any) {
         if (error.message === "USER_NOT_FOUND") {
@@ -861,6 +879,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const achievements = calculateAchievements(stats, trades);
 
       const dashboardData: DashboardData = {
+        profile: {
+          username: validatedUsername,
+          profileImage,
+          bio,
+        },
         stats,
         pnlHistory,
         positions,
