@@ -23,16 +23,16 @@ export function VolumeMetrics({ totalVolume, trades }: VolumeMetricsProps) {
   ];
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="mb-4">
-        <h2 className="text-2xl font-semibold text-foreground">Trading Volume</h2>
-        <p className="text-sm text-muted-foreground">Volume breakdown by position type</p>
+        <h2 className="text-xl font-semibold text-foreground">Trading Volume</h2>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">Volume breakdown by position type</p>
       </div>
 
       <div className="flex flex-col items-center">
         <div className="text-center mb-4">
-          <p className="text-sm text-muted-foreground mb-1">Total Volume</p>
-          <p className="text-4xl font-bold font-gaming text-foreground tabular-nums" data-testid="text-total-volume">
+          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Total Volume</p>
+          <p className="text-3xl font-bold text-foreground tabular-nums" data-testid="text-total-volume">
             ${totalVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
@@ -73,14 +73,14 @@ export function VolumeMetrics({ totalVolume, trades }: VolumeMetricsProps) {
 
         <div className="grid grid-cols-2 gap-6 w-full mt-6">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-1">YES Volume</p>
-            <p className="text-xl font-bold font-gaming text-chart-2 tabular-nums">
+            <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">YES Volume</p>
+            <p className="text-xl font-bold text-chart-2 tabular-nums">
               ${(yesVolume / 1000).toFixed(1)}K
             </p>
           </div>
           <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-1">NO Volume</p>
-            <p className="text-xl font-bold font-gaming text-chart-1 tabular-nums">
+            <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">NO Volume</p>
+            <p className="text-xl font-bold text-chart-1 tabular-nums">
               ${(noVolume / 1000).toFixed(1)}K
             </p>
           </div>

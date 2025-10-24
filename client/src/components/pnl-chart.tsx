@@ -41,11 +41,11 @@ export function PnLChart({ data }: PnLChartProps) {
   const isPositive = chartData.length > 0 && chartData[chartData.length - 1].value >= (chartData[0]?.value || 0);
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">PnL Over Time</h2>
-          <p className="text-sm text-muted-foreground">Track your profit and loss</p>
+          <h2 className="text-xl font-semibold text-foreground">PnL Over Time</h2>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Track your profit and loss</p>
         </div>
         <div className="flex gap-2">
           {(["24H", "7D", "30D", "ALL"] as TimeRange[]).map((range) => (

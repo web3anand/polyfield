@@ -12,10 +12,10 @@ export function RecentActivity({ trades }: RecentActivityProps) {
   const recentTrades = trades.slice(0, 10);
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="mb-4">
-        <h2 className="text-2xl font-semibold text-foreground">Recent Activity</h2>
-        <p className="text-sm text-muted-foreground">Your latest trades and positions</p>
+        <h2 className="text-xl font-semibold text-foreground">Recent Activity</h2>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">Your latest trades and positions</p>
       </div>
 
       <ScrollArea className="h-[400px] pr-4" data-testid="activity-feed">

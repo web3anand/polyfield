@@ -435,6 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch real data from Polymarket APIs
       let positions: Position[] = [];
       let trades: Trade[] = [];
+      let useDemoData = false;
       
       try {
         [positions, trades] = await Promise.all([
@@ -442,19 +443,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           fetchUserTrades(walletAddress),
         ]);
       } catch (error) {
-        // API error while fetching data - return 503
+        // If API returns 401 (unauthorized), fall back to demo data
         if (axios.isAxiosError(error)) {
-          console.error("Polymarket API error:", error.message);
-          return res.status(503).json({ 
-            error: "Unable to reach Polymarket API. Please try again later." 
-          });
+          const status = error.response?.status;
+          console.log(`Polymarket CLOB API error: ${error.message}, status: ${status}`);
+          
+          if (status === 401 || status === 403) {
+            console.log(`API authentication error for ${validatedUsername}, using demo data`);
+            useDemoData = true;
+          } else {
+            // Other API errors - return 503
+            return res.status(503).json({ 
+              error: "Unable to reach Polymarket API. Please try again later." 
+            });
+          }
+        } else {
+          throw error;
         }
-        throw error;
       }
 
-      // If user has legitimately no data, use demo data for better UX
-      if (positions.length === 0 && trades.length === 0) {
-        console.log(`No trading activity found for ${validatedUsername}, showing demo data`);
+      // If user has legitimately no data or API is unauthorized, use demo data for better UX
+      if (useDemoData || (positions.length === 0 && trades.length === 0)) {
+        console.log(`Showing demo data for ${validatedUsername}`);
         const demoData = generateDemoData();
         return res.json(demoData);
       }

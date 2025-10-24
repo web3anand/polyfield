@@ -10,20 +10,20 @@ interface PositionsTableProps {
 export function PositionsTable({ positions }: PositionsTableProps) {
   if (positions.length === 0) {
     return (
-      <Card className="p-8">
+      <Card className="p-6 hover-elevate">
         <div className="text-center space-y-2">
-          <p className="text-lg font-semibold text-muted-foreground">No Active Positions</p>
-          <p className="text-sm text-muted-foreground">Your active positions will appear here</p>
+          <p className="text-xl font-semibold text-foreground">No Active Positions</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Your active positions will appear here</p>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="mb-4">
-        <h2 className="text-2xl font-semibold text-foreground">Active Positions</h2>
-        <p className="text-sm text-muted-foreground">Monitor your current market positions</p>
+        <h2 className="text-xl font-semibold text-foreground">Active Positions</h2>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">Monitor your current market positions</p>
       </div>
 
       {/* Desktop Table */}
@@ -92,7 +92,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
         {positions.map((position, index) => {
           const isProfitable = position.unrealizedPnL >= 0;
           return (
-            <Card key={position.id} className="p-4" data-testid={`card-position-${index}`}>
+            <Card key={position.id} className="p-6 hover-elevate" data-testid={`card-position-${index}`}>
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-foreground flex-1">{position.marketName}</p>
