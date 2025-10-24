@@ -17,25 +17,35 @@ const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 // Helper to search for a user by username and get their wallet address
 async function findUserByUsername(username: string): Promise<string> {
   try {
-    // Use Polymarket public search API (uses 'q' parameter)
+    // Use Polymarket public search API with profile search enabled
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-      params: { q: username },
+      params: { 
+        q: username,
+        search_profiles: true,
+        optimized: true
+      },
       timeout: 5000,
     });
 
-    // Search through results for exact username match
-    if (response.data && Array.isArray(response.data)) {
-      for (const result of response.data) {
-        if (result.username && result.username.toLowerCase() === username.toLowerCase()) {
-          const address = result.address || result.wallet_address;
+    // Check if profiles were returned
+    if (response.data && response.data.profiles && Array.isArray(response.data.profiles)) {
+      // Search for exact username match (case-insensitive)
+      for (const profile of response.data.profiles) {
+        if (profile.name && profile.name.toLowerCase() === username.toLowerCase()) {
+          const address = profile.proxyWallet;
           if (address) {
             return address;
           }
         }
       }
+      
+      // If no exact match but we have results, return first match
+      if (response.data.profiles.length > 0 && response.data.profiles[0].proxyWallet) {
+        return response.data.profiles[0].proxyWallet;
+      }
     }
 
-    // If no exact match found, throw user not found
+    // If no profiles found, throw user not found
     throw new Error("USER_NOT_FOUND");
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -372,15 +382,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      // Use Polymarket public search API (uses 'q' parameter)
+      // Use Polymarket public search API with profile search enabled
       const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
-        params: { q: query, limit: 10 },
+        params: { 
+          q: query, 
+          search_profiles: true,
+          optimized: true
+        },
         timeout: 3000,
       });
 
-      if (response.data && Array.isArray(response.data)) {
-        const usernames = response.data
-          .map((result: any) => result.username)
+      if (response.data && response.data.profiles && Array.isArray(response.data.profiles)) {
+        const usernames = response.data.profiles
+          .map((profile: any) => profile.name)
           .filter(Boolean)
           .slice(0, 10);
         return res.json(usernames);
