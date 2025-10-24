@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { z } from 'zod';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const app = express();
 
@@ -374,4 +375,16 @@ app.get('/api/dashboard/username/:username', async (req, res) => {
   }
 });
 
-export default app;
+// Export for Vercel serverless functions
+export default async (req: VercelRequest, res: VercelResponse) => {
+  // Handle the request with Express app
+  return new Promise((resolve, reject) => {
+    app(req as any, res as any, (err: any) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(undefined);
+      }
+    });
+  });
+};
