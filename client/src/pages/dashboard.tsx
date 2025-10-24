@@ -6,7 +6,6 @@ import type { DashboardData } from "@shared/schema";
 import { StatCard } from "@/components/stat-card";
 import { PnLChart } from "@/components/pnl-chart";
 import { PositionsTable } from "@/components/positions-table";
-import { VolumeMetrics } from "@/components/volume-metrics";
 import { RecentActivity } from "@/components/recent-activity";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { UsernameInput } from "@/components/username-input";
@@ -176,11 +175,8 @@ export default function Dashboard() {
         {/* Active Positions */}
         <PositionsTable positions={positions.filter(p => p.status === "ACTIVE")} />
 
-        {/* Volume + Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <VolumeMetrics totalVolume={stats.totalVolume} trades={recentTrades} />
-          <RecentActivity trades={recentTrades} />
-        </div>
+        {/* Recent Activity */}
+        <RecentActivity trades={recentTrades} />
       </div>
     </div>
   );
