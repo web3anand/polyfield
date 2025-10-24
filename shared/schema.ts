@@ -67,8 +67,18 @@ export const achievementSchema = z.object({
 
 export type Achievement = z.infer<typeof achievementSchema>;
 
+// User Profile Schema
+export const userProfileSchema = z.object({
+  username: z.string(),
+  profileImage: z.string().optional(),
+  bio: z.string().optional(),
+});
+
+export type UserProfile = z.infer<typeof userProfileSchema>;
+
 // User Dashboard Data Schema
 export const dashboardDataSchema = z.object({
+  profile: userProfileSchema,
   stats: portfolioStatsSchema,
   pnlHistory: z.array(pnlDataPointSchema),
   positions: z.array(positionSchema),
