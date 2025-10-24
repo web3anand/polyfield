@@ -131,7 +131,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-6">
-            <Card className="w-full max-w-lg p-6 text-center space-y-4 hover-elevate">
+            <Card className="w-full max-w-lg p-6 text-center space-y-4">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-destructive/10 mb-2">
                 <Target className="w-8 h-8 text-destructive" />
               </div>
@@ -180,11 +180,8 @@ export default function Dashboard() {
       {/* Header with Search Bar */}
       <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              {/* POLYFEILD BETA moved to navbar */}
-            </div>
-            <div className="flex-1 max-w-md mx-4">
+          <div className="flex justify-center items-center gap-4">
+            <div className="flex-1 max-w-md">
               <UsernameInput onSubmit={handleConnect} compact />
             </div>
             <Button variant="ghost" size="sm" onClick={handleDisconnect} data-testid="button-disconnect">
@@ -217,7 +214,7 @@ export default function Dashboard() {
                     </code>
                     <button
                       onClick={handleCopyAddress}
-                      className="hover-elevate p-1 transition-all"
+                      className="p-1 transition-all"
                       data-testid="button-copy-address"
                       aria-label="Copy wallet address"
                     >
@@ -238,25 +235,25 @@ export default function Dashboard() {
         <div className="container mx-auto px-6 py-8 space-y-8">
           {/* Key Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Open Positions Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
                 ${openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">All-Time PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Win Rate</p>
               <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
                 {stats.winRate.toFixed(1)}%
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Trades</p>
               <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
                 {stats.totalTrades.toLocaleString()}
