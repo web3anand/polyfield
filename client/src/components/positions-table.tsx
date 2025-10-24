@@ -91,7 +91,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
 
       {/* Desktop Table - Scrollable with max 5 rows visible */}
       <div className="hidden md:block overflow-x-auto">
-        <div className="max-h-[400px] overflow-y-auto" data-testid="scrollable-positions-table">
+        <div className="max-h-[400px] overflow-y-auto scrollbar-hidden" data-testid="scrollable-positions-table">
           <table className="w-full" data-testid="table-positions">
             <thead className="sticky top-0 bg-card z-10">
               <tr className="border-b border-border">
@@ -153,7 +153,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
       </div>
 
       {/* Mobile Card View - Scrollable with max 5 cards visible */}
-      <div className="md:hidden max-h-[500px] overflow-y-auto space-y-4" data-testid="scrollable-positions-mobile">
+      <div className="md:hidden max-h-[500px] overflow-y-auto scrollbar-hidden space-y-4" data-testid="scrollable-positions-mobile">
         {sortedPositions.map((position, index) => {
           const isProfitable = position.unrealizedPnL >= 0;
           return (
