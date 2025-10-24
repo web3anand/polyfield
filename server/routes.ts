@@ -192,6 +192,30 @@ async function fetchUserPositions(address: string): Promise<Position[]> {
   }
 }
 
+// Helper to fetch user activity (complete ledger for balance calculation)
+async function fetchUserActivity(address: string): Promise<any[]> {
+  try {
+    const response = await axios.get(`${POLYMARKET_DATA_API}/activity`, {
+      params: {
+        user: address,
+        limit: 500, // Get more activity for better balance calculation
+      },
+      timeout: 5000,
+    });
+
+    if (!response.data || !Array.isArray(response.data)) {
+      console.log("No activity data returned");
+      return [];
+    }
+
+    console.log(`Found ${response.data.length} activity events`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching activity:", error);
+    throw error;
+  }
+}
+
 // Helper to fetch user trading activity
 async function fetchUserTrades(address: string): Promise<Trade[]> {
   try {
@@ -229,18 +253,74 @@ async function fetchUserTrades(address: string): Promise<Trade[]> {
   }
 }
 
+// Calculate cash balance and realized PnL from activity ledger
+function calculateBalanceFromActivity(activity: any[]): { cashBalance: number; realizedPnL: number; netDeposits: number } {
+  let cashBalance = 0;
+  let deposits = 0;
+  let withdrawals = 0;
+
+  for (const event of activity) {
+    const type = event.type?.toUpperCase();
+    const usdcSize = parseFloat(event.usdcSize || "0");
+    const side = event.side?.toUpperCase();
+
+    // Track deposits and withdrawals
+    if (type === "DEPOSIT" || type === "CONVERSION" && usdcSize > 0) {
+      deposits += Math.abs(usdcSize);
+      cashBalance += Math.abs(usdcSize);
+    } else if (type === "WITHDRAW") {
+      withdrawals += Math.abs(usdcSize);
+      cashBalance -= Math.abs(usdcSize);
+    }
+    // Track trades (BUY spends cash, SELL adds cash)
+    else if (type === "TRADE") {
+      if (side === "BUY") {
+        cashBalance -= usdcSize;
+      } else if (side === "SELL") {
+        cashBalance += usdcSize;
+      }
+    }
+    // Track redeems and rewards (add cash)
+    else if (type === "REDEEM" || type === "REWARD" || type === "CLAIM") {
+      cashBalance += usdcSize;
+    }
+    // Track fees (subtract from cash)
+    else if (type === "FEE") {
+      cashBalance -= Math.abs(usdcSize);
+    }
+  }
+
+  const netDeposits = deposits - withdrawals;
+  const realizedPnL = cashBalance - netDeposits;
+
+  return {
+    cashBalance: parseFloat(cashBalance.toFixed(2)),
+    realizedPnL: parseFloat(realizedPnL.toFixed(2)),
+    netDeposits: parseFloat(netDeposits.toFixed(2)),
+  };
+}
+
 // Calculate portfolio statistics
 function calculateStats(
   positions: Position[],
   trades: Trade[],
+  activity: any[] = [],
 ): PortfolioStats {
   const activePositions = positions.filter((p) => p.status === "ACTIVE");
 
-  const totalValue = activePositions.reduce((sum, pos) => {
+  // Calculate balance from activity ledger
+  const { cashBalance, realizedPnL, netDeposits } = calculateBalanceFromActivity(activity);
+
+  // Portfolio value = cash + value of active positions
+  const positionValue = activePositions.reduce((sum, pos) => {
     return sum + pos.currentPrice * pos.size;
   }, 0);
+  
+  const totalValue = cashBalance + positionValue;
 
-  const totalPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
+  // All-time PnL = realized PnL + unrealized PnL from active positions
+  const unrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
+  const totalPnL = realizedPnL + unrealizedPnL;
 
   const totalVolume = trades.reduce((sum, trade) => {
     return sum + trade.price * trade.size;
@@ -542,7 +622,7 @@ function generateDemoData(): DashboardData {
     });
   }
 
-  const stats = calculateStats(positions, trades);
+  const stats = calculateStats(positions, trades, []);
   const achievements = calculateAchievements(stats, trades);
 
   return {
@@ -653,13 +733,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let positions: Position[] = [];
       let trades: Trade[] = [];
+      let activity: any[] = [];
 
       // Only fetch real data if we have a wallet address
       if (!useDemoData && walletAddress) {
         try {
-          [positions, trades] = await Promise.all([
+          [positions, trades, activity] = await Promise.all([
             fetchUserPositions(walletAddress),
             fetchUserTrades(walletAddress),
+            fetchUserActivity(walletAddress),
           ]);
         } catch (error) {
           if (axios.isAxiosError(error)) {
@@ -687,7 +769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(demoData);
       }
 
-      const stats = calculateStats(positions, trades);
+      const stats = calculateStats(positions, trades, activity);
       const pnlHistory = generatePnLHistory(positions, trades);
       const achievements = calculateAchievements(stats, trades);
 
