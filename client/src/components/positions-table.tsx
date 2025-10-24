@@ -49,7 +49,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
 
   if (positions.length === 0) {
     return (
-      <Card className="p-6 hover-elevate">
+      <Card className="p-6">
         <div className="text-center space-y-2">
           <p className="text-xl font-semibold text-foreground">No Active Positions</p>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Your active positions will appear here</p>
@@ -59,7 +59,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
   }
 
   return (
-    <Card className="p-6 hover-elevate">
+    <Card className="p-6">
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Active Positions</h2>
@@ -109,7 +109,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                 return (
                   <tr 
                     key={position.id} 
-                    className="border-b border-border hover-elevate"
+                    className="border-b border-border"
                     data-testid={`row-position-${index}`}
                   >
                     <td className="py-4 px-4">
@@ -118,6 +118,8 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                     <td className="py-4 px-4">
                       <Badge 
                         variant="outline"
+                        className="outcome-badge-dotted"
+                        data-outcome={position.outcome}
                         data-testid={`badge-outcome-${index}`}
                       >
                         {position.outcome}
@@ -157,11 +159,15 @@ export function PositionsTable({ positions }: PositionsTableProps) {
         {sortedPositions.map((position, index) => {
           const isProfitable = position.unrealizedPnL >= 0;
           return (
-            <Card key={position.id} className="p-6 hover-elevate" data-testid={`card-position-${index}`}>
+            <Card key={position.id} className="p-6" data-testid={`card-position-${index}`}>
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium text-foreground flex-1">{position.marketName}</p>
-                  <Badge variant="outline">
+                  <Badge 
+                    variant="outline"
+                    className="outcome-badge-dotted"
+                    data-outcome={position.outcome}
+                  >
                     {position.outcome}
                   </Badge>
                 </div>

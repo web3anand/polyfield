@@ -11,12 +11,12 @@ interface StatCardProps {
 
 export function StatCard({ icon, label, value, suffix, color = "text-foreground" }: StatCardProps) {
   return (
-    <Card className="p-6 hover-elevate">
+    <Card className="p-6 h-[120px] flex flex-col justify-between">
       <div className="flex items-start justify-between mb-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {label}
         </p>
-        <div className={`p-2 rounded-md bg-primary/5 ${color}`}>
+        <div className={`p-2 bg-primary/5 ${color}`}>
           {icon}
         </div>
       </div>
