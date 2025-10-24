@@ -85,7 +85,11 @@ export function UsernameInput({ onSubmit }: UsernameInputProps) {
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onFocus={() => username.length >= 2 && setShowSuggestions(true)}
-                className="h-14 text-base pr-10"
+                className={`h-14 text-base pr-10 transition-all duration-200 ${
+                  showSuggestions && (suggestions.length > 0 || (username.length >= 2 && !loadingSuggestions && suggestions.length === 0))
+                    ? 'rounded-b-none border-b-0'
+                    : ''
+                }`}
               />
               {loadingSuggestions && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -110,37 +114,41 @@ export function UsernameInput({ onSubmit }: UsernameInputProps) {
           </div>
 
           {showSuggestions && suggestions.length > 0 && (
-            <div
-              ref={suggestionsRef}
-              className="absolute left-0 right-[calc(100%-100%+6rem)] top-[calc(100%+0.5rem)] z-50"
-            >
-              <Card className="p-2 shadow-lg border-border">
-                <div className="space-y-1 max-h-60 overflow-y-auto">
+            <div className="relative flex gap-3">
+              <div
+                ref={suggestionsRef}
+                className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200"
+              >
+                <div className="p-2 space-y-1 max-h-60 overflow-y-auto scrollbar-hidden">
                   {suggestions.map((suggestion, index) => (
                     <button
                       key={index}
                       data-testid={`suggestion-${index}`}
                       onClick={() => handleSuggestionClick(suggestion)}
-                      className="w-full text-left px-3 py-2 rounded-md hover-elevate transition-all duration-200 text-sm text-foreground"
+                      className="w-full text-left px-3 py-2 rounded-md hover-elevate transition-all duration-150 text-sm text-foreground"
                     >
                       @{suggestion}
                     </button>
                   ))}
                 </div>
-              </Card>
+              </div>
+              <div className="w-[6rem]"></div>
             </div>
           )}
 
           {showSuggestions && username.length >= 2 && !loadingSuggestions && suggestions.length === 0 && (
-            <div
-              ref={suggestionsRef}
-              className="absolute left-0 right-[calc(100%-100%+6rem)] top-[calc(100%+0.5rem)] z-50"
-            >
-              <Card className="p-4 shadow-lg border-border">
-                <p className="text-sm text-muted-foreground text-center">
-                  No users found. Try a different username.
-                </p>
-              </Card>
+            <div className="relative flex gap-3">
+              <div
+                ref={suggestionsRef}
+                className="flex-1 border border-border border-t-0 rounded-b-md bg-card shadow-lg animate-in slide-in-from-top-2 duration-200"
+              >
+                <div className="p-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    No users found. Try a different username.
+                  </p>
+                </div>
+              </div>
+              <div className="w-[6rem]"></div>
             </div>
           )}
         </div>
