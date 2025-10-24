@@ -7,13 +7,21 @@ interface PnLChartProps {
 }
 
 export function PnLChart({ data }: PnLChartProps) {
-  const chartData = data.map(point => ({
-    date: new Date(point.timestamp).toLocaleDateString(undefined, { 
-      month: 'short', 
-      day: 'numeric' 
-    }),
-    value: point.value,
-  }));
+  const chartData = data.map(point => {
+    const date = new Date(point.timestamp);
+    return {
+      date: date.toLocaleDateString(undefined, { 
+        month: 'short', 
+        year: '2-digit'
+      }),
+      fullDate: date.toLocaleDateString(undefined, { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      }),
+      value: point.value,
+    };
+  });
 
   const currentPnL = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
   const isPositive = currentPnL >= 0;
@@ -67,7 +75,13 @@ export function PnLChart({ data }: PnLChartProps) {
                 padding: "8px 12px",
               }}
               labelStyle={{ color: "hsl(var(--foreground))" }}
-              formatter={(value: number) => [`$${value.toFixed(2)}`, "PnL"]}
+              labelFormatter={(label, payload) => {
+                if (payload && payload.length > 0) {
+                  return payload[0].payload.fullDate;
+                }
+                return label;
+              }}
+              formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "PnL"]}
             />
             <Area
               type="monotone"
