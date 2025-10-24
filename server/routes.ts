@@ -462,77 +462,79 @@ function calculateStats(
   };
 }
 
-// Generate PnL history from trades and positions
+// Generate PnL history from trades using true FIFO matching
 function generatePnLHistory(positions: Position[], trades: Trade[]): PnLDataPoint[] {
-  // If no data, return single zero point
-  if (positions.length === 0 && trades.length === 0) {
-    return [
-      {
-        timestamp: new Date().toISOString(),
-        value: 0,
-      },
-    ];
+  if (trades.length === 0) {
+    return [{
+      timestamp: new Date().toISOString(),
+      value: 0,
+    }];
   }
 
-  // Combine all data points with timestamps
-  const dataPoints: { timestamp: string; pnl: number }[] = [];
-
-  // Add position PnL
-  positions.forEach((pos) => {
-    dataPoints.push({
-      timestamp: pos.openedAt,
-      pnl: pos.unrealizedPnL,
-    });
-  });
-
-  // Add trade profit (if available)
-  trades.forEach((trade) => {
-    if (trade.profit !== undefined) {
-      dataPoints.push({
-        timestamp: trade.timestamp,
-        pnl: trade.profit,
-      });
-    }
-  });
-
-  // If still no data points, generate from trade activity
-  if (dataPoints.length === 0 && trades.length > 0) {
-    // Sort trades by time
-    const sortedTrades = [...trades].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    // Generate PnL based on buy/sell patterns
-    let cumulativePnL = 0;
-    const history: PnLDataPoint[] = [];
-
-    sortedTrades.forEach((trade) => {
-      // Simple heuristic: sells generally realize profit, buys are entries
-      if (trade.type === "SELL") {
-        // Estimate profit/loss from sell (random variation for demo)
-        const estimatedPnL = (Math.random() - 0.45) * trade.size * trade.price * 0.1;
-        cumulativePnL += estimatedPnL;
-      }
-      
-      history.push({
-        timestamp: trade.timestamp,
-        value: parseFloat(cumulativePnL.toFixed(2)),
-      });
-    });
-
-    return history;
-  }
-
-  // Sort by timestamp
-  const sortedPoints = dataPoints.sort(
+  // Sort all trades by timestamp for chronological processing
+  const sortedTrades = [...trades].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  // Build cumulative history
+  // Track FIFO queue of buy lots per market
+  // Each lot: { price: number, remainingSize: number }
+  const fifoBuyLots: Record<string, Array<{ price: number; remainingSize: number }>> = {};
+
+  // Calculate PnL for each trade chronologically
+  const tradeWithPnL: Array<{ timestamp: string; pnl: number }> = [];
+
+  for (const trade of sortedTrades) {
+    const key = `${trade.marketName}_${trade.outcome}`;
+    
+    if (!fifoBuyLots[key]) {
+      fifoBuyLots[key] = [];
+    }
+
+    let tradePnL = 0;
+
+    if (trade.type === "BUY") {
+      // Add new buy lot to FIFO queue
+      fifoBuyLots[key].push({
+        price: trade.price,
+        remainingSize: trade.size,
+      });
+    } else {
+      // SELL: Match against oldest buy lots (FIFO)
+      let remainingSellSize = trade.size;
+      
+      while (remainingSellSize > 0 && fifoBuyLots[key].length > 0) {
+        const oldestLot = fifoBuyLots[key][0];
+        const matchSize = Math.min(remainingSellSize, oldestLot.remainingSize);
+        
+        // Calculate realized PnL for this match
+        tradePnL += (trade.price - oldestLot.price) * matchSize;
+        
+        // Update lot and remove if fully consumed
+        oldestLot.remainingSize -= matchSize;
+        if (oldestLot.remainingSize <= 0) {
+          fifoBuyLots[key].shift(); // Remove first element (FIFO)
+        }
+        
+        remainingSellSize -= matchSize;
+      }
+      
+      // Log warning if unmatched sell (shouldn't happen in normal Polymarket flow)
+      if (remainingSellSize > 0) {
+        console.log(`⚠️ Warning: Unmatched sell of ${remainingSellSize} shares for ${trade.marketName} (${trade.outcome})`);
+      }
+    }
+
+    tradeWithPnL.push({
+      timestamp: trade.timestamp,
+      pnl: tradePnL,
+    });
+  }
+
+  // Build cumulative PnL history
   const history: PnLDataPoint[] = [];
   let cumulativePnL = 0;
 
-  for (const point of sortedPoints) {
+  for (const point of tradeWithPnL) {
     cumulativePnL += point.pnl;
     history.push({
       timestamp: point.timestamp,
@@ -540,15 +542,19 @@ function generatePnLHistory(positions: Position[], trades: Trade[]): PnLDataPoin
     });
   }
 
-  // Add current point
-  if (history.length > 0) {
+  // Add unrealized PnL from open positions
+  const unrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
+  if (history.length > 0 && unrealizedPnL !== 0) {
     history.push({
       timestamp: new Date().toISOString(),
-      value: parseFloat(cumulativePnL.toFixed(2)),
+      value: parseFloat((cumulativePnL + unrealizedPnL).toFixed(2)),
     });
   }
 
-  return history;
+  return history.length > 0 ? history : [{
+    timestamp: new Date().toISOString(),
+    value: 0,
+  }];
 }
 
 // Calculate achievements based on stats
