@@ -11,18 +11,16 @@ import type {
   PortfolioStats 
 } from "@shared/schema";
 
-const POLYMARKET_CLOB_API = "https://clob.polymarket.com";
+const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 
 // Helper to search for a user by username and get their wallet address
 async function findUserByUsername(username: string): Promise<string> {
   try {
-    // Use Polymarket public search API with profile search enabled
+    // Use Polymarket public search API
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
       params: { 
         q: username,
-        search_profiles: true,
-        optimized: true
       },
       timeout: 5000,
     });
@@ -64,7 +62,7 @@ async function findUserByUsername(username: string): Promise<string> {
 
 // Helper to fetch user positions from Polymarket
 async function fetchUserPositions(address: string): Promise<Position[]> {
-  const response = await axios.get(`${POLYMARKET_CLOB_API}/positions`, {
+  const response = await axios.get(`${POLYMARKET_DATA_API}/positions`, {
     params: { user: address },
     timeout: 5000,
   });
@@ -74,25 +72,25 @@ async function fetchUserPositions(address: string): Promise<Position[]> {
   }
 
   return response.data.map((pos: any, index: number) => ({
-    id: pos.id || `pos-${index}`,
-    marketName: pos.market?.question || pos.question || "Unknown Market",
-    marketId: pos.market?.condition_id || pos.condition_id || `market-${index}`,
-    outcome: pos.outcome === "Yes" || pos.outcome === "YES" ? "YES" : "NO",
-    entryPrice: parseFloat(pos.average_price || pos.entry_price || "0"),
-    currentPrice: parseFloat(pos.current_price || pos.average_price || "0"),
-    size: parseFloat(pos.size || pos.amount || "0"),
-    unrealizedPnL: parseFloat(pos.unrealized_pnl || pos.pnl || "0"),
-    status: pos.status === "open" || pos.status === "OPEN" ? "ACTIVE" : "CLOSED",
-    openedAt: new Date(pos.opened_at || pos.created_at || Date.now()).toISOString(),
+    id: pos.asset || pos.id || `pos-${index}`,
+    marketName: pos.title || pos.market?.question || "Unknown Market",
+    marketId: pos.conditionId || pos.market?.condition_id || `market-${index}`,
+    outcome: pos.outcome || "Unknown",
+    entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
+    currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
+    size: parseFloat(pos.size || "0"),
+    unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
+    status: parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED",
+    openedAt: new Date(pos.created_at || Date.now()).toISOString(),
     closedAt: pos.closed_at ? new Date(pos.closed_at).toISOString() : undefined,
   }));
 }
 
 // Helper to fetch user trading activity
 async function fetchUserTrades(address: string): Promise<Trade[]> {
-  const response = await axios.get(`${POLYMARKET_CLOB_API}/trades`, {
+  const response = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
     params: { 
-      maker_address: address,
+      user: address,
       limit: 100,
     },
     timeout: 5000,
@@ -103,13 +101,13 @@ async function fetchUserTrades(address: string): Promise<Trade[]> {
   }
 
   return response.data.map((trade: any, index: number) => ({
-    id: trade.id || `trade-${index}`,
+    id: trade.transactionHash || trade.id || `trade-${index}`,
     timestamp: new Date((trade.timestamp || Date.now()) * 1000).toISOString(),
-    marketName: trade.market || trade.question || "Unknown Market",
+    marketName: trade.title || trade.market || "Unknown Market",
     type: trade.side === "BUY" || trade.side === "buy" ? "BUY" : "SELL",
-    outcome: trade.outcome === "Yes" || trade.outcome === "YES" ? "YES" : "NO",
+    outcome: trade.outcome || "Unknown",
     price: parseFloat(trade.price || "0"),
-    size: parseFloat(trade.size || trade.amount || "0"),
+    size: parseFloat(trade.size || "0"),
     profit: trade.profit ? parseFloat(trade.profit) : undefined,
   }));
 }
@@ -382,12 +380,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      // Use Polymarket public search API with profile search enabled
+      // Use Polymarket public search API
       const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
         params: { 
-          q: query, 
-          search_profiles: true,
-          optimized: true
+          q: query,
         },
         timeout: 3000,
       });
