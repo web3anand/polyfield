@@ -71,7 +71,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
   if (compact) {
     return (
       <div className="relative w-full">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Input
               ref={inputRef}
@@ -82,7 +82,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => username.length >= 2 && setShowSuggestions(true)}
-              className={`h-10 text-sm pr-8 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
+              className={`h-10 py-0 text-sm pr-8 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
                 showSuggestions && (suggestions.length > 0 || (username.length >= 2 && !loadingSuggestions && suggestions.length === 0))
                   ? 'border-b-0'
                   : ''
@@ -140,8 +140,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
             data-testid="button-connect"
             onClick={handleSubmit}
             disabled={!username.trim()}
-            size="sm"
-            className="px-4 h-10 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
+            className="px-4 h-10 py-0 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm flex items-center justify-center"
           >
             Search
           </Button>
@@ -153,7 +152,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
   return (
     <div className="w-full max-w-2xl space-y-3">
       <div className="relative">
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           <div className="relative flex-1">
             <Input
               ref={inputRef}
@@ -164,7 +163,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => username.length >= 2 && setShowSuggestions(true)}
-              className={`h-14 text-base pr-10 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
+              className={`h-10 py-0 text-base pr-10 bg-card/50 border-border/50 focus:border-border/50 focus:bg-card/50 focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 transition-all duration-300 ease-in-out ${
                 showSuggestions && (suggestions.length > 0 || (username.length >= 2 && !loadingSuggestions && suggestions.length === 0))
                   ? 'border-b-0'
                   : ''
@@ -222,8 +221,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
             data-testid="button-connect"
             onClick={handleSubmit}
             disabled={!username.trim()}
-            size="lg"
-            className="px-8 h-14 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
+            className="px-8 h-10 py-0 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm flex items-center justify-center"
           >
             Search
           </Button>

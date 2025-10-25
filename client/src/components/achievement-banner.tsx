@@ -17,7 +17,7 @@ const iconMap: Record<string, any> = {
 
 export function AchievementBanner({ achievements }: AchievementBannerProps) {
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-foreground">Achievements</h2>
         <p className="text-xs text-muted-foreground uppercase tracking-wide">Unlock badges by trading on Polymarket</p>

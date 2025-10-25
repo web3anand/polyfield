@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import path from "path";
 // Vite imports removed - using console.log instead
 
 const app = express();
@@ -57,10 +58,13 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // Serve static files in production
-  if (app.get("env") !== "development") {
-    app.use(express.static("public"));
-  }
+  // Serve static files (both development and production)
+  app.use(express.static("public"));
+  
+  // Fallback to index.html for SPA routing
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "public/index.html"));
+  });
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
