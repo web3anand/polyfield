@@ -1,0 +1,443 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+
+  --opaque-button-border-intensity: -8;
+
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
+
+  --background: 0 0% 3.53%;
+
+  --foreground: 0 0% 92.16%;
+
+  --border: 0 0% 16.86%;
+
+  --card: 300 4.35% 6.67%;
+
+  --card-foreground: 0 0% 100%;
+
+  --card-border: 0 0% 12%;
+
+  --sidebar: 45 25% 97%;
+
+  --sidebar-foreground: 20 14% 17%;
+
+  --sidebar-border: 45 15% 80%;
+
+  --sidebar-primary: 9 75% 61%;
+
+  --sidebar-primary-foreground: 0 0% 100%;
+
+  --sidebar-accent: 25 45% 80%;
+
+  --sidebar-accent-foreground: 20 14% 17%;
+
+  --sidebar-ring: 9 75% 61%;
+
+  --popover: 45 25% 97%;
+
+  --popover-foreground: 0 0% 100%;
+
+  --popover-border: 45 15% 85%;
+
+  --primary: 0 0% 96.08%;
+
+  --primary-foreground: 0 0% 5.1%;
+
+  --secondary: 0 0% 92.16%;
+
+  --secondary-foreground: 0 0% 5.1%;
+
+  --muted: 0 0% 25.1%;
+
+  --muted-foreground: 0 0% 67.06%;
+
+  --accent: 0 0% 92.16%;
+
+  --accent-foreground: 0 0% 0%;
+
+  --destructive: 356.3033 90.5579% 54.3137%;
+
+  --destructive-foreground: 0 0% 100%;
+
+  --input: 0 0% 16.86%;
+  --ring: 221.74 13.14% 34.31%;
+
+  --chart-1: 203.8863 88.2845% 53.1373%;
+  --chart-2: 159.7826 100% 36.0784%;
+  --chart-3: 42.0290 92.8251% 56.2745%;
+  --chart-4: 147.1429 78.5047% 41.9608%;
+  --chart-5: 341.4894 75.2000% 50.9804%;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Inter', sans-serif;
+  --font-mono: Menlo, monospace;
+  --font-gaming: 'Rajdhani', sans-serif;
+
+  --radius: 0.75rem;
+
+  --shadow-2xs: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00);
+  --shadow-xs: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00);
+  --shadow-sm: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00), 0px 1px 2px -1px hsl(9, 75%, 61% / 0.00);
+  --shadow: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00), 0px 1px 2px -1px hsl(9, 75%, 61% / 0.00);
+  --shadow-md: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00), 0px 2px 4px -1px hsl(9, 75%, 61% / 0.00);
+  --shadow-lg: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00), 0px 4px 6px -1px hsl(9, 75%, 61% / 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00), 0px 8px 10px -1px hsl(9, 75%, 61% / 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(9, 75%, 61% / 0.00);
+
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+
+  --opaque-button-border-intensity: 9;
+
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  --background: 0 0% 0%;
+
+  --foreground: 0 0% 95%;
+
+  --border: 0 0% 8%;
+
+  --card: 0 0% 2%;
+
+  --card-foreground: 0 0% 95%;
+
+  --card-border: 0 0% 6%;
+
+  --sidebar: 0 0% 4%;
+
+  --sidebar-foreground: 0 0% 85%;
+
+  --sidebar-border: 0 0% 8%;
+
+  --sidebar-primary: 9 75% 61%;
+
+  --sidebar-primary-foreground: 0 0% 100%;
+
+  --sidebar-accent: 0 0% 8%;
+
+  --sidebar-accent-foreground: 0 0% 85%;
+
+  --sidebar-ring: 9 75% 61%;
+
+  --popover: 0 0% 2%;
+
+  --popover-foreground: 0 0% 91%;
+
+  --popover-border: 0 0% 6%;
+
+  --primary: 142 76% 36%;
+
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 0 0% 8%;
+
+  --secondary-foreground: 0 0% 95%;
+
+  --muted: 0 0% 6%;
+
+  --muted-foreground: 0 0% 60%;
+
+  --accent: 0 0% 8%;
+
+  --accent-foreground: 0 0% 85%;
+
+  --destructive: 356.3033 90.5579% 54.3137%;
+
+  --destructive-foreground: 0 0% 100%;
+
+  --input: 0 0% 6%;
+  --ring: 221.74 13.14% 34.31%;
+
+  --chart-1: 203.8863 88.2845% 53.1373%;
+  --chart-2: 159.7826 100% 36.0784%;
+  --chart-3: 42.0290 92.8251% 56.2745%;
+  --chart-4: 147.1429 78.5047% 41.9608%;
+  --chart-5: 341.4894 75.2000% 50.9804%;
+
+  --shadow-2xs: 0px 2px 0px 0px hsl(9 75% 61% / 0.00);
+  --shadow-xs: 0px 2px 0px 0px hsl(9 75% 61% / 0.00);
+  --shadow-sm: 0px 2px 0px 0px hsl(9 75% 61% / 0.00), 0px 1px 2px -1px hsl(9 75% 61% / 0.00);
+  --shadow: 0px 2px 0px 0px hsl(9 75% 61% / 0.00), 0px 1px 2px -1px hsl(9 75% 61% / 0.00);
+  --shadow-md: 0px 2px 0px 0px hsl(9 75% 61% / 0.00), 0px 2px 4px -1px hsl(9 75% 61% / 0.00);
+  --shadow-lg: 0px 2px 0px 0px hsl(9 75% 61% / 0.00), 0px 4px 6px -1px hsl(9 75% 61% / 0.00);
+  --shadow-xl: 0px 2px 0px 0px hsl(9 75% 61% / 0.00), 0px 8px 10px -1px hsl(9 75% 61% / 0.00);
+  --shadow-2xl: 0px 2px 0px 0px hsl(9 75% 61% / 0.00);
+
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-variant-numeric: tabular-nums;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+
+  .font-mono {
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  /* Gaming font styling for POLYFIELD branding */
+  .poly-scramble {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.3), 0 0 20px rgba(34, 197, 94, 0.2);
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  .field-scramble {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    font-style: italic;
+  }
+
+  /* Modern typography improvements */
+  .text-2xl, .text-3xl, .text-4xl {
+    letter-spacing: -0.025em;
+    font-weight: 700;
+  }
+
+  .text-lg, .text-xl {
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+
+  .text-sm, .text-xs {
+    letter-spacing: 0.01em;
+    font-weight: 500;
+  }
+
+  /* Clean monospace for numbers and codes */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Gaming/esports typography */
+  .font-gaming {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .font-gaming-bold {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+}
+
+@layer utilities {
+
+  input[type="search"]::-webkit-search-cancel-button {
+    @apply hidden;
+  }
+
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+
+  /* Hide scrollbars while keeping scroll functionality */
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
+
+  .toggle-elevate::before,
+  .toggle-elevate-2::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    border-radius: 0;
+    z-index: -1;
+  }
+
+  .toggle-elevate.toggle-elevated::before {
+    background-color: var(--elevate-2);
+  }
+
+  .border.toggle-elevate::before {
+    inset: -1px;
+  }
+
+  .hover-elevate:not(.no-default-hover-elevate),
+  .active-elevate:not(.no-default-active-elevate),
+  .hover-elevate-2:not(.no-default-hover-elevate),
+  .active-elevate-2:not(.no-default-active-elevate) {
+    position: relative;
+    z-index: 0;
+  }
+
+  .hover-elevate:not(.no-default-hover-elevate)::after,
+  .active-elevate:not(.no-default-active-elevate)::after,
+  .hover-elevate-2:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:not(.no-default-active-elevate)::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    border-radius: 0;
+    z-index: 999;
+  }
+
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-1);
+  }
+
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-2);
+  }
+
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
+    inset: -1px;
+  }
+
+
+  /* Custom styled outcome badges - base styles for YES/NO/UP/DOWN only */
+  .outcome-badge-dotted {
+    border-style: solid !important;
+    border-width: 2px !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    padding: 6px 12px !important;
+    border-radius: 0px !important;
+    min-width: 50px !important;
+    width: 50px !important; /* Fixed width for all badges */
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: nowrap !important; /* Prevent text wrapping */
+  }
+  
+  /* Classic text styling for other outcomes (not YES/NO/UP/DOWN) */
+  .outcome-badge-dotted:not([data-outcome="YES"]):not([data-outcome="Yes"]):not([data-outcome="yes"]):not([data-outcome="NO"]):not([data-outcome="No"]):not([data-outcome="no"]):not([data-outcome="UP"]):not([data-outcome="Up"]):not([data-outcome="up"]):not([data-outcome="DOWN"]):not([data-outcome="Down"]):not([data-outcome="down"]) {
+    background-color: transparent !important;
+    border: none !important;
+    color: #6b7280 !important; /* Muted gray text */
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    font-size: 12px !important;
+    letter-spacing: 0.5px !important;
+    padding: 0 !important;
+    min-width: auto !important;
+    width: auto !important;
+    height: auto !important;
+    display: inline !important;
+  }
+  
+  /* Green background for UP and YES */
+  .outcome-badge-dotted[data-outcome="YES"],
+  .outcome-badge-dotted[data-outcome="Yes"],
+  .outcome-badge-dotted[data-outcome="yes"],
+  .outcome-badge-dotted[data-outcome="UP"],
+  .outcome-badge-dotted[data-outcome="Up"],
+  .outcome-badge-dotted[data-outcome="up"] {
+    background-color: #22c55e !important; /* Green */
+    border-color: #22c55e !important;
+    color: white !important; /* White text on green */
+  }
+  
+  /* Red background for NO and DOWN */
+  .outcome-badge-dotted[data-outcome="NO"],
+  .outcome-badge-dotted[data-outcome="No"],
+  .outcome-badge-dotted[data-outcome="no"],
+  .outcome-badge-dotted[data-outcome="DOWN"],
+  .outcome-badge-dotted[data-outcome="Down"],
+  .outcome-badge-dotted[data-outcome="down"] {
+    background-color: #ef4444 !important; /* Red */
+    border-color: #ef4444 !important;
+    color: white !important; /* White text on red */
+  }
+}
