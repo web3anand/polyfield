@@ -68,8 +68,8 @@ export default function Dashboard() {
             {/* POLYFIELD Branding */}
             <div className="text-center space-y-8">
               <h1 className="text-6xl md:text-8xl font-black tracking-tight">
-                <span className="text-green-400 drop-shadow-lg">POLY</span>
-                <span className="italic font-light text-gray-300 ml-2">FIELD</span>
+                <span className="poly-scramble text-green-400 drop-shadow-lg">POLY</span>
+                <span className="field-scramble text-gray-300 ml-2">FIELD</span>
               </h1>
               
               <div className="text-center space-y-4">
@@ -235,25 +235,25 @@ export default function Dashboard() {
         <div className="container mx-auto px-6 py-8 space-y-8">
           {/* Key Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
-            <Card className="p-6">
+            <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Open Positions Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
                 ${openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6">
+            <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">All-Time PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6">
+            <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Win Rate</p>
               <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
                 {stats.winRate.toFixed(1)}%
               </p>
             </Card>
-            <Card className="p-6">
+            <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Trades</p>
               <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
                 {stats.totalTrades.toLocaleString()}

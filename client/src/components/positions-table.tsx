@@ -49,7 +49,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
 
   if (positions.length === 0) {
     return (
-      <Card className="p-6">
+      <Card className="p-6 hover-elevate">
         <div className="text-center space-y-2">
           <p className="text-xl font-semibold text-foreground">No Active Positions</p>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Your active positions will appear here</p>
@@ -59,7 +59,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
   }
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Active Positions</h2>

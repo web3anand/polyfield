@@ -27,7 +27,7 @@ export function PnLChart({ data }: PnLChartProps) {
   const isPositive = currentPnL >= 0;
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 hover-elevate">
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">All-Time PnL</p>
