@@ -20,13 +20,18 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api", "dashboard", connectedUsername],
+    queryKey: ["dashboard", connectedUsername],
     enabled: !!connectedUsername,
     staleTime: 30 * 1000, // 30 seconds - refresh for live prices
     gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
     retry: 2,
     retryDelay: 1000,
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for live updates
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
+      if (!res.ok) throw new Error('Failed to fetch dashboard data');
+      return res.json();
+    },
   });
 
   const handleConnect = (username: string) => {

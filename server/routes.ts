@@ -1055,8 +1055,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/dashboard/username/:username - Fetch dashboard data by username
-  app.get("/api/dashboard/username/:username", async (req, res) => {
+  // GET /api/dashboard/username?username=xxx - Fetch dashboard data by username
+  app.get("/api/dashboard/username", async (req, res) => {
     // Set a timeout for the entire request
     const requestTimeout = setTimeout(() => {
       if (!res.headersSent) {
@@ -1067,7 +1067,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }, 15000); // 15 second timeout
 
     try {
-      const { username } = req.params;
+      const { username } = req.query;
+
+      if (!username || typeof username !== 'string') {
+        clearTimeout(requestTimeout);
+        return res.status(400).json({ error: 'Username query parameter is required' });
+      }
 
       const usernameSchema = z
         .string()
