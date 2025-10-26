@@ -144,6 +144,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return sum + Math.abs(trade.outcomeTokenAmount * trade.outcomeTokenPrice);
     }, 0);
 
+    // Generate PnL history from closed positions
+    const pnlHistory = [];
+    let cumulativePnl = 0;
+    
+    // Sort by date and create cumulative PnL chart data
+    const sortedPositions = (pnlData.closedPositionsHistory || [])
+      .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
+    
+    for (const pos of sortedPositions) {
+      cumulativePnl += pos.realizedPnl;
+      pnlHistory.push({
+        timestamp: pos.endDate,
+        value: cumulativePnl
+      });
+    }
+    
+    // Add current point with unrealized PnL
+    if (pnlHistory.length > 0 || pnlData.unrealizedPnl !== 0) {
+      pnlHistory.push({
+        timestamp: new Date().toISOString(),
+        value: pnlData.totalPnl
+      });
+    }
+
     const dashboardData = {
       profile: {
         username,
@@ -162,6 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         activePositions: pnlData.openPositions,
         closedPositions: pnlData.closedPositions,
       },
+      pnlHistory,
       positions: positions.map((pos: any) => ({
         id: pos.id,
         market: pos.market,
@@ -180,6 +205,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: trade.timestamp,
         pnl: trade.outcomeTokenAmount * trade.outcomeTokenPrice,
       })),
+      achievements: [
+        {
+          id: "first_trade",
+          name: "First Trade",
+          description: "Complete your first trade",
+          icon: "star",
+          unlocked: trades.length > 0,
+          progress: Math.min(trades.length, 1),
+          total: 1
+        },
+        {
+          id: "profit_maker",
+          name: "Profit Maker",
+          description: "Achieve positive PnL",
+          icon: "trophy",
+          unlocked: pnlData.totalPnl > 0,
+          progress: pnlData.totalPnl > 0 ? 1 : 0,
+          total: 1
+        }
+      ]
     };
 
     console.log('Dashboard data prepared:', {
