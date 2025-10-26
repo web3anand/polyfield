@@ -160,13 +160,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     
-    // Add current point with unrealized PnL
-    if (pnlHistory.length > 0 || pnlData.unrealizedPnl !== 0) {
-      pnlHistory.push({
-        timestamp: new Date().toISOString(),
-        value: pnlData.totalPnl
-      });
-    }
+    // Always add a current point with total PnL (or starting point if no history)
+    pnlHistory.push({
+      timestamp: new Date().toISOString(),
+      value: pnlData.totalPnl
+    });
 
     const dashboardData = {
       profile: {
@@ -210,6 +208,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('Dashboard data prepared:', {
       profile: dashboardData.profile,
       stats: dashboardData.stats,
+      pnlHistoryCount: dashboardData.pnlHistory.length,
       positionsCount: dashboardData.positions.length,
       tradesCount: dashboardData.recentTrades.length,
     });
