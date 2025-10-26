@@ -192,6 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         size: parseFloat(pos.size || 0),
         entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
         currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
+        unrealizedPnL: (parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0) - parseFloat(pos.avgPrice || pos.price || 0)) * parseFloat(pos.size || 0),
         status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
         createdAt: pos.createdAt || pos.created_at || new Date().toISOString(),
       })),
