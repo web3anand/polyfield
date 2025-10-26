@@ -205,26 +205,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         timestamp: trade.timestamp,
         pnl: trade.outcomeTokenAmount * trade.outcomeTokenPrice,
       })),
-      achievements: [
-        {
-          id: "first_trade",
-          name: "First Trade",
-          description: "Complete your first trade",
-          icon: "star",
-          unlocked: trades.length > 0,
-          progress: Math.min(trades.length, 1),
-          total: 1
-        },
-        {
-          id: "profit_maker",
-          name: "Profit Maker",
-          description: "Achieve positive PnL",
-          icon: "trophy",
-          unlocked: pnlData.totalPnl > 0,
-          progress: pnlData.totalPnl > 0 ? 1 : 0,
-          total: 1
-        }
-      ]
     };
 
     console.log('Dashboard data prepared:', {

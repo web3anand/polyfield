@@ -91,7 +91,6 @@ export const dashboardDataSchema = z.object({
   pnlHistory: z.array(pnlDataPointSchema),
   positions: z.array(positionSchema),
   recentTrades: z.array(tradeSchema),
-  achievements: z.array(achievementSchema),
 });
 
 export type DashboardData = z.infer<typeof dashboardDataSchema>;
