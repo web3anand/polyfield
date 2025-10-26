@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
-import { fetchUserPnLData } from '../utils/polymarket-pnl';
+import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
