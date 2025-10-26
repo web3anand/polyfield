@@ -43,8 +43,8 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
       console.log("Selected profile:", JSON.stringify(profile, null, 2));
 
       return {
-        wallet: profile.wallet || profile.address,
-        profileImage: profile.profile_image_url || profile.avatar_url,
+        wallet: profile.proxyWallet || profile.wallet || profile.address,
+        profileImage: profile.profileImage || profile.profile_image_url || profile.avatar_url,
         bio: profile.bio || profile.description
       };
     }
