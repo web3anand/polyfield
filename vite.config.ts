@@ -13,5 +13,15 @@ export default defineConfig({
   build: {
     outDir: "../public",
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'chart-vendor': ['recharts'],
+          'query-vendor': ['@tanstack/react-query'],
+        },
+      },
+    },
   },
 });
