@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Extract usernames from profiles
     const usernames = profiles
-      .map(profile => profile.username || profile.display_name)
+      .map(profile => profile.name || profile.username || profile.displayName || profile.pseudonym)
       .filter(Boolean)
       .slice(0, 10); // Limit to 10 suggestions
 
