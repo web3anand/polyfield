@@ -5,6 +5,10 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/dashboard/:username",
+      "destination": "/api/dashboard/[username]"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }
