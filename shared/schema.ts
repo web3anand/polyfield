@@ -5,6 +5,8 @@ export const positionSchema = z.object({
   id: z.string(),
   marketName: z.string(),
   marketId: z.string(),
+  marketSlug: z.string().optional(), // Question slug for Polymarket URL
+  eventSlug: z.string().optional(), // Event slug for Polymarket URL
   outcome: z.enum(["YES", "NO"]),
   entryPrice: z.number(),
   currentPrice: z.number(),
@@ -33,15 +35,20 @@ export type Trade = z.infer<typeof tradeSchema>;
 
 // Portfolio Stats Schema
 export const portfolioStatsSchema = z.object({
-  totalValue: z.number(),
+  totalValue: z.number().optional(),
   totalPnL: z.number(),
+  realizedPnL: z.number(),
+  unrealizedPnL: z.number(),
   totalVolume: z.number(),
   totalTrades: z.number(),
   winRate: z.number(),
-  bestTrade: z.number(),
-  worstTrade: z.number(),
+  bestTrade: z.number().optional(),
+  worstTrade: z.number().optional(),
   activePositions: z.number(),
-  winStreak: z.number(),
+  closedPositions: z.number(),
+  openPositionsValue: z.number(),
+  winStreak: z.number().optional(),
+  closedPositionsHistory: z.array(z.any()).optional(), // Closed positions with timestamps for chart
 });
 
 export type PortfolioStats = z.infer<typeof portfolioStatsSchema>;

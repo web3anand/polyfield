@@ -1,27 +1,31 @@
 import { useState } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 interface NavItem {
   id: string;
   label: string;
+  href: string;
   isActive?: boolean;
   hasDropdown?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { id: "01", label: "TRACKER", isActive: true },
-  { id: "02", label: "WHALES HUB", isActive: false },
-  { id: "03", label: "INSIDOOR", isActive: false },
-  { id: "04", label: "LEADERBOARD", isActive: false, hasDropdown: true },
+  { id: "01", label: "TRACKER", href: "/", isActive: false },
+  { id: "02", label: "WHALES HUB", href: "/whales", isActive: false },
+  { id: "03", label: "INSIDOOR", href: "/oracle", isActive: false },
+  { id: "04", label: "LEADERBOARD", href: "#", isActive: false, hasDropdown: true },
 ];
 
 export function Navbar() {
-  const [activeItem, setActiveItem] = useState("01");
+  const [location] = useLocation();
   const [clickedItem, setClickedItem] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Determine active item based on current route
+  const activeItem = navItems.find(item => item.href === location)?.id || "01";
+
   const handleItemClick = (itemId: string) => {
-    setActiveItem(itemId);
     setClickedItem(itemId);
     setIsMobileMenuOpen(false); // Close mobile menu on click
     
@@ -49,8 +53,9 @@ export function Navbar() {
           {/* Desktop Navigation Items - Centered */}
           <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
             {navItems.map((item) => (
-              <button
+              <Link
                 key={item.id}
+                href={item.href}
                 onClick={() => handleItemClick(item.id)}
                 className={`
                   relative flex items-center justify-center space-x-2 px-4 py-2 text-sm font-mono
@@ -82,7 +87,7 @@ export function Navbar() {
                     }
                   `}
                 />
-              </button>
+              </Link>
             ))}
           </div>
           
@@ -104,8 +109,9 @@ export function Navbar() {
           <div className="md:hidden border-t border-gray-800 bg-black">
             <div className="px-2 pt-2 pb-3 space-y-1">
               {navItems.map((item) => (
-                <button
+                <Link
                   key={item.id}
+                  href={item.href}
                   onClick={() => handleItemClick(item.id)}
                   className={`
                     w-full flex items-center space-x-2 px-4 py-3 text-sm font-mono
@@ -137,7 +143,7 @@ export function Navbar() {
                       }
                     `}
                   />
-                </button>
+                </Link>
               ))}
             </div>
           </div>

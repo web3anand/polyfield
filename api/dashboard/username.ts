@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
+import { fetchUserPnLData } from '../utils/polymarket-pnl';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
@@ -126,30 +127,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('User info found:', userInfo);
 
     // Fetch user data in parallel
-    const [positions, trades] = await Promise.all([
+    const [positions, trades, pnlData] = await Promise.all([
       fetchUserPositions(userInfo.wallet),
-      fetchUserTrades(userInfo.wallet)
+      fetchUserTrades(userInfo.wallet),
+      fetchUserPnLData(userInfo.wallet)
     ]);
 
-    // Calculate PnL from trades
-    const totalPnL = trades.reduce((sum, trade) => {
-      return sum + (trade.outcomeTokenAmount * trade.outcomeTokenPrice);
-    }, 0);
-
     // Calculate win rate
-    const winningTrades = trades.filter(trade => 
+    const winningTrades = trades.filter((trade: any) => 
       trade.outcomeTokenAmount * trade.outcomeTokenPrice > 0
     ).length;
     const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
-    // Calculate total volume
-    const totalVolume = trades.reduce((sum, trade) => {
+    // Calculate total volume from trades
+    const totalVolume = trades.reduce((sum: number, trade: any) => {
       return sum + Math.abs(trade.outcomeTokenAmount * trade.outcomeTokenPrice);
-    }, 0);
-
-    // Calculate open positions value
-    const openPositionsValue = positions.reduce((sum, position) => {
-      return sum + (position.size * position.currentPrice);
     }, 0);
 
     const dashboardData = {
@@ -160,14 +152,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         bio: userInfo.bio,
       },
       stats: {
-        totalPnL,
+        totalPnL: pnlData.totalPnl,
+        realizedPnL: pnlData.realizedPnl,
+        unrealizedPnL: pnlData.unrealizedPnl,
         winRate: Math.round(winRate * 100) / 100,
         totalVolume,
-        openPositionsValue,
+        openPositionsValue: pnlData.portfolioValue,
         totalTrades: trades.length,
-        activePositions: positions.length,
+        activePositions: pnlData.openPositions,
+        closedPositions: pnlData.closedPositions,
       },
-      positions: positions.map(pos => ({
+      positions: positions.map((pos: any) => ({
         id: pos.id,
         market: pos.market,
         outcome: pos.outcome,
@@ -176,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: pos.status,
         createdAt: pos.createdAt,
       })),
-      recentTrades: trades.slice(0, 10).map(trade => ({
+      recentTrades: trades.slice(0, 10).map((trade: any) => ({
         id: trade.id,
         market: trade.market,
         outcome: trade.outcome,

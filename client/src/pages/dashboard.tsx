@@ -22,10 +22,11 @@ export default function Dashboard() {
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard/username", connectedUsername],
     enabled: !!connectedUsername,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds - refresh for live prices
     gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
     retry: 2,
     retryDelay: 1000,
+    refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for live updates
   });
 
   const handleConnect = (username: string) => {
@@ -238,25 +239,25 @@ export default function Dashboard() {
             <Card className="p-6 hover-elevate">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Open Positions Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
-                ${openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${stats.openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
             <Card className="p-6 hover-elevate">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">All-Time PnL</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
             <Card className="p-6 hover-elevate">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Win Rate</p>
-              <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-win-rate">
-                {stats.winRate.toFixed(1)}%
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Realized PnL</p>
+              <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.realizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-realized-pnl">
+                {stats.realizedPnL >= 0 ? '+' : ''}${stats.realizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
             <Card className="p-6 hover-elevate">
-              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total Trades</p>
-              <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-total-trades">
-                {stats.totalTrades.toLocaleString()}
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Unrealized PnL</p>
+              <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.unrealizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-unrealized-pnl">
+                {stats.unrealizedPnL >= 0 ? '+' : ''}${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
           </div>
@@ -270,7 +271,7 @@ export default function Dashboard() {
               <StatCard
                 icon={<TrendingUp className="w-6 h-6" />}
                 label="Best Trade"
-                value={`$${stats.bestTrade.toFixed(2)}`}
+                value={`$${(stats.bestTrade ?? 0).toFixed(2)}`}
                 color="text-chart-2"
               />
               <StatCard

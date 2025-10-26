@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Position } from "@shared/schema";
-import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowUpDown, ExternalLink } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,18 @@ interface PositionsTableProps {
 }
 
 type SortOption = "pnl-desc" | "pnl-asc" | "size-desc" | "size-asc" | "market-asc";
+
+// Generate Polymarket URL
+function getPolymarketUrl(eventSlug?: string, marketSlug?: string, marketId?: string): string {
+  // Polymarket URL format: https://polymarket.com/event/[eventSlug]/[marketSlug]?tid=[conditionId]
+  if (eventSlug && marketSlug && marketId) {
+    // Convert conditionId hex to decimal for tid parameter
+    const tid = marketId.startsWith('0x') ? BigInt(marketId).toString() : marketId;
+    return `https://polymarket.com/event/${eventSlug}/${marketSlug}?tid=${tid}`;
+  }
+  // Fallback if missing data
+  return `https://polymarket.com`;
+}
 
 export function PositionsTable({ positions }: PositionsTableProps) {
   const [sortBy, setSortBy] = useState<SortOption>("pnl-desc");
@@ -106,14 +118,23 @@ export function PositionsTable({ positions }: PositionsTableProps) {
             <tbody>
               {sortedPositions.map((position, index) => {
                 const isProfitable = position.unrealizedPnL >= 0;
+                const marketUrl = getPolymarketUrl(position.eventSlug, position.marketSlug, position.marketId);
                 return (
                   <tr 
                     key={position.id} 
-                    className="border-b border-border"
+                    className="border-b border-border hover:bg-muted/50 transition-colors"
                     data-testid={`row-position-${index}`}
                   >
                     <td className="py-4 px-4">
-                      <p className="font-medium text-foreground">{position.marketName}</p>
+                      <a 
+                        href={marketUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2 group"
+                      >
+                        <span className="group-hover:underline">{position.marketName}</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </a>
                     </td>
                     <td className="py-4 px-4">
                       <Badge 
@@ -158,14 +179,23 @@ export function PositionsTable({ positions }: PositionsTableProps) {
       <div className="md:hidden max-h-[500px] overflow-y-auto scrollbar-hidden space-y-4" data-testid="scrollable-positions-mobile">
         {sortedPositions.map((position, index) => {
           const isProfitable = position.unrealizedPnL >= 0;
+          const marketUrl = getPolymarketUrl(position.eventSlug, position.marketSlug, position.marketId);
           return (
             <Card key={position.id} className="p-6" data-testid={`card-position-${index}`}>
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-foreground flex-1">{position.marketName}</p>
+                  <a 
+                    href={marketUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2 group flex-1"
+                  >
+                    <span className="group-hover:underline">{position.marketName}</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                  </a>
                   <Badge 
                     variant="outline"
-                    className="outcome-badge-dotted"
+                    className="outcome-badge-dotted flex-shrink-0"
                     data-outcome={position.outcome}
                   >
                     {position.outcome}

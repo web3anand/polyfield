@@ -1,0 +1,17 @@
+{
+  "name": "polyfield-oracle-bot",
+  "version": "1.0.0",
+  "description": "UMA Optimistic Oracle Monitor for Polymarket",
+  "main": "oracle-bot.js",
+  "scripts": {
+    "start": "node oracle-bot.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "graphql": "^16.11.0",
+    "graphql-request": "^7.3.1",
+    "node-cron": "^3.0.3",
+    "sqlite3": "^5.1.6"
+  }
+}
