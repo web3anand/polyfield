@@ -20,7 +20,7 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/dashboard/username", connectedUsername],
+    queryKey: ["/api", "dashboard", connectedUsername],
     enabled: !!connectedUsername,
     staleTime: 30 * 1000, // 30 seconds - refresh for live prices
     gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
