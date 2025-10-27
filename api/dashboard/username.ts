@@ -211,11 +211,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: trade.id || `trade-${Math.random()}`,
         marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
         outcome: trade.outcome || "YES",
-        size: parseFloat(trade.outcomeTokenAmount || trade.amount || 0),
-        price: parseFloat(trade.outcomeTokenPrice || trade.price || 0),
+        size: parseFloat(trade.size || trade.outcomeTokenAmount || trade.amount || 0),
+        price: parseFloat(trade.price || trade.outcomeTokenPrice || 0),
         timestamp: trade.timestamp || trade.created_at || new Date().toISOString(),
-        type: trade.side === "BUY" ? "BUY" : "SELL",
-        profit: parseFloat(trade.outcomeTokenAmount || 0) * parseFloat(trade.outcomeTokenPrice || 0),
+        type: (trade.side === "BUY" || trade.side === "buy") ? "BUY" : "SELL",
+        profit: trade.pnl ? parseFloat(trade.pnl) : undefined,
       })),
     };
 
