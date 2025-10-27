@@ -64,12 +64,14 @@ async function fetchUserPositions(walletAddress: string): Promise<any[]> {
     const response = await axios.get(`${POLYMARKET_DATA_API}/positions`, {
       params: {
         user: walletAddress,
-        active: true,
+        limit: 1000,
       },
       timeout: 10000,
     });
 
-    return response.data || [];
+    // Filter to only positions with size > 0 (matching PnL calculation logic)
+    const allPositions = response.data || [];
+    return allPositions.filter((pos: any) => parseFloat(pos.size || 0) > 0);
   } catch (error) {
     console.error('Error fetching positions:', error);
     return [];
@@ -211,10 +213,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: trade.id || `trade-${Math.random()}`,
         marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
         outcome: trade.outcome || "YES",
-        size: parseFloat(trade.size || trade.outcomeTokenAmount || trade.amount || 0),
-        price: parseFloat(trade.price || trade.outcomeTokenPrice || 0),
+        size: parseFloat(trade.outcomeTokenAmount || trade.size || trade.amount || 0),
+        price: parseFloat(trade.outcomeTokenPrice || trade.price || 0),
         timestamp: trade.timestamp || trade.created_at || new Date().toISOString(),
-        type: (trade.side === "BUY" || trade.side === "buy") ? "BUY" : "SELL",
+        type: (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL",
         profit: trade.pnl ? parseFloat(trade.pnl) : undefined,
       })),
     };
