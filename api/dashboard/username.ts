@@ -187,7 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pnlHistory,
       positions: positions.map((pos: any) => ({
         id: pos.id || `pos-${Math.random()}`,
-        market: pos.market || pos.title || "Unknown Market",
+        market: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
         outcome: pos.outcome || "YES",
         size: parseFloat(pos.size || 0),
         entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
@@ -198,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })),
       recentTrades: trades.slice(0, 10).map((trade: any) => ({
         id: trade.id || `trade-${Math.random()}`,
-        market: trade.market || trade.title || "Unknown Market",
+        market: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
         outcome: trade.outcome || "YES",
         amount: parseFloat(trade.outcomeTokenAmount || trade.amount || 0),
         price: parseFloat(trade.outcomeTokenPrice || trade.price || 0),
