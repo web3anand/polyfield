@@ -133,6 +133,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fetchUserPnLData(userInfo.wallet)
     ]);
 
+    // Log first position and trade to see structure
+    if (positions.length > 0) {
+      console.log('First position structure:', JSON.stringify(positions[0], null, 2));
+    }
+    if (trades.length > 0) {
+      console.log('First trade structure:', JSON.stringify(trades[0], null, 2));
+    }
+
     // Calculate win rate
     const winningTrades = trades.filter((trade: any) => 
       trade.outcomeTokenAmount * trade.outcomeTokenPrice > 0
