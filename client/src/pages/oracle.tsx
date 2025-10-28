@@ -133,22 +133,34 @@ export default function OracleBot() {
         return sorted.sort((a, b) => b.lastUpdate - a.lastUpdate);
       case "consensus":
         return sorted.sort((a, b) => {
+          // First prioritize consensus markets
           if (a.status === "CONSENSUS" && b.status !== "CONSENSUS") return -1;
           if (a.status !== "CONSENSUS" && b.status === "CONSENSUS") return 1;
+          // Then sort by consensus percentage
           return b.consensus - a.consensus;
         });
       case "liquidity":
-        return sorted.sort((a, b) => b.liquidity - a.liquidity);
+        return sorted.sort((a, b) => (b.liquidity || 0) - (a.liquidity || 0));
       case "ev":
-        return sorted.sort((a, b) => (b.ev || 0) - (a.ev || 0));
+        return sorted.sort((a, b) => {
+          const aEV = a.ev || 0;
+          const bEV = b.ev || 0;
+          return bEV - aEV;
+        });
+      case "confidence":
+        return sorted.sort((a, b) => {
+          const aConf = a.aiConfidence || 0;
+          const bConf = b.aiConfidence || 0;
+          return bConf - aConf;
+        });
       case "disputed":
         return sorted.sort((a, b) => {
           if (a.status === "DISPUTED" && b.status !== "DISPUTED") return -1;
           if (a.status !== "DISPUTED" && b.status === "DISPUTED") return 1;
-          return 0;
+          return b.lastUpdate - a.lastUpdate;
         });
       default:
-        return sorted;
+        return sorted.sort((a, b) => b.lastUpdate - a.lastUpdate);
     }
   };
 
@@ -205,14 +217,10 @@ export default function OracleBot() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
               <div className="p-2 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Markets</p>
+                <p className="text-xs text-muted-foreground mb-1">Markets Tracked</p>
                 <p className="text-base font-bold text-foreground">{botStats.marketsTracked}</p>
-              </div>
-              <div className="p-2 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Alerts</p>
-                <p className="text-base font-bold text-chart-2">{botStats.totalAlerts}</p>
               </div>
               <div className="p-2 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Consensus</p>
@@ -248,13 +256,14 @@ export default function OracleBot() {
               </div>
               <div className="flex items-center gap-3">
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Sort by..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="recent">Most Recent</SelectItem>
                     <SelectItem value="ev">Highest EV</SelectItem>
-                    <SelectItem value="consensus">Consensus First</SelectItem>
+                    <SelectItem value="confidence">AI Confidence</SelectItem>
+                    <SelectItem value="consensus">Consensus %</SelectItem>
                     <SelectItem value="liquidity">Highest Liquidity</SelectItem>
                     <SelectItem value="disputed">Disputed First</SelectItem>
                   </SelectContent>
