@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SCAN_INTERVAL = 60000; // 1 minute (60 seconds)
 const MIN_LIQUIDITY = 10000; // $10k minimum
-const CONSENSUS_THRESHOLD = 0.70; // 70% consensus
+const CONSENSUS_THRESHOLD = 0.60; // 60% consensus (lowered to find more markets)
 const EV_ALERT_THRESHOLD = 5000; // Alert on >$5k EV opportunities
 const AI_ANALYSIS_INTERVAL = 60000; // Re-analyze with AI every 1 minute
 
@@ -165,8 +165,20 @@ async function fetchAllMarkets() {
 }
 
 async function analyzeMarket(market) {
-  const yesPrice = parseFloat(market.outcomePrices?.[0] || 0.5);
-  const noPrice = parseFloat(market.outcomePrices?.[1] || 0.5);
+  // Parse outcome prices - they come as a JSON string!
+  let outcomePrices = [];
+  try {
+    if (typeof market.outcomePrices === 'string') {
+      outcomePrices = JSON.parse(market.outcomePrices);
+    } else if (Array.isArray(market.outcomePrices)) {
+      outcomePrices = market.outcomePrices;
+    }
+  } catch (e) {
+    outcomePrices = [0.5, 0.5]; // Default to 50/50 if parse fails
+  }
+  
+  const yesPrice = parseFloat(outcomePrices[0] || 0.5);
+  const noPrice = parseFloat(outcomePrices[1] || 0.5);
   const volume = parseFloat(market.volume) || 0;
   const liquidity = parseFloat(market.liquidity) || 0;
   
@@ -177,21 +189,18 @@ async function analyzeMarket(market) {
   let ev = 0;
   let aiData = null;
   
-  // ONLY TRACK HIGH-QUALITY ALPHA SIGNALS
+  // ONLY TRACK HIGH-LIQUIDITY MARKETS (show ALL, not just consensus)
   // Skip low liquidity markets (< $10k)
   if (liquidity < MIN_LIQUIDITY) {
     return null; // Filter out noise
   }
   
-  // ONLY SAVE STRONG CONSENSUS (>70% certainty) - These are alpha signals
+  // Determine market direction
   if (yesPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
     outcome = 'YES';
     consensus = yesPrice * 100;
-    
-    // Calculate Expected Value: (implied_prob - market_price) * liquidity
-    // If market is at 0.85 but "should" be 0.95, EV = (0.95 - 0.85) * liquidity
-    ev = (0.95 - yesPrice) * liquidity; // Conservative: assume 95% true prob for 70%+ consensus
+    ev = (0.95 - yesPrice) * liquidity;
     
   } else if (noPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
@@ -199,8 +208,11 @@ async function analyzeMarket(market) {
     consensus = noPrice * 100;
     ev = (0.95 - noPrice) * liquidity;
   } else {
-    // Skip markets without strong consensus - not actionable alpha
-    return null;
+    // Track all markets, even uncertain ones
+    status = 'UNCERTAIN';
+    outcome = yesPrice > noPrice ? 'YES_LEAN' : 'NO_LEAN';
+    consensus = Math.max(yesPrice, noPrice) * 100;
+    ev = 0; // No clear edge
   }
   
   // Get DEEP AI analysis for high-value or important markets
@@ -359,8 +371,70 @@ async function scanAllOracles() {
   let filteredCount = 0;
   let highEVCount = 0;
   let totalEV = 0;
+  let lowLiquidityCount = 0;
+  let weakConsensusCount = 0;
+  
+  // Sample some markets for debugging
+  let highConsensusLowLiq = [];
+  let highLiqWeakConsensus = [];
+  let potentialMatches = [];
   
   for (const market of markets) {
+    // Parse outcome prices - they come as a JSON string!
+    let outcomePrices = [];
+    try {
+      if (typeof market.outcomePrices === 'string') {
+        outcomePrices = JSON.parse(market.outcomePrices);
+      } else if (Array.isArray(market.outcomePrices)) {
+        outcomePrices = market.outcomePrices;
+      }
+    } catch (e) {
+      outcomePrices = [0.5, 0.5];
+    }
+    
+    const yesPrice = parseFloat(outcomePrices[0] || 0.5);
+    const noPrice = parseFloat(outcomePrices[1] || 0.5);
+    const liquidity = parseFloat(market.liquidity) || 0;
+    const maxPrice = Math.max(yesPrice, noPrice);
+    
+    // Debug first market to see data structure
+    if (potentialMatches.length === 0 && liquidity > MIN_LIQUIDITY) {
+      console.log(`\n🔍 DEBUG - First high liquidity market:`);
+      console.log(`   Question: ${market.question}`);
+      console.log(`   outcomePrices: ${JSON.stringify(market.outcomePrices)}`);
+      console.log(`   yesPrice parsed: ${yesPrice}`);
+      console.log(`   noPrice parsed: ${noPrice}`);
+      console.log(`   liquidity: ${liquidity}`);
+      console.log(`   maxPrice: ${maxPrice}`);
+      console.log(`   CONSENSUS_THRESHOLD: ${CONSENSUS_THRESHOLD}\n`);
+    }
+    
+    // Debug: Track why markets are filtered
+    if (liquidity < MIN_LIQUIDITY) {
+      lowLiquidityCount++;
+      if (maxPrice >= CONSENSUS_THRESHOLD) {
+        highConsensusLowLiq.push({
+          title: market.question?.substring(0, 60),
+          consensus: (maxPrice * 100).toFixed(1),
+          liquidity: liquidity.toFixed(0)
+        });
+      }
+    } else if (maxPrice < CONSENSUS_THRESHOLD) {
+      weakConsensusCount++;
+      highLiqWeakConsensus.push({
+        title: market.question?.substring(0, 60),
+        consensus: (maxPrice * 100).toFixed(1),
+        liquidity: (liquidity / 1000).toFixed(1)
+      });
+    } else {
+      // This market should pass!
+      potentialMatches.push({
+        title: market.question?.substring(0, 60),
+        consensus: (maxPrice * 100).toFixed(1),
+        liquidity: (liquidity / 1000).toFixed(1)
+      });
+    }
+    
     const analysis = await analyzeMarket(market);
     
     // Skip low-quality markets
@@ -451,10 +525,37 @@ async function scanAllOracles() {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`\n✅ Scan complete: ${elapsed}s`);
   console.log(`🔍 Scanned ${markets.length} markets | Filtered out ${filteredCount} (low liquidity / weak consensus)`);
+  console.log(`   � Low liquidity (<$${MIN_LIQUIDITY/1000}k): ${lowLiquidityCount}`);
+  console.log(`   �📊 Weak consensus (<${(CONSENSUS_THRESHOLD * 100).toFixed(0)}%): ${weakConsensusCount}`);
+  console.log(`   ✅ Potential matches: ${potentialMatches.length}`);
   console.log(`📊 Inserted: ${insertedCount} | Updated: ${updatedCount} | Deleted: ${deletedCount}`);
   console.log(`🎯 ALPHA SIGNALS: ${consensusCount} strong consensus markets (>${(CONSENSUS_THRESHOLD * 100).toFixed(0)}% certainty, >$${MIN_LIQUIDITY/1000}k liquidity)`);
   console.log(`💰 Total EV: $${(totalEV/1000).toFixed(1)}k across all opportunities | High-EV alerts: ${highEVCount}`);
-  console.log(`📈 Historical Win Rate: ${winRate}%\n`);
+  console.log(`📈 Historical Win Rate: ${winRate}%`);
+  
+  // Show samples of filtered markets
+  if (highConsensusLowLiq.length > 0) {
+    console.log(`\n🔍 Sample: High consensus but low liquidity (top 5):`);
+    highConsensusLowLiq.slice(0, 5).forEach(m => {
+      console.log(`   ${m.consensus}% consensus | $${m.liquidity} liq | ${m.title}`);
+    });
+  }
+  
+  if (highLiqWeakConsensus.length > 0 && potentialMatches.length === 0) {
+    console.log(`\n🔍 Sample: High liquidity but weak consensus (top 5):`);
+    highLiqWeakConsensus.slice(0, 5).forEach(m => {
+      console.log(`   ${m.consensus}% consensus | $${m.liquidity}k liq | ${m.title}`);
+    });
+  }
+  
+  if (potentialMatches.length > 0) {
+    console.log(`\n✅ Markets that SHOULD match (${potentialMatches.length} total):`);
+    potentialMatches.slice(0, 10).forEach(m => {
+      console.log(`   ${m.consensus}% | $${m.liquidity}k | ${m.title}`);
+    });
+  }
+  
+  console.log('');
 }
 
 async function init() {

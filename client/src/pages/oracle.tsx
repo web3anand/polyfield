@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
+import { Activity, Zap, TrendingUp, RefreshCw, ExternalLink } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import {
   Select,
@@ -293,7 +293,15 @@ export default function OracleBot() {
                 >
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
-                      <p className="font-medium text-foreground mb-2">{market.title}</p>
+                      <a 
+                        href={`https://polymarket.com/event/${market.marketId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-foreground hover:text-primary transition-colors mb-2 inline-flex items-center gap-1 group"
+                      >
+                        <span className="group-hover:underline">{market.title}</span>
+                        <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" />
+                      </a>
                       <div className="flex items-center gap-3 flex-wrap">
                         <code className="text-xs text-muted-foreground font-mono">
                           {market.marketId.slice(0, 10)}...{market.marketId.slice(-8)}
@@ -417,12 +425,21 @@ export default function OracleBot() {
                         </p>
                       </div>
                       <div className="flex gap-2 mt-3">
-                        <Button size="sm" variant="default" className="flex-1">
+                        <Button 
+                          size="sm" 
+                          variant="default" 
+                          className="flex-1"
+                          onClick={() => window.open(`https://polymarket.com/event/${market.marketId}`, '_blank')}
+                        >
                           <Zap className="w-3 h-3 mr-1" />
-                          Bet {market.outcome} @ ~{(market.consensus / 100).toFixed(2)}
+                          Bet {market.outcome} @ {(market.consensus / 100).toFixed(2)}
                         </Button>
-                        <Button size="sm" variant="outline">
-                          View Oracle
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => window.open(`https://polymarket.com/event/${market.marketId}`, '_blank')}
+                        >
+                          View Market
                         </Button>
                       </div>
                     </div>
