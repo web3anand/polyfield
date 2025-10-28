@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const GROK_API_KEY = process.env.GROK_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyC7HKCheUjLY_7N8tNuK2YgKusxflZ0Fnw';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ Missing SUPABASE_URL or SUPABASE_KEY in environment');
@@ -16,51 +16,57 @@ const MIN_LIQUIDITY = 20000; // Increased to $20k for higher quality
 const CONSENSUS_THRESHOLD = 0.80; // 80% minimum for alpha signals
 const EV_ALERT_THRESHOLD = 10000; // Alert on >$10k EV opportunities
 
-// LLM Analysis for high-value markets
+// LLM Analysis for high-value markets using Gemini
 async function getLLMAnalysis(market) {
   // Only analyze high-value or politically sensitive markets
-  const keywords = ['trump', 'election', 'president', 'government', 'war', 'supreme court'];
+  const keywords = ['trump', 'election', 'president', 'government', 'war', 'supreme court', 'bitcoin', 'eth', 'fed'];
   const isHighValue = market.liquidity > 50000;
   const isPolitical = keywords.some(kw => market.question?.toLowerCase().includes(kw));
   
-  if (!GROK_API_KEY || (!isHighValue && !isPolitical)) {
+  if (!GEMINI_API_KEY || (!isHighValue && !isPolitical)) {
     return null;
   }
   
   try {
-    const prompt = `Analyze this prediction market for betting edge:
+    const prompt = `You are a prediction market analyst. Analyze this market for betting edge:
+
 Question: "${market.question}"
 Current YES price: ${(parseFloat(market.outcomePrices?.[0] || 0.5) * 100).toFixed(1)}%
 Liquidity: $${(market.liquidity / 1000).toFixed(1)}k
 
-Task: Based on historical patterns, news, and similar past events, estimate:
-1. True probability (YES %)
-2. Expected value if betting YES
-3. Dispute risk (low/medium/high)
+Provide:
+1. True probability estimate (YES %)
+2. Expected value assessment
+3. Dispute risk level
 
-Be concise, 2-3 sentences max. Focus on edge and actionability.`;
+Keep it concise (2-3 sentences). Focus on actionable insights.`;
 
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'grok-beta',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 150
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 200
+        }
       })
     });
     
     if (!response.ok) {
-      console.log(`⚠️ Grok API error: ${response.status}`);
+      console.log(`⚠️ Gemini API error: ${response.status}`);
       return null;
     }
     
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
+    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return analysis || null;
   } catch (error) {
     console.error('❌ LLM analysis error:', error.message);
     return null;
@@ -378,9 +384,9 @@ async function scanAllOracles() {
 }
 
 async function init() {
-  console.log('🚀 ORACLE ALPHA SCANNER v2.0 - LLM-Powered');
+  console.log('🚀 ORACLE ALPHA SCANNER v2.0 - AI-Powered');
   console.log('🎯 Only tracking HIGH-CONVICTION signals (>80% consensus, >$20k liquidity)');
-  console.log('🤖 Grok AI analysis for high-value opportunities (>$50k or political markets)');
+  console.log('🤖 Google Gemini AI analysis for high-value opportunities (>$50k or key markets)');
   console.log('💰 Expected Value (EV) calculation + alerts on >$10k EV opportunities');
   console.log(`⏱️  Scan Interval: ${SCAN_INTERVAL / 1000}s`);
   console.log(`💾 Database: Supabase (${SUPABASE_URL})\n`);
