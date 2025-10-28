@@ -34,7 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       alerts: m.disputes?.toString() || '0',
       liquidity: m.liquidity || 0,
       ev: m.ev || 0,
-      llmAnalysis: m.llm_analysis || null
+      llmAnalysis: m.llm_analysis || null,
+      aiRecommendation: m.ai_recommendation || null,
+      aiConfidence: m.ai_confidence || null,
+      aiTrueProb: m.ai_true_prob || null,
+      aiEdge: m.ai_edge || null,
+      aiRisk: m.ai_risk || null
     }));
 
     res.status(200).json(markets);

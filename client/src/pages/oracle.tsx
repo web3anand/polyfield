@@ -24,6 +24,11 @@ interface Market {
   liquidity: number;
   ev?: number;
   llmAnalysis?: string;
+  aiRecommendation?: string;
+  aiConfidence?: number;
+  aiTrueProb?: number;
+  aiEdge?: number;
+  aiRisk?: string;
 }
 
 interface BotStats {
@@ -338,12 +343,58 @@ export default function OracleBot() {
                         </div>
                       )}
                       
-                      {/* LLM Analysis */}
+                      {/* AI Analysis with Enhanced Details */}
                       {market.llmAnalysis && (
                         <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold text-purple-600">🤖 AI ANALYSIS</span>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-bold text-purple-600">🤖 AI DEEP ANALYSIS</span>
+                            {market.aiRecommendation && (
+                              <Badge 
+                                variant={market.aiRecommendation === 'YES' ? 'default' : 'destructive'}
+                                className="text-xs"
+                              >
+                                BET {market.aiRecommendation}
+                              </Badge>
+                            )}
                           </div>
+                          
+                          {/* AI Metrics Grid */}
+                          {(market.aiConfidence || market.aiTrueProb || market.aiEdge || market.aiRisk) && (
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                              {market.aiConfidence && (
+                                <div className="p-2 bg-background/50 rounded">
+                                  <p className="text-xs text-muted-foreground">Confidence</p>
+                                  <p className="text-sm font-bold text-purple-600">{market.aiConfidence}/10</p>
+                                </div>
+                              )}
+                              {market.aiTrueProb && (
+                                <div className="p-2 bg-background/50 rounded">
+                                  <p className="text-xs text-muted-foreground">True Probability</p>
+                                  <p className="text-sm font-bold text-purple-600">{market.aiTrueProb}%</p>
+                                </div>
+                              )}
+                              {market.aiEdge !== undefined && market.aiEdge !== null && (
+                                <div className="p-2 bg-background/50 rounded">
+                                  <p className="text-xs text-muted-foreground">Market Edge</p>
+                                  <p className={`text-sm font-bold ${market.aiEdge > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {market.aiEdge > 0 ? '+' : ''}{market.aiEdge}%
+                                  </p>
+                                </div>
+                              )}
+                              {market.aiRisk && (
+                                <div className="p-2 bg-background/50 rounded">
+                                  <p className="text-xs text-muted-foreground">Risk Level</p>
+                                  <p className={`text-sm font-bold ${
+                                    market.aiRisk === 'LOW' ? 'text-green-600' : 
+                                    market.aiRisk === 'MEDIUM' ? 'text-yellow-600' : 'text-red-600'
+                                  }`}>
+                                    {market.aiRisk}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
                           <p className="text-xs text-foreground leading-relaxed">
                             {market.llmAnalysis}
                           </p>
