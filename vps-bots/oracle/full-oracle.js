@@ -8,17 +8,50 @@ const SCAN_INTERVAL = 15000; // 15 seconds
 
 async function fetchAllMarkets() {
   try {
-    // Fetch only active, non-closed markets
-    const response = await fetch('https://gamma-api.polymarket.com/markets?limit=100&active=true&closed=false');
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
-    const markets = await response.json();
+    let allMarkets = [];
+    let offset = 0;
+    const limit = 100;
+    let hasMore = true;
+    
+    console.log('📥 Fetching all available markets...');
+    
+    // Fetch all markets with pagination
+    while (hasMore) {
+      const response = await fetch(`https://gamma-api.polymarket.com/markets?limit=${limit}&offset=${offset}&active=true&closed=false`);
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const markets = await response.json();
+      
+      if (markets.length === 0) {
+        hasMore = false;
+      } else {
+        allMarkets = allMarkets.concat(markets);
+        offset += limit;
+        console.log(`   Fetched ${allMarkets.length} markets so far...`);
+        
+        // Stop if we got fewer than limit (last page)
+        if (markets.length < limit) {
+          hasMore = false;
+        }
+      }
+      
+      // Safety limit to prevent infinite loops
+      if (offset > 10000) {
+        console.log('⚠️  Reached safety limit of 10,000 markets');
+        hasMore = false;
+      }
+    }
+    
+    console.log(`✅ Fetched total of ${allMarkets.length} markets`);
     
     // Filter out markets that ended more than 7 days ago
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    return markets.filter(market => {
+    const filtered = allMarkets.filter(market => {
       const endDate = market.endDate ? new Date(market.endDate).getTime() : Date.now();
       return endDate > sevenDaysAgo; // Only markets ending in the future or ended recently
     });
+    
+    console.log(`📊 ${filtered.length} markets after 7-day filter`);
+    return filtered;
   } catch (error) {
     console.error('❌ Error fetching markets:', error.message);
     return [];

@@ -50,7 +50,7 @@ export default function OracleBot() {
 
   const loadMarkets = async () => {
     try {
-      const response = await fetch('/api/oracle/markets?limit=20');
+      const response = await fetch('/api/oracle/markets?limit=100');
       if (response.ok) {
         const data = await response.json();
         setTrackedMarkets(data);
