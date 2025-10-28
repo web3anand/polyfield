@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Target, Zap, Clock, Code, RefreshCw } from "lucide-react";
+import { TrendingUp, Zap, Clock, Code, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { useToast } from "@/hooks/use-toast";
 

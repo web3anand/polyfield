@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Zap, AlertCircle, TrendingUp, RefreshCw } from "lucide-react";
+import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 
 interface Market {
@@ -279,101 +279,6 @@ export default function OracleBot() {
             </div>
           </Card>
         </div>
-      </div>
-    </div>
-  );
-}
-
-          <div className="space-y-4 text-sm text-muted-foreground">
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                1
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Setup & Launch</p>
-                <p className="mt-1">Load .env (wallet PK, RPC URL, Telegram token). Fetches 5-10 "ready to resolve" markets from Polymarket API and tracks their condition IDs + YES/NO tokens.</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                2
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Oracle Monitoring</p>
-                <p className="mt-1">Uses Web3 to listen for UMA events (e.g., "Propose" when oracle gets resolution request). Filters for tracked markets' request IDs and calls UMA contract's getProposal() to grab details.</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                3
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Vote Check</p>
-                <p className="mt-1">Polls/tallies votes via custom getVotes() function. If YES &gt;80% or NO &gt;80%, flags consensus. Monitors for disputes that could flip results.</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                4
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Action</p>
-                <p className="mt-1">
-                  <span className="font-semibold">Alert Mode:</span> Sends Telegram message with bet recommendation and market link.<br />
-                  <span className="font-semibold">Auto Mode:</span> Gets USDC balance, approves to CTF router, places market order via Polymarket CLOB API at current price (~0.99). Transaction on Polygon (~$0.01 gas).
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                5
-              </div>
-              <div>
-                <p className="font-semibold text-foreground">Continuous Loop</p>
-                <p className="mt-1">Listens continuously via Web3 subscription. Monitors for disputes and cancels bets if challenged. Tracks 5-10 markets max to respect RPC rate limits (Alchemy free tier: 300k/day).</p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Risks & Notes */}
-        <Card className="p-6 hover-elevate border-destructive/50">
-          <div className="flex items-start gap-3 mb-4">
-            <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0" />
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">Risks & Notes</h2>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mt-1">
-                Read carefully before enabling auto-bet
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-3 text-sm">
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-semibold text-foreground mb-1">⚡ Edge Advantage</p>
-              <p className="text-muted-foreground">Beats Polymarket lag by 5-15 seconds, but UMA disputes (up to 2 hours) can flip results causing total loss.</p>
-            </div>
-
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-semibold text-foreground mb-1">🧪 Testing Recommended</p>
-              <p className="text-muted-foreground">Start with mock events or low-stakes markets. Add PnL logging to track performance over time.</p>
-            </div>
-
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-semibold text-foreground mb-1">⚠️ Rate Limits</p>
-              <p className="text-muted-foreground">Track max 5-10 markets. Free RPC tiers (Alchemy: 300k requests/day) may be insufficient for heavy monitoring.</p>
-            </div>
-
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-semibold text-foreground mb-1">💸 Gas Costs</p>
-              <p className="text-muted-foreground">Polygon transactions cost ~$0.01 in gas. Factor this into profitability calculations for smaller bets.</p>
-            </div>
-          </div>
-        </Card>
       </div>
     </div>
   );
