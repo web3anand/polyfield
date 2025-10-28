@@ -183,7 +183,7 @@ export default function OracleBot() {
                 ORACLE BOT
               </h1>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
-                UMA Optimistic Oracle Monitor • 5-15s Edge
+                UMA Optimistic Oracle Monitor • 1-min Updates • AI-Powered
               </p>
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function OracleBot() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">Oracle Bot: LIVE</p>
-                  <p className="text-xs text-muted-foreground">Polling every 10s</p>
+                  <p className="text-xs text-muted-foreground">Scanning every 1min</p>
                 </div>
               </div>
               <Button
