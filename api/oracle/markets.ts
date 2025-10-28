@@ -9,10 +9,15 @@ const supabase = createClient(
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const limit = parseInt(req.query.limit as string) || 20;
+    
+    // Only show markets updated in the last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const { data: oracles, error } = await supabase
       .from('oracles')
       .select('*')
+      .gte('timestamp', sevenDaysAgo.toISOString())
       .order('timestamp', { ascending: false })
       .limit(limit);
 

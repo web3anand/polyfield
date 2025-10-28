@@ -111,22 +111,22 @@ export default function OracleBot() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Navbar */}
       <Navbar />
       
-      {/* Header */}
-      <div className="border-b border-border bg-card/50">
-        <div className="container mx-auto px-6 py-6">
+      {/* Fixed Header */}
+      <div className="border-b border-border bg-card/50 flex-shrink-0">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-lg">
-              <Zap className="w-8 h-8 text-primary" />
+              <Zap className="w-7 h-7 text-primary" />
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl font-black text-foreground tracking-tight">
+              <h1 className="text-2xl font-black text-foreground tracking-tight">
                 ORACLE BOT
               </h1>
-              <p className="text-sm text-muted-foreground uppercase tracking-wider mt-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
                 UMA Optimistic Oracle Monitor • 5-15s Edge
               </p>
             </div>
@@ -134,22 +134,21 @@ export default function OracleBot() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-6 py-8 space-y-8">
-        {/* Bot Status */}
-        <Card className="p-6 hover-elevate border-primary/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Activity className="w-6 h-6 text-primary animate-pulse" />
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+      {/* Fixed Bot Status */}
+      <div className="border-b border-border bg-card/50 flex-shrink-0">
+        <div className="container mx-auto px-6 py-3">
+          <Card className="p-4 hover-elevate border-primary/50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Activity className="w-5 h-5 text-primary animate-pulse" />
+                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Oracle Bot: LIVE</p>
+                  <p className="text-xs text-muted-foreground">Polling every 10s</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Oracle Bot: LIVE</p>
-                <p className="text-xs text-muted-foreground">Polling every 10s • UMA Optimistic Oracle Monitor</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -160,64 +159,67 @@ export default function OracleBot() {
                 Refresh
               </Button>
             </div>
-          </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Markets</p>
-              <p className="text-lg font-bold text-foreground">{botStats.marketsTracked}</p>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Markets</p>
+                <p className="text-base font-bold text-foreground">{botStats.marketsTracked}</p>
+              </div>
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Alerts</p>
+                <p className="text-base font-bold text-chart-2">{botStats.totalAlerts}</p>
+              </div>
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Consensus</p>
+                <p className="text-base font-bold text-chart-2">{botStats.consensusDetected}</p>
+              </div>
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Disputed</p>
+                <p className="text-base font-bold text-destructive">{botStats.disputed}</p>
+              </div>
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Win Rate</p>
+                <p className="text-base font-bold text-primary">{botStats.winRate}%</p>
+              </div>
+              <div className="p-2 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Edge Time</p>
+                <p className="text-base font-bold text-foreground">{botStats.edgeTime}</p>
+              </div>
             </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Alerts</p>
-              <p className="text-lg font-bold text-chart-2">{botStats.totalAlerts}</p>
-            </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Consensus</p>
-              <p className="text-lg font-bold text-chart-2">{botStats.consensusDetected}</p>
-            </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Disputed</p>
-              <p className="text-lg font-bold text-destructive">{botStats.disputed}</p>
-            </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Win Rate</p>
-              <p className="text-lg font-bold text-primary">{botStats.winRate}%</p>
-            </div>
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Edge Time</p>
-              <p className="text-lg font-bold text-foreground">{botStats.edgeTime}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
+      </div>
 
-        {/* Tracked Markets */}
-        <Card className="p-6 hover-elevate">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">Tracked Oracle Markets</h2>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mt-1">
-                Live UMA Oracle Monitoring • 10s Polling
-              </p>
+      {/* Scrollable Markets Section */}
+      <div className="flex-1 overflow-hidden">
+        <div className="container mx-auto px-6 h-full py-4">
+          <Card className="h-full flex flex-col p-4">
+            <div className="flex items-center justify-between mb-3 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Tracked Oracle Markets</h2>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Live Monitoring • Recent Markets Only
+                </p>
+              </div>
+              <Activity className="w-5 h-5 text-muted-foreground" />
             </div>
-            <Activity className="w-6 h-6 text-muted-foreground" />
-          </div>
 
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
-              <p>Loading oracle data...</p>
-            </div>
-          ) : trackedMarkets.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-semibold">No oracle markets yet</p>
-              <p className="text-sm">Bot is running. Markets will appear when oracle proposals are detected.</p>
-              <p className="text-xs mt-2">Make sure the oracle bot is running: <code className="bg-muted px-2 py-1 rounded">npm run oracle</code></p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {trackedMarkets.map((market) => (
+            {/* Scrollable Markets List */}
+            <div className="flex-1 overflow-y-auto pr-2">
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
+                  <p>Loading oracle data...</p>
+                </div>
+              ) : trackedMarkets.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="font-semibold">No oracle markets yet</p>
+                  <p className="text-sm">Bot is running. Markets will appear when oracle proposals are detected.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">{trackedMarkets.map((market) => (
                 <div
                   key={market.marketId}
                   className="p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
@@ -274,11 +276,14 @@ export default function OracleBot() {
               ))}
             </div>
           )}
-        </Card>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* How It Works */}
-        <Card className="p-6 hover-elevate">
-          <h2 className="text-xl font-semibold text-foreground mb-4">How It Works</h2>
           <div className="space-y-4 text-sm text-muted-foreground">
             <div className="flex gap-3">
               <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">

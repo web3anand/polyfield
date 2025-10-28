@@ -8,10 +8,17 @@ const SCAN_INTERVAL = 30000; // 30 seconds for faster updates
 
 async function fetchAllMarkets() {
   try {
-    // Fetch ALL active markets - no filtering
+    // Fetch only active, non-closed markets
     const response = await fetch('https://gamma-api.polymarket.com/markets?limit=100&active=true&closed=false');
     if (!response.ok) throw new Error(`API error: ${response.status}`);
-    return await response.json();
+    const markets = await response.json();
+    
+    // Filter out markets that ended more than 7 days ago
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    return markets.filter(market => {
+      const endDate = market.endDate ? new Date(market.endDate).getTime() : Date.now();
+      return endDate > sevenDaysAgo; // Only markets ending in the future or ended recently
+    });
   } catch (error) {
     console.error('❌ Error fetching markets:', error.message);
     return [];
