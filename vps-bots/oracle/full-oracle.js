@@ -12,8 +12,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SCAN_INTERVAL = 15000; // 15 seconds
-const MIN_LIQUIDITY = 20000; // Increased to $20k for higher quality
-const CONSENSUS_THRESHOLD = 0.80; // 80% minimum for alpha signals
+const MIN_LIQUIDITY = 10000; // $10k for more results
+const CONSENSUS_THRESHOLD = 0.70; // 70% to see more markets (was 80%)
 const EV_ALERT_THRESHOLD = 10000; // Alert on >$10k EV opportunities
 
 // LLM Analysis for high-value markets using Gemini
