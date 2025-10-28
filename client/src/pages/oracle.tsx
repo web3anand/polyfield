@@ -4,6 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Market {
   marketId: string;
@@ -29,6 +36,7 @@ interface BotStats {
 
 export default function OracleBot() {
   const [trackedMarkets, setTrackedMarkets] = useState<Market[]>([]);
+  const [sortBy, setSortBy] = useState<string>("recent");
   const [botStats, setBotStats] = useState<BotStats>({
     marketsTracked: 0,
     totalAlerts: 0,
@@ -109,6 +117,32 @@ export default function OracleBot() {
       default: return <Badge variant="outline">UNKNOWN</Badge>;
     }
   };
+
+  const sortMarkets = (markets: Market[]) => {
+    const sorted = [...markets];
+    switch (sortBy) {
+      case "recent":
+        return sorted.sort((a, b) => b.lastUpdate - a.lastUpdate);
+      case "consensus":
+        return sorted.sort((a, b) => {
+          if (a.status === "CONSENSUS" && b.status !== "CONSENSUS") return -1;
+          if (a.status !== "CONSENSUS" && b.status === "CONSENSUS") return 1;
+          return b.consensus - a.consensus;
+        });
+      case "liquidity":
+        return sorted.sort((a, b) => b.liquidity - a.liquidity);
+      case "disputed":
+        return sorted.sort((a, b) => {
+          if (a.status === "DISPUTED" && b.status !== "DISPUTED") return -1;
+          if (a.status !== "DISPUTED" && b.status === "DISPUTED") return 1;
+          return 0;
+        });
+      default:
+        return sorted;
+    }
+  };
+
+  const sortedMarkets = sortMarkets(trackedMarkets);
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -202,7 +236,20 @@ export default function OracleBot() {
                   Live Monitoring • Recent Markets Only
                 </p>
               </div>
-              <Activity className="w-5 h-5 text-muted-foreground" />
+              <div className="flex items-center gap-3">
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Sort by..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recent">Most Recent</SelectItem>
+                    <SelectItem value="consensus">Consensus First</SelectItem>
+                    <SelectItem value="liquidity">Highest Liquidity</SelectItem>
+                    <SelectItem value="disputed">Disputed First</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Activity className="w-5 h-5 text-muted-foreground" />
+              </div>
             </div>
 
             {/* Scrollable Markets List */}
@@ -219,7 +266,7 @@ export default function OracleBot() {
                   <p className="text-sm">Bot is running. Markets will appear when oracle proposals are detected.</p>
                 </div>
               ) : (
-                <div className="space-y-3">{trackedMarkets.map((market) => (
+                <div className="space-y-3">{sortedMarkets.map((market) => (
                 <div
                   key={market.marketId}
                   className="p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
@@ -227,9 +274,14 @@ export default function OracleBot() {
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
                       <p className="font-medium text-foreground mb-2">{market.title}</p>
-                      <code className="text-xs text-muted-foreground font-mono">
-                        {market.marketId.slice(0, 10)}...{market.marketId.slice(-8)}
-                      </code>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <code className="text-xs text-muted-foreground font-mono">
+                          {market.marketId.slice(0, 10)}...{market.marketId.slice(-8)}
+                        </code>
+                        <Badge variant="outline" className="text-xs">
+                          Liquidity: ${(market.liquidity / 1000).toFixed(1)}k
+                        </Badge>
+                      </div>
                     </div>
                     {getStatusBadge(market.status)}
                   </div>
@@ -243,13 +295,18 @@ export default function OracleBot() {
                             Consensus Detected: {market.outcome}
                           </span>
                         </div>
-                        <span className="text-lg font-bold text-chart-2 tabular-nums">
-                          {market.consensus.toFixed(0)}%
-                        </span>
+                        <div className="text-right">
+                          <span className="text-lg font-bold text-chart-2 tabular-nums">
+                            {market.consensus.toFixed(0)}%
+                          </span>
+                          <p className="text-xs text-muted-foreground">
+                            {market.outcome === "YES" ? "Yes votes" : "No votes"}
+                          </p>
+                        </div>
                       </div>
                       {market.proposer && market.proposer !== 'N/A' && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Proposer: <code className="font-mono">{market.proposer}</code>
+                          Proposer: <code className="font-mono">{market.proposer.slice(0, 10)}...{market.proposer.slice(-8)}</code>
                         </p>
                       )}
                       {market.alerts && (
@@ -257,10 +314,16 @@ export default function OracleBot() {
                           🚨 {market.alerts}
                         </p>
                       )}
+                      <div className="mt-3 p-2 bg-muted rounded-lg">
+                        <p className="text-xs text-muted-foreground mb-1">Expected Edge</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          5-15 second advantage before market adjusts
+                        </p>
+                      </div>
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" variant="default" className="flex-1">
                           <Zap className="w-3 h-3 mr-1" />
-                          Bet {market.outcome}
+                          Bet {market.outcome} @ ~{(market.consensus / 100).toFixed(2)}
                         </Button>
                         <Button size="sm" variant="outline">
                           View Oracle
@@ -269,9 +332,31 @@ export default function OracleBot() {
                     </div>
                   )}
 
-                  <p className="text-xs text-muted-foreground mt-3">
-                    Last Update: {formatTimestamp(market.lastUpdate)} • Liquidity: ${market.liquidity.toLocaleString()}
-                  </p>
+                  {market.status === "DISPUTED" && (
+                    <div className="mt-3 p-3 bg-destructive/10 border border-destructive/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-destructive">
+                          ⚠️ Dispute Active - Outcome Uncertain
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Wait for dispute resolution before placing bets
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground">
+                      Last Update: {formatTimestamp(market.lastUpdate)}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {market.status === "MONITORING" && (
+                        <Badge variant="outline" className="text-xs">
+                          Watching for oracle events
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
