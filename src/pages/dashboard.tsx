@@ -20,13 +20,18 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["/api/dashboard/username", connectedUsername],
+    queryKey: ["dashboard", connectedUsername],
     enabled: !!connectedUsername,
     staleTime: 30 * 1000, // 30 seconds - refresh for live prices
     gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
     retry: 2,
     retryDelay: 1000,
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for live updates
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
+      if (!res.ok) throw new Error('Failed to fetch dashboard data');
+      return res.json();
+    },
   });
 
   const handleConnect = (username: string) => {
@@ -47,14 +52,6 @@ export default function Dashboard() {
       });
       setTimeout(() => setCopiedAddress(false), 2000);
     }
-  };
-
-  // Calculate total open positions value
-  const getOpenPositionsValue = () => {
-    if (!data?.positions) return 0;
-    return data.positions
-      .filter((p: any) => p.status === "ACTIVE")
-      .reduce((total: number, pos: any) => total + (pos.size * pos.currentPrice), 0);
   };
 
   if (!connectedUsername) {
@@ -171,7 +168,6 @@ export default function Dashboard() {
   }
 
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
-  const openPositionsValue = getOpenPositionsValue();
 
   return (
     <div className="min-h-screen bg-background">

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Target, Zap, Clock, Code, RefreshCw } from "lucide-react";
+import { TrendingUp, Zap, Clock, Code, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,7 +27,7 @@ interface ScannerMetrics {
   activeScans: number;
 }
 
-export default function WhalesHub() {
+export default function MicroEdgeScanner() {
   const [edgeAlerts, setEdgeAlerts] = useState<EdgeAlert[]>([]);
   const [scannerStats, setScannerStats] = useState<ScannerMetrics>({
     alertsThisMonth: 0,
@@ -157,14 +157,14 @@ export default function WhalesHub() {
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-lg">
-              <Target className="w-8 h-8 text-primary" />
+              <Zap className="w-8 h-8 text-yellow-500" />
             </div>
             <div className="flex-1">
               <h1 className="text-3xl font-black text-foreground tracking-tight">
-                MICRO-EDGE SCANNER
+                MICRO EDGE SCANNER
               </h1>
               <p className="text-sm text-muted-foreground uppercase tracking-wider mt-1">
-                15min Crypto Bets • EV 3-5% Detection • Off-Chain Alert System
+                Real-time Arbitrage Detection • EV 3%+ Opportunities • Automated Scanning
               </p>
             </div>
           </div>
