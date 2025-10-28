@@ -1,10 +1,71 @@
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const GROK_API_KEY = process.env.GROK_API_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_KEY in environment');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SCAN_INTERVAL = 15000; // 15 seconds
+const MIN_LIQUIDITY = 20000; // Increased to $20k for higher quality
+const CONSENSUS_THRESHOLD = 0.80; // 80% minimum for alpha signals
+const EV_ALERT_THRESHOLD = 10000; // Alert on >$10k EV opportunities
+
+// LLM Analysis for high-value markets
+async function getLLMAnalysis(market) {
+  // Only analyze high-value or politically sensitive markets
+  const keywords = ['trump', 'election', 'president', 'government', 'war', 'supreme court'];
+  const isHighValue = market.liquidity > 50000;
+  const isPolitical = keywords.some(kw => market.question?.toLowerCase().includes(kw));
+  
+  if (!GROK_API_KEY || (!isHighValue && !isPolitical)) {
+    return null;
+  }
+  
+  try {
+    const prompt = `Analyze this prediction market for betting edge:
+Question: "${market.question}"
+Current YES price: ${(parseFloat(market.outcomePrices?.[0] || 0.5) * 100).toFixed(1)}%
+Liquidity: $${(market.liquidity / 1000).toFixed(1)}k
+
+Task: Based on historical patterns, news, and similar past events, estimate:
+1. True probability (YES %)
+2. Expected value if betting YES
+3. Dispute risk (low/medium/high)
+
+Be concise, 2-3 sentences max. Focus on edge and actionability.`;
+
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'grok-beta',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 150
+      })
+    });
+    
+    if (!response.ok) {
+      console.log(`⚠️ Grok API error: ${response.status}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (error) {
+    console.error('❌ LLM analysis error:', error.message);
+    return null;
+  }
+}
 
 async function fetchAllMarkets() {
   try {
@@ -58,7 +119,7 @@ async function fetchAllMarkets() {
   }
 }
 
-function analyzeMarket(market) {
+async function analyzeMarket(market) {
   const yesPrice = parseFloat(market.outcomePrices?.[0] || 0.5);
   const noPrice = parseFloat(market.outcomePrices?.[1] || 0.5);
   const volume = parseFloat(market.volume) || 0;
@@ -68,28 +129,44 @@ function analyzeMarket(market) {
   let consensus = yesPrice * 100;
   let outcome = 'N/A';
   let disputes = 0;
+  let ev = 0;
+  let llm_analysis = null;
   
   // ONLY TRACK HIGH-QUALITY ALPHA SIGNALS
-  // Skip low liquidity markets (< $10k) - high dispute risk
-  if (liquidity < 10000) {
+  // Skip low liquidity markets (< $20k) - higher quality threshold
+  if (liquidity < MIN_LIQUIDITY) {
     return null; // Filter out noise
   }
   
   // ONLY SAVE STRONG CONSENSUS (>80% certainty) - These are alpha signals
-  if (yesPrice >= 0.80) {
+  if (yesPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
     outcome = 'YES';
     consensus = yesPrice * 100;
-  } else if (noPrice >= 0.80) {
+    
+    // Calculate Expected Value: (implied_prob - market_price) * liquidity
+    // If market is at 0.85 but "should" be 0.95, EV = (0.95 - 0.85) * liquidity
+    ev = (0.95 - yesPrice) * liquidity; // Conservative: assume 95% true prob for 80%+ consensus
+    
+  } else if (noPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
     outcome = 'NO';
     consensus = noPrice * 100;
+    ev = (0.95 - noPrice) * liquidity;
   } else {
     // Skip markets without strong consensus - not actionable alpha
     return null;
   }
   
-  return { status, consensus, outcome, disputes, liquidity };
+  // Get LLM analysis for high-value opportunities
+  if (ev > 5000 || liquidity > 50000) {
+    llm_analysis = await getLLMAnalysis(market);
+    if (llm_analysis) {
+      console.log(`🤖 LLM: ${market.question?.substring(0, 50)}... | ${llm_analysis.substring(0, 100)}...`);
+    }
+  }
+  
+  return { status, consensus, outcome, disputes, liquidity, ev, llm_analysis };
 }
 
 async function saveOracle(oracle) {
@@ -126,6 +203,8 @@ async function saveOracle(oracle) {
           outcome: oracle.outcome,
           disputes: oracle.disputes,
           liquidity: oracle.liquidity,
+          ev: oracle.ev,
+          llm_analysis: oracle.llm_analysis,
           timestamp: new Date().toISOString()
         })
         .eq('market_id', oracle.marketId);
@@ -152,7 +231,9 @@ async function saveOracle(oracle) {
           outcome: oracle.outcome,
           proposer: oracle.proposer,
           disputes: oracle.disputes,
-          liquidity: oracle.liquidity
+          liquidity: oracle.liquidity,
+          ev: oracle.ev,
+          llm_analysis: oracle.llm_analysis
         }]);
       
       if (error) {
@@ -164,6 +245,27 @@ async function saveOracle(oracle) {
   } catch (error) {
     console.error('❌ Save error:', error.message);
     return false;
+  }
+}
+
+// Calculate win rate from resolved markets
+async function calculateWinRate() {
+  try {
+    const { data: resolved } = await supabase
+      .from('oracles')
+      .select('outcome, consensus, status')
+      .eq('status', 'RESOLVED');
+    
+    if (!resolved || resolved.length === 0) return 0;
+    
+    const wins = resolved.filter(m => {
+      const predictedOutcome = m.consensus > 50 ? 'YES' : 'NO';
+      return m.outcome === predictedOutcome;
+    }).length;
+    
+    return ((wins / resolved.length) * 100).toFixed(1);
+  } catch (error) {
+    return 0;
   }
 }
 
@@ -182,9 +284,11 @@ async function scanAllOracles() {
   let consensusCount = 0;
   let disputeCount = 0;
   let filteredCount = 0;
+  let highEVCount = 0;
+  let totalEV = 0;
   
   for (const market of markets) {
-    const analysis = analyzeMarket(market);
+    const analysis = await analyzeMarket(market);
     
     // Skip low-quality markets
     if (!analysis) {
@@ -212,7 +316,19 @@ async function scanAllOracles() {
     
     if (analysis.status === 'CONSENSUS') {
       consensusCount++;
-      console.log(`✅ CONSENSUS: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | $${(analysis.liquidity/1000).toFixed(1)}k`);
+      totalEV += analysis.ev || 0;
+      
+      // Alert on high EV opportunities
+      if (analysis.ev > EV_ALERT_THRESHOLD) {
+        highEVCount++;
+        console.log(`🚨 HIGH EV ALERT: ${oracle.title.substring(0, 60)}...`);
+        console.log(`   ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | EV: $${(analysis.ev/1000).toFixed(1)}k | Liq: $${(analysis.liquidity/1000).toFixed(1)}k`);
+        if (analysis.llm_analysis) {
+          console.log(`   🤖 ${analysis.llm_analysis.substring(0, 120)}...`);
+        }
+      } else {
+        console.log(`✅ Alpha: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | EV: $${(analysis.ev/1000).toFixed(1)}k`);
+      }
     }
     if (analysis.status === 'DISPUTED') {
       disputeCount++;
@@ -249,17 +365,23 @@ async function scanAllOracles() {
     }
   }
   
+  // Calculate win rate
+  const winRate = await calculateWinRate();
+  
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`\n✅ Scan complete: ${elapsed}s`);
   console.log(`🔍 Scanned ${markets.length} markets | Filtered out ${filteredCount} (low liquidity / weak consensus)`);
   console.log(`📊 Inserted: ${insertedCount} | Updated: ${updatedCount} | Deleted: ${deletedCount}`);
-  console.log(`🎯 ALPHA SIGNALS: ${consensusCount} strong consensus markets (>80% certainty, >$10k liquidity)`);
-  console.log(`💰 Total tracked opportunities: ${insertedCount + updatedCount}\n`);
+  console.log(`🎯 ALPHA SIGNALS: ${consensusCount} strong consensus markets (>${(CONSENSUS_THRESHOLD * 100).toFixed(0)}% certainty, >$${MIN_LIQUIDITY/1000}k liquidity)`);
+  console.log(`💰 Total EV: $${(totalEV/1000).toFixed(1)}k across all opportunities | High-EV alerts: ${highEVCount}`);
+  console.log(`📈 Historical Win Rate: ${winRate}%\n`);
 }
 
 async function init() {
-  console.log('🚀 ORACLE ALPHA SCANNER');
-  console.log('🎯 Only tracking HIGH-CONVICTION signals (>80% consensus, >$10k liquidity)');
+  console.log('🚀 ORACLE ALPHA SCANNER v2.0 - LLM-Powered');
+  console.log('🎯 Only tracking HIGH-CONVICTION signals (>80% consensus, >$20k liquidity)');
+  console.log('🤖 Grok AI analysis for high-value opportunities (>$50k or political markets)');
+  console.log('💰 Expected Value (EV) calculation + alerts on >$10k EV opportunities');
   console.log(`⏱️  Scan Interval: ${SCAN_INTERVAL / 1000}s`);
   console.log(`💾 Database: Supabase (${SUPABASE_URL})\n`);
 

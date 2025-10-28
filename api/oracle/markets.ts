@@ -32,7 +32,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       proposer: m.proposer || 'N/A',
       lastUpdate: new Date(m.timestamp).getTime(),
       alerts: m.disputes?.toString() || '0',
-      liquidity: m.liquidity || 0
+      liquidity: m.liquidity || 0,
+      ev: m.ev || 0,
+      llmAnalysis: m.llm_analysis || null
     }));
 
     res.status(200).json(markets);

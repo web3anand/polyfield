@@ -22,6 +22,8 @@ interface Market {
   lastUpdate: number;
   alerts: string;
   liquidity: number;
+  ev?: number;
+  llmAnalysis?: string;
 }
 
 interface BotStats {
@@ -132,6 +134,8 @@ export default function OracleBot() {
         });
       case "liquidity":
         return sorted.sort((a, b) => b.liquidity - a.liquidity);
+      case "ev":
+        return sorted.sort((a, b) => (b.ev || 0) - (a.ev || 0));
       case "disputed":
         return sorted.sort((a, b) => {
           if (a.status === "DISPUTED" && b.status !== "DISPUTED") return -1;
@@ -244,6 +248,7 @@ export default function OracleBot() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="recent">Most Recent</SelectItem>
+                    <SelectItem value="ev">Highest EV</SelectItem>
                     <SelectItem value="consensus">Consensus First</SelectItem>
                     <SelectItem value="liquidity">Highest Liquidity</SelectItem>
                     <SelectItem value="disputed">Disputed First</SelectItem>
@@ -315,6 +320,36 @@ export default function OracleBot() {
                           🚨 {market.alerts}
                         </p>
                       )}
+                      
+                      {/* EV Display */}
+                      {market.ev && market.ev > 0 && (
+                        <div className="mt-3 p-2 bg-primary/10 border border-primary/30 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Expected Value (EV)</p>
+                            <p className="text-sm font-bold text-primary">
+                              ${(market.ev / 1000).toFixed(1)}k
+                            </p>
+                          </div>
+                          {market.ev > 10000 && (
+                            <p className="text-xs text-primary font-semibold mt-1">
+                              🚨 High-value opportunity!
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* LLM Analysis */}
+                      {market.llmAnalysis && (
+                        <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-purple-600">🤖 AI ANALYSIS</span>
+                          </div>
+                          <p className="text-xs text-foreground leading-relaxed">
+                            {market.llmAnalysis}
+                          </p>
+                        </div>
+                      )}
+                      
                       <div className="mt-3 p-2 bg-muted rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">Expected Edge</p>
                         <p className="text-sm font-semibold text-foreground">
