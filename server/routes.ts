@@ -961,7 +961,6 @@ async function generateDemoData(): Promise<DashboardData> {
     pnlHistory,
     positions,
     recentTrades: trades,
-    achievements,
   };
 }
 
@@ -1165,7 +1164,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pnlHistory,
         positions,
         recentTrades: trades.slice(0, 20),
-        achievements,
       };
 
       console.log(

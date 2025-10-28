@@ -54,14 +54,6 @@ export default function Dashboard() {
     }
   };
 
-  // Calculate total open positions value
-  const getOpenPositionsValue = () => {
-    if (!data?.positions) return 0;
-    return data.positions
-      .filter((p: any) => p.status === "ACTIVE")
-      .reduce((total: number, pos: any) => total + (pos.size * pos.currentPrice), 0);
-  };
-
   if (!connectedUsername) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -176,7 +168,6 @@ export default function Dashboard() {
   }
 
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
-  const openPositionsValue = getOpenPositionsValue();
 
   return (
     <div className="min-h-screen bg-background">

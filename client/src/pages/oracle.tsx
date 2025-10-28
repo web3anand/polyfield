@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Activity, Zap, AlertCircle, TrendingUp, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
-import { useToast } from "@/hooks/use-toast";
 
 interface Market {
   marketId: string;
@@ -40,7 +39,6 @@ export default function OracleBot() {
     edgeTime: "10s avg"
   });
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
 
   const loadMarkets = async () => {
     try {
