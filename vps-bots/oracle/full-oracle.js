@@ -15,7 +15,7 @@ async function fetchAllMarkets() {
     
     console.log('📥 Fetching all available markets...');
     
-    // Fetch all markets with pagination
+    // Fetch all markets with pagination - NO LIMIT
     while (hasMore) {
       const response = await fetch(`https://gamma-api.polymarket.com/markets?limit=${limit}&offset=${offset}&active=true&closed=false`);
       if (!response.ok) throw new Error(`API error: ${response.status}`);
@@ -26,7 +26,11 @@ async function fetchAllMarkets() {
       } else {
         allMarkets = allMarkets.concat(markets);
         offset += limit;
-        console.log(`   Fetched ${allMarkets.length} markets so far...`);
+        
+        // Only log every 1000 markets to reduce spam
+        if (offset % 1000 === 0) {
+          console.log(`   Fetched ${allMarkets.length} markets...`);
+        }
         
         // Stop if we got fewer than limit (last page)
         if (markets.length < limit) {
@@ -34,14 +38,10 @@ async function fetchAllMarkets() {
         }
       }
       
-      // Safety limit to prevent infinite loops
-      if (offset > 10000) {
-        console.log('⚠️  Reached safety limit of 10,000 markets');
-        hasMore = false;
-      }
+      // NO SAFETY LIMIT - fetch everything available
     }
     
-    console.log(`✅ Fetched total of ${allMarkets.length} markets`);
+    console.log(`✅ Fetched total of ${allMarkets.length} markets from API`);
     
     // Filter out markets that ended more than 7 days ago
     const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -50,7 +50,7 @@ async function fetchAllMarkets() {
       return endDate > sevenDaysAgo; // Only markets ending in the future or ended recently
     });
     
-    console.log(`📊 ${filtered.length} markets after 7-day filter`);
+    console.log(`📊 ${filtered.length} active markets after 7-day filter`);
     return filtered;
   } catch (error) {
     console.error('❌ Error fetching markets:', error.message);
@@ -69,12 +69,13 @@ function analyzeMarket(market) {
   let outcome = 'N/A';
   let disputes = 0;
   
+  // ONLY TRACK HIGH-QUALITY ALPHA SIGNALS
   // Skip low liquidity markets (< $10k) - high dispute risk
   if (liquidity < 10000) {
-    return null; // Filter out low-quality markets
+    return null; // Filter out noise
   }
   
-  // Detect strong consensus (>80% or <20%) - less likely to be disputed
+  // ONLY SAVE STRONG CONSENSUS (>80% certainty) - These are alpha signals
   if (yesPrice >= 0.80) {
     status = 'CONSENSUS';
     outcome = 'YES';
@@ -83,20 +84,9 @@ function analyzeMarket(market) {
     status = 'CONSENSUS';
     outcome = 'NO';
     consensus = noPrice * 100;
-  }
-  
-  // Markets between 40-60% are uncertain - flag for disputes
-  if (yesPrice >= 0.40 && yesPrice <= 0.60) {
-    status = 'UNCERTAIN';
-    outcome = 'N/A';
-    consensus = 50;
-  }
-  
-  // Simulate realistic disputes only for uncertain + high-volume markets
-  if (status === 'UNCERTAIN' && volume > 50000) {
-    status = 'DISPUTED';
-    disputes = Math.floor(Math.random() * 3) + 1;
-    consensus = 45 + (Math.random() * 10);
+  } else {
+    // Skip markets without strong consensus - not actionable alpha
+    return null;
   }
   
   return { status, consensus, outcome, disputes, liquidity };
@@ -260,14 +250,16 @@ async function scanAllOracles() {
   }
   
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`\n✅ Scan complete: ${elapsed}s | Filtered: ${filteredCount} (<$10k)`);
-  console.log(`📊 Inserted: ${insertedCount} | Updated: ${updatedCount} | Deleted: ${deletedCount} | Skipped: ${skippedCount}`);
-  console.log(`� Consensus: ${consensusCount} | Disputed: ${disputeCount} | Alerts: ${alertCount}\n`);
+  console.log(`\n✅ Scan complete: ${elapsed}s`);
+  console.log(`🔍 Scanned ${markets.length} markets | Filtered out ${filteredCount} (low liquidity / weak consensus)`);
+  console.log(`📊 Inserted: ${insertedCount} | Updated: ${updatedCount} | Deleted: ${deletedCount}`);
+  console.log(`🎯 ALPHA SIGNALS: ${consensusCount} strong consensus markets (>80% certainty, >$10k liquidity)`);
+  console.log(`💰 Total tracked opportunities: ${insertedCount + updatedCount}\n`);
 }
 
 async function init() {
-  console.log('🚀 FULL ORACLE SCANNER (Supabase)');
-  console.log('📊 Scanning ALL active Polymarket markets');
+  console.log('🚀 ORACLE ALPHA SCANNER');
+  console.log('🎯 Only tracking HIGH-CONVICTION signals (>80% consensus, >$10k liquidity)');
   console.log(`⏱️  Scan Interval: ${SCAN_INTERVAL / 1000}s`);
   console.log(`💾 Database: Supabase (${SUPABASE_URL})\n`);
 
