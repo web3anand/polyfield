@@ -62,30 +62,44 @@ function analyzeMarket(market) {
   const yesPrice = parseFloat(market.outcomePrices?.[0] || 0.5);
   const noPrice = parseFloat(market.outcomePrices?.[1] || 0.5);
   const volume = parseFloat(market.volume) || 0;
+  const liquidity = parseFloat(market.liquidity) || 0;
   
   let status = 'MONITORING';
   let consensus = yesPrice * 100;
   let outcome = 'N/A';
   let disputes = 0;
   
-  // Detect consensus (>75% or <25%)
-  if (yesPrice >= 0.75) {
+  // Skip low liquidity markets (< $10k) - high dispute risk
+  if (liquidity < 10000) {
+    return null; // Filter out low-quality markets
+  }
+  
+  // Detect strong consensus (>80% or <20%) - less likely to be disputed
+  if (yesPrice >= 0.80) {
     status = 'CONSENSUS';
     outcome = 'YES';
-  } else if (noPrice >= 0.75) {
+    consensus = yesPrice * 100;
+  } else if (noPrice >= 0.80) {
     status = 'CONSENSUS';
     outcome = 'NO';
     consensus = noPrice * 100;
   }
   
-  // Simulate disputes for high-volume markets
-  if (volume > 50000 && Math.random() > 0.7) {
-    status = 'DISPUTED';
-    disputes = Math.floor(Math.random() * 5) + 1;
-    consensus = 50 + (Math.random() * 10);
+  // Markets between 40-60% are uncertain - flag for disputes
+  if (yesPrice >= 0.40 && yesPrice <= 0.60) {
+    status = 'UNCERTAIN';
+    outcome = 'N/A';
+    consensus = 50;
   }
   
-  return { status, consensus, outcome, disputes };
+  // Simulate realistic disputes only for uncertain + high-volume markets
+  if (status === 'UNCERTAIN' && volume > 50000) {
+    status = 'DISPUTED';
+    disputes = Math.floor(Math.random() * 3) + 1;
+    consensus = 45 + (Math.random() * 10);
+  }
+  
+  return { status, consensus, outcome, disputes, liquidity };
 }
 
 async function saveOracle(oracle) {
@@ -93,12 +107,27 @@ async function saveOracle(oracle) {
     // Check if exists
     const { data: existing } = await supabase
       .from('oracles')
-      .select('id')
+      .select('id, status')
       .eq('market_id', oracle.marketId)
       .single();
     
     if (existing) {
-      // Update
+      // If market is resolved, delete it from database
+      if (oracle.status === 'RESOLVED') {
+        const { error } = await supabase
+          .from('oracles')
+          .delete()
+          .eq('market_id', oracle.marketId);
+        
+        if (error) {
+          console.error('❌ Delete error:', error.message);
+          return false;
+        }
+        console.log(`🗑️  Removed resolved market: ${oracle.title.substring(0, 50)}...`);
+        return 'deleted';
+      }
+      
+      // Update existing market
       const { error } = await supabase
         .from('oracles')
         .update({
@@ -111,9 +140,18 @@ async function saveOracle(oracle) {
         })
         .eq('market_id', oracle.marketId);
       
-      if (error) console.error('❌ Update error:', error.message);
+      if (error) {
+        console.error('❌ Update error:', error.message);
+        return false;
+      }
+      return 'updated';
     } else {
-      // Insert
+      // Skip resolved markets on insert
+      if (oracle.status === 'RESOLVED') {
+        return 'skipped';
+      }
+      
+      // Insert new market
       const { error } = await supabase
         .from('oracles')
         .insert([{
@@ -127,10 +165,12 @@ async function saveOracle(oracle) {
           liquidity: oracle.liquidity
         }]);
       
-      if (error) console.error('❌ Insert error:', error.message);
+      if (error) {
+        console.error('❌ Insert error:', error.message);
+        return false;
+      }
+      return 'inserted';
     }
-    
-    return true;
   } catch (error) {
     console.error('❌ Save error:', error.message);
     return false;
@@ -144,13 +184,23 @@ async function scanAllOracles() {
   const markets = await fetchAllMarkets();
   console.log(`📊 Scanning ${markets.length} markets for oracle data...`);
   
-  let savedCount = 0;
+  let insertedCount = 0;
+  let updatedCount = 0;
+  let deletedCount = 0;
+  let skippedCount = 0;
   let alertCount = 0;
   let consensusCount = 0;
   let disputeCount = 0;
+  let filteredCount = 0;
   
   for (const market of markets) {
     const analysis = analyzeMarket(market);
+    
+    // Skip low-quality markets
+    if (!analysis) {
+      filteredCount++;
+      continue;
+    }
     
     const oracle = {
       marketId: market.id,
@@ -160,13 +210,20 @@ async function scanAllOracles() {
       outcome: analysis.outcome,
       proposer: market.creatorAddress || '0x000000000000',
       disputes: analysis.disputes,
-      liquidity: parseFloat(market.liquidity) || 0
+      liquidity: analysis.liquidity
     };
     
-    await saveOracle(oracle);
-    savedCount++;
+    const result = await saveOracle(oracle);
     
-    if (analysis.status === 'CONSENSUS') consensusCount++;
+    if (result === 'inserted') insertedCount++;
+    else if (result === 'updated') updatedCount++;
+    else if (result === 'deleted') deletedCount++;
+    else if (result === 'skipped') skippedCount++;
+    
+    if (analysis.status === 'CONSENSUS') {
+      consensusCount++;
+      console.log(`✅ CONSENSUS: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | $${(analysis.liquidity/1000).toFixed(1)}k`);
+    }
     if (analysis.status === 'DISPUTED') {
       disputeCount++;
       alertCount++;
@@ -174,10 +231,38 @@ async function scanAllOracles() {
     }
   }
   
+  // Clean up stale markets not in current scan
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  
+  const { data: allDbMarkets } = await supabase
+    .from('oracles')
+    .select('market_id')
+    .gte('timestamp', sevenDaysAgo.toISOString());
+  
+  if (allDbMarkets && allDbMarkets.length > 0) {
+    const scannedIds = markets.map(m => m.id);
+    const dbIds = allDbMarkets.map(m => m.market_id);
+    const idsToDelete = dbIds.filter(id => !scannedIds.includes(id));
+    
+    if (idsToDelete.length > 0) {
+      console.log(`🧹 Cleaning ${idsToDelete.length} stale markets...`);
+      const { error } = await supabase
+        .from('oracles')
+        .delete()
+        .in('market_id', idsToDelete);
+      
+      if (!error) {
+        deletedCount += idsToDelete.length;
+        console.log(`✅ Removed ${idsToDelete.length} stale markets`);
+      }
+    }
+  }
+  
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`\n✅ Scan complete: ${elapsed}s | ${savedCount} saved`);
-  console.log(`📊 Consensus: ${consensusCount} | Disputed: ${disputeCount} | Alerts: ${alertCount}`);
-  console.log(`💾 All ${savedCount} markets stored in Supabase\n`);
+  console.log(`\n✅ Scan complete: ${elapsed}s | Filtered: ${filteredCount} (<$10k)`);
+  console.log(`📊 Inserted: ${insertedCount} | Updated: ${updatedCount} | Deleted: ${deletedCount} | Skipped: ${skippedCount}`);
+  console.log(`� Consensus: ${consensusCount} | Disputed: ${disputeCount} | Alerts: ${alertCount}\n`);
 }
 
 async function init() {

@@ -15,7 +15,7 @@ import {
 interface Market {
   marketId: string;
   title: string;
-  status: "MONITORING" | "CONSENSUS" | "DISPUTED" | "RESOLVED";
+  status: "MONITORING" | "CONSENSUS" | "DISPUTED" | "RESOLVED" | "UNCERTAIN";
   consensus: number;
   outcome: string;
   proposer: string;
@@ -114,6 +114,7 @@ export default function OracleBot() {
       case "CONSENSUS": return <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10">CONSENSUS</Badge>;
       case "DISPUTED": return <Badge variant="outline" className="border-destructive text-destructive bg-destructive/10">DISPUTED</Badge>;
       case "RESOLVED": return <Badge variant="outline" className="border-primary text-primary bg-primary/10">RESOLVED</Badge>;
+      case "UNCERTAIN": return <Badge variant="outline" className="border-yellow-500 text-yellow-500 bg-yellow-500/10">UNCERTAIN</Badge>;
       default: return <Badge variant="outline">UNKNOWN</Badge>;
     }
   };
@@ -253,7 +254,7 @@ export default function OracleBot() {
             </div>
 
             {/* Scrollable Markets List */}
-            <div className="flex-1 overflow-y-auto pr-2">
+            <div className="flex-1 overflow-y-auto pr-2 scrollbar-hidden">
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
@@ -341,6 +342,19 @@ export default function OracleBot() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
                         Wait for dispute resolution before placing bets
+                      </p>
+                    </div>
+                  )}
+
+                  {market.status === "UNCERTAIN" && (
+                    <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-yellow-600">
+                          ⚡ No Clear Consensus (40-60% range)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        High dispute risk - wait for clearer market signal
                       </p>
                     </div>
                   )}
