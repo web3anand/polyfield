@@ -11,11 +11,11 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const SCAN_INTERVAL = 600000; // 10 minutes (600 seconds)
+const SCAN_INTERVAL = 60000; // 1 minute (60 seconds)
 const MIN_LIQUIDITY = 10000; // $10k minimum
 const CONSENSUS_THRESHOLD = 0.70; // 70% consensus
 const EV_ALERT_THRESHOLD = 5000; // Alert on >$5k EV opportunities
-const AI_ANALYSIS_INTERVAL = 600000; // Re-analyze with AI every 10 minutes
+const AI_ANALYSIS_INTERVAL = 60000; // Re-analyze with AI every 1 minute
 
 // Deep AI Analysis with real-time data research using Gemini
 async function getDeepAIAnalysis(market) {
