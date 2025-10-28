@@ -1,15 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  // Return mock stats since oracle bot runs on VPS with local SQLite DB
+  // Return mock stats matching BotStats interface
+  // Actual data is on VPS server 207.246.126.234
   const stats = {
-    totalMarkets: 0,
-    activeMarkets: 0,
-    proposedMarkets: 0,
-    resolvedMarkets: 0,
-    avgResponseTime: "0s",
-    lastCheckTime: new Date().toISOString(),
-    checkInterval: "10s",
+    marketsTracked: 0,
+    totalAlerts: 0,
+    consensusDetected: 0,
+    disputed: 0,
+    autoBets: 0,
+    winRate: 0,
+    edgeTime: "0s",
     status: "running_on_vps",
     message: "Oracle bot is running on VPS server 207.246.126.234"
   };
