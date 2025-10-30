@@ -12,7 +12,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 console.log(`🔑 Using key: ${SUPABASE_KEY.substring(0, 30)}...`);
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const SCAN_INTERVAL = 60000; // 1 minute
+const SCAN_INTERVAL = 300000; // 5 minutes (free tier safe)
 const MIN_LIQUIDITY = 10000; // $10k
 const CONSENSUS_THRESHOLD = 0.60; // 60%
 
