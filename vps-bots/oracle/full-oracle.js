@@ -71,8 +71,8 @@ function analyzeMarket(market) {
     const eventSlug = market.events?.[0]?.slug || market.slug || market.id;
     
     return {
-      status: yesPrice > noPrice ? 'yes_likely' : 'no_likely',
-      consensus: maxPrice,
+      status: 'CONSENSUS',
+      consensus: maxPrice * 100, // Convert to percentage
       outcome: yesPrice > noPrice ? 'Yes' : 'No',
       disputes: 0,
       liquidity: liquidity,
