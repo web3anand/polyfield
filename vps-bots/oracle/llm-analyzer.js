@@ -40,7 +40,7 @@ async function fetchNewsContext(query, maxResults = 5) {
  */
 async function analyzeLLM(market) {
   // Only analyze high-liquidity political markets (free tier has rate limits)
-  if (!market.liquidity || market.liquidity < 50000) {
+  if (!market.liquidity || market.liquidity < 20000) { // Lowered from 50k
     return null; // Skip low liquidity
   }
 

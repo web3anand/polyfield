@@ -140,9 +140,9 @@ async function scanAllMarkets() {
     if (analysis) {
       const title = market.question || market.title || `Market ${market.id}`;
       
-      // Run LLM analysis on high-value markets (async, don't block scan)
+      // Run LLM analysis on high-value markets (lower threshold for political markets)
       let llmAnalysis = null;
-      if (analysis.liquidity >= 50000) {
+      if (analysis.liquidity >= 20000) { // Lowered from 50k to catch more political markets
         try {
           llmAnalysis = await analyzeLLM(analysis.rawMarket);
           if (llmAnalysis) llmCount++;
