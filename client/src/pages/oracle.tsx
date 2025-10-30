@@ -166,14 +166,13 @@ export default function OracleBot() {
       </div>
 
       {/* Fixed Bot Status */}
-      <div className="border-b border-border bg-card/50 flex-shrink-0">
+      <div className="border-b border-border bg-background flex-shrink-0">
         <div className="container mx-auto px-6 py-3">
-          <Card className="p-4 hover-elevate border-primary/50">
-            <div className="flex items-center justify-between mb-3">
+          <Card className="p-4 bg-background border-primary/30">
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Activity className="w-5 h-5 text-primary animate-pulse" />
-                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">Oracle Bot: LIVE</p>
@@ -185,6 +184,7 @@ export default function OracleBot() {
                 size="sm"
                 onClick={handleRefresh}
                 disabled={isLoading}
+                className="border-primary/30 hover:bg-primary/10"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -192,26 +192,26 @@ export default function OracleBot() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-              <div className="p-2 bg-muted rounded-lg">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="p-3 bg-background border border-border rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Markets Tracked</p>
-                <p className="text-base font-bold text-foreground">{botStats.marketsTracked}</p>
+                <p className="text-xl font-bold text-foreground">{botStats.marketsTracked}</p>
               </div>
-              <div className="p-2 bg-muted rounded-lg">
+              <div className="p-3 bg-background border border-primary/30 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Consensus</p>
-                <p className="text-base font-bold text-chart-2">{botStats.consensusDetected}</p>
+                <p className="text-xl font-bold text-primary">{botStats.consensusDetected}</p>
               </div>
-              <div className="p-2 bg-muted rounded-lg">
+              <div className="p-3 bg-background border border-border rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Disputed</p>
-                <p className="text-base font-bold text-destructive">{botStats.disputed}</p>
+                <p className="text-xl font-bold text-destructive">{botStats.disputed}</p>
               </div>
-              <div className="p-2 bg-muted rounded-lg">
+              <div className="p-3 bg-background border border-border rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Win Rate</p>
-                <p className="text-base font-bold text-primary">{botStats.winRate}%</p>
+                <p className="text-xl font-bold text-primary">{botStats.winRate}%</p>
               </div>
-              <div className="p-2 bg-muted rounded-lg">
+              <div className="p-3 bg-background border border-border rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">Edge Time</p>
-                <p className="text-base font-bold text-foreground">{botStats.edgeTime}</p>
+                <p className="text-xl font-bold text-foreground">{botStats.edgeTime}</p>
               </div>
             </div>
           </Card>
@@ -264,52 +264,54 @@ export default function OracleBot() {
                 <div className="space-y-3">{sortedMarkets.map((market) => (
                 <div
                   key={market.marketId}
-                  className="p-5 border border-border rounded-xl hover:border-primary/50 transition-all bg-card"
+                  className="p-4 bg-background border border-border/50 rounded-lg hover:border-primary/50 transition-all"
                 >
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-4 mb-4">
+                  {/* Title with Badge */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
                     <a 
                       href={`https://polymarket.com/event/${market.slug}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 text-lg font-semibold text-foreground hover:text-primary transition-colors"
+                      className="flex-1 font-medium text-foreground hover:text-primary transition-colors"
                     >
                       {market.title}
                     </a>
-                    <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10 shrink-0">
+                    <Badge className="bg-primary/10 text-primary border-primary/30 shrink-0 text-xs">
                       CONSENSUS
                     </Badge>
                   </div>
 
-                  {/* Consensus Info */}
-                  <div className="flex items-center justify-between p-4 bg-chart-2/5 rounded-lg border border-chart-2/20">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-chart-2/20 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-chart-2" />
+                  {/* Prediction Card */}
+                  <div className="bg-muted/30 rounded-lg p-3 border border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <TrendingUp className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Prediction</p>
+                          <p className="text-lg font-bold text-primary">{market.outcome}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Prediction</p>
-                        <p className="text-xl font-bold text-chart-2">{market.outcome}</p>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Consensus</p>
+                        <p className="text-2xl font-bold text-primary tabular-nums">
+                          {market.consensus.toFixed(0)}%
+                        </p>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Consensus</p>
-                      <p className="text-3xl font-bold text-chart-2 tabular-nums">
-                        {market.consensus.toFixed(0)}%
-                      </p>
                     </div>
                   </div>
 
-                  {/* Footer Meta */}
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>💰 ${(market.liquidity / 1000).toFixed(1)}k liquidity</span>
-                    </div>
+                  {/* Footer */}
+                  <div className="flex items-center justify-between mt-3 text-xs">
+                    <span className="text-muted-foreground">
+                      💰 ${(market.liquidity / 1000).toFixed(1)}k liquidity
+                    </span>
                     <a 
                       href={`https://polymarket.com/event/${market.slug}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
+                      className="text-primary hover:underline"
                     >
                       View Market →
                     </a>
