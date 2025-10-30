@@ -46,7 +46,15 @@ async function analyzeLLM(market) {
 
   // Focus on politics/economics (where LLM can add value)
   const question = market.question || market.title;
-  const isPolitical = /trump|biden|election|president|senate|congress|policy|immigration|tariff|china|russia|ukraine/i.test(question);
+  const isPolitical = /trump|biden|election|president|senate|congress|policy|immigration|tariff|china|russia|ukraine|saudi|israel|hamas|fed|interest|rate/i.test(question);
+  
+  // Filter out meme/impossible markets
+  const isMemeMarket = /satoshi|alien|ufo|simulation|time.travel|immortal|bitcoin.*creator|nakamoto.*identity/i.test(question);
+  
+  if (isMemeMarket) {
+    console.log(`⏭️  Skipping meme market: ${question.substring(0, 60)}...`);
+    return null; // Skip impossible-to-resolve markets
+  }
   
   if (!isPolitical) {
     return null; // Skip non-political markets to save API quota
@@ -72,37 +80,49 @@ async function analyzeLLM(market) {
     const noPrice = parseFloat(prices[1]);
 
     // Prompt for Groq Llama 3.1
-    const prompt = `You are a prediction market analyst. Analyze this Polymarket question and provide probabilities + betting recommendation.
+    const prompt = `You are a conservative prediction market analyst. Your job is to estimate TRUE probabilities based on EVIDENCE ONLY.
 
-**Question**: ${question}
+**CRITICAL RULES:**
+1. Base estimates on historical precedent and factual evidence ONLY
+2. If insufficient evidence exists, stay close to market price
+3. Extreme probabilities (>90% or <10%) require extraordinary evidence
+4. Meme/impossible events (e.g., "Trump is Satoshi") = reject analysis
 
-**Current Market Prices**:
+**Market Question**: ${question}
+
+**Current Polymarket Prices** (ACTUAL LIVE ODDS):
 - YES: ${(yesPrice * 100).toFixed(1)}¢ (${(yesPrice * 100).toFixed(0)}% implied probability)
 - NO: ${(noPrice * 100).toFixed(1)}¢ (${(noPrice * 100).toFixed(0)}% implied probability)
 
 **Market Context**:
 - Liquidity: $${(market.liquidity / 1000).toFixed(0)}k
-- Volume: $${(market.volume24hr / 1000).toFixed(0)}k (24h)
+- Volume (24h): $${(market.volume24hr / 1000).toFixed(0)}k
 
 **News Context**:
 ${newsContext}
 
 **Task**:
-1. Estimate TRUE probabilities based on historical precedent, news, and logic
-2. Calculate Expected Value (EV) and edge vs market price
-3. Recommend bet side (YES/NO/SKIP) with confidence level
-4. Provide concise rationale (max 2 sentences)
+1. Analyze if market is mispriced based on EVIDENCE from news/history
+2. Calculate true probability (conservative, evidence-based)
+3. Only recommend bet if edge >10% AND confidence >70%
+4. Specify how this market will RESOLVE (UMA oracle, news source, on-chain data)
+
+**IMPORTANT**: 
+- If question is impossible to verify (e.g., identity claims without proof), set betSide = "SKIP"
+- If insufficient evidence, keep yesProb/noProb within ±5% of market price
+- Extreme markets (>95% or <5%) are usually correct - need STRONG evidence to contradict
 
 **Output Format** (JSON only, no markdown):
 {
-  "yesProb": 0.72,
-  "noProb": 0.28,
-  "ev": 15.3,
-  "edge": 12.0,
-  "betSide": "YES",
-  "confidence": 0.85,
-  "rationale": "Historical Trump dominance in similar scenarios combined with recent polling surge. Market underpricing YES by ~12%.",
-  "risk": "LOW"
+  "yesProb": 0.08,
+  "noProb": 0.92,
+  "ev": 3.2,
+  "edge": 3.0,
+  "betSide": "NO",
+  "confidence": 0.75,
+  "rationale": "No credible evidence of Trump-Satoshi link. Market correctly priced at ~5% (meme value). Small edge betting NO but low conviction.",
+  "risk": "LOW",
+  "resolveSource": "UMA oracle will require cryptographic proof or credible admission - neither exists"
 }`;
 
     // Call Groq API
@@ -149,12 +169,45 @@ ${newsContext}
       return null;
     }
 
+    // Validate analysis quality
+    if (analysis.betSide === 'SKIP') {
+      console.log(`⏭️  LLM skipped: ${market.question.substring(0, 50)}... (insufficient evidence)`);
+      return null;
+    }
+
+    // Recalculate edge based on actual market price
+    const trueProbYes = analysis.yesProb || 0;
+    const marketProbYes = yesPrice;
+    const edgeYes = (trueProbYes - marketProbYes) * 100; // Convert to percentage
+    const edgeNo = ((1 - trueProbYes) - noPrice) * 100;
+    
+    // Determine best side and actual edge
+    let bestSide, actualEdge;
+    if (Math.abs(edgeYes) > Math.abs(edgeNo)) {
+      bestSide = edgeYes > 0 ? 'YES' : 'NO';
+      actualEdge = Math.abs(edgeYes);
+    } else {
+      bestSide = edgeNo > 0 ? 'NO' : 'YES';
+      actualEdge = Math.abs(edgeNo);
+    }
+
+    // Override LLM if edge calculation disagrees significantly
+    if (actualEdge < 5) {
+      console.log(`⚠️  Edge too small: ${market.question.substring(0, 50)}... (${actualEdge.toFixed(1)}%)`);
+      return null; // Don't save low-edge markets
+    }
+
+    // Update analysis with accurate values
+    analysis.betSide = bestSide;
+    analysis.edge = actualEdge;
+    analysis.ev = actualEdge; // Simplified EV for now
+
     // Add metadata
     analysis.sources = headlines;
     analysis.analyzedAt = new Date().toISOString();
     analysis.marketPrice = yesPrice;
 
-    console.log(`🤖 LLM Analysis: ${market.question.substring(0, 50)}... → ${analysis.betSide} (${(analysis.edge || 0).toFixed(0)}% edge)`);
+    console.log(`🤖 LLM Analysis: ${market.question.substring(0, 50)}... → ${analysis.betSide} (${analysis.edge.toFixed(0)}% edge, ${(analysis.confidence * 100).toFixed(0)}% conf)`);
     
     return analysis;
 
