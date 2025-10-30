@@ -113,7 +113,7 @@ ${newsContext}
         'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile', // Fast + smart on free tier
+        model: 'llama-3.1-8b-instant', // Fast + free tier (replacement for deprecated 70b)
         messages: [
           { role: 'system', content: 'You are a precise prediction market analyst. Output valid JSON only.' },
           { role: 'user', content: prompt }
