@@ -304,6 +304,13 @@
 
 @layer utilities {
 
+  /* Remove default focus glow */
+  *:focus,
+  *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
   }
