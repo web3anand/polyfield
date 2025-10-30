@@ -66,8 +66,9 @@ function analyzeMarket(market) {
     const maxPrice = Math.max(yesPrice, noPrice);
     if (maxPrice < CONSENSUS_THRESHOLD) return null;
     
-    // Use market slug directly - Polymarket handles the URL routing
-    const slug = market.slug || market.id;
+    // Polymarket groups markets by event - use event slug, not market slug
+    // events[0].slug is the main event page URL
+    const eventSlug = market.events?.[0]?.slug || market.slug || market.id;
     
     return {
       status: yesPrice > noPrice ? 'yes_likely' : 'no_likely',
@@ -75,7 +76,7 @@ function analyzeMarket(market) {
       outcome: yesPrice > noPrice ? 'Yes' : 'No',
       disputes: 0,
       liquidity: liquidity,
-      slug: slug
+      slug: eventSlug
     };
   } catch (error) {
     return null;
