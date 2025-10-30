@@ -158,18 +158,12 @@ async function scanAllMarkets() {
 
   console.log(`\n✅ Scan complete: ${count} consensus markets saved (${llmCount} with LLM analysis)\n`);
 }
-      const saved = await saveOracle(market.id, title, analysis);
-      if (saved) count++;
-    }
-  }
-
-  console.log(`\n✅ Scan complete: ${count} consensus markets saved\n`);
-}
 
 async function init() {
-  console.log('🚀 ORACLE SCANNER');
-  console.log(`� Min Liquidity: $${MIN_LIQUIDITY.toLocaleString()}`);
+  console.log('🚀 ORACLE SCANNER WITH LLM');
+  console.log(`💰 Min Liquidity: $${MIN_LIQUIDITY.toLocaleString()}`);
   console.log(`📊 Consensus: ${(CONSENSUS_THRESHOLD * 100)}%`);
+  console.log(`🤖 LLM: Groq Llama 3.1 (>$50k political markets)`);
   console.log(`⏱️  Interval: ${SCAN_INTERVAL / 1000}s\n`);
 
   await scanAllMarkets();

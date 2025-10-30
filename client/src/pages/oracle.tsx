@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Activity, Zap, TrendingUp, RefreshCw, Search, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import {
   Select,
@@ -24,7 +25,18 @@ interface Market {
   liquidity: number;
   slug: string;
   ev?: number;
-  llmAnalysis?: string;
+  llmAnalysis?: {
+    yesProb: number;
+    noProb: number;
+    ev: number;
+    edge: number;
+    betSide: string;
+    confidence: number;
+    rationale: string;
+    risk: string;
+    sources?: string[];
+    marketPrice?: number;
+  };
   aiRecommendation?: string;
   aiConfidence?: number;
   aiTrueProb?: number;
@@ -45,6 +57,8 @@ interface BotStats {
 export default function OracleBot() {
   const [trackedMarkets, setTrackedMarkets] = useState<Market[]>([]);
   const [sortBy, setSortBy] = useState<string>("recent");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [expandedMarkets, setExpandedMarkets] = useState<Set<string>>(new Set());
   const [botStats, setBotStats] = useState<BotStats>({
     marketsTracked: 0,
     totalAlerts: 0,
@@ -139,7 +153,49 @@ export default function OracleBot() {
     }
   };
 
-  const sortedMarkets = sortMarkets(trackedMarkets);
+  const filterMarkets = (markets: Market[]) => {
+    if (!searchTerm.trim()) return markets;
+    const term = searchTerm.toLowerCase();
+    return markets.filter(m => 
+      m.title.toLowerCase().includes(term) || 
+      m.outcome.toLowerCase().includes(term)
+    );
+  };
+
+  const calculateEdge = (market: Market) => {
+    // Use LLM edge if available
+    if (market.llmAnalysis?.edge) {
+      return market.llmAnalysis.edge;
+    }
+    // Fallback: Edge = True Probability - Market Price
+    if (market.aiTrueProb) {
+      return market.aiTrueProb - market.consensus;
+    }
+    return 0;
+  };
+
+  const toggleExpanded = (marketId: string) => {
+    setExpandedMarkets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(marketId)) {
+        newSet.delete(marketId);
+      } else {
+        newSet.add(marketId);
+      }
+      return newSet;
+    });
+  };
+
+  const getEdgeBadge = (market: Market) => {
+    const edge = calculateEdge(market);
+    if (edge > 10) return { color: "bg-green-500/10 text-green-500 border-green-500/30", label: `+${edge.toFixed(0)}% EDGE` };
+    if (edge < -10) return { color: "bg-red-500/10 text-red-500 border-red-500/30", label: `${edge.toFixed(0)}% FADE` };
+    if (market.liquidity > 100000) return { color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30", label: "HIGH VOL" };
+    return null;
+  };
+
+  const filteredMarkets = filterMarkets(trackedMarkets);
+  const sortedMarkets = sortMarkets(filteredMarkets);
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -226,24 +282,32 @@ export default function OracleBot() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Tracked Oracle Markets</h2>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Live Monitoring • Recent Markets Only
+                  {filteredMarkets.length} markets • Live updates every 15s
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search (e.g. 'Trump')..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 w-[200px] bg-background"
+                  />
+                </div>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-[200px]">
                     <SelectValue placeholder="Sort by..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="recent">Most Recent</SelectItem>
+                    <SelectItem value="liquidity">Highest Liquidity</SelectItem>
+                    <SelectItem value="consensus">Consensus %</SelectItem>
                     <SelectItem value="ev">Highest EV</SelectItem>
                     <SelectItem value="confidence">AI Confidence</SelectItem>
-                    <SelectItem value="consensus">Consensus %</SelectItem>
-                    <SelectItem value="liquidity">Highest Liquidity</SelectItem>
                     <SelectItem value="disputed">Disputed First</SelectItem>
                   </SelectContent>
                 </Select>
-                <Activity className="w-5 h-5 text-muted-foreground" />
               </div>
             </div>
 
@@ -266,7 +330,7 @@ export default function OracleBot() {
                   key={market.marketId}
                   className="p-4 bg-background border border-border/50 rounded-lg hover:border-primary/50 transition-all"
                 >
-                  {/* Title with Badge */}
+                  {/* Title with Badges */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <a 
                       href={`https://polymarket.com/event/${market.slug}`}
@@ -276,9 +340,28 @@ export default function OracleBot() {
                     >
                       {market.title}
                     </a>
-                    <Badge className="bg-primary/10 text-primary border-primary/30 shrink-0 text-xs">
-                      CONSENSUS
-                    </Badge>
+                    <div className="flex gap-2 shrink-0">
+                      <Badge className="bg-primary/10 text-primary border-primary/30 text-xs">
+                        CONSENSUS
+                      </Badge>
+                      {(() => {
+                        const edgeBadge = getEdgeBadge(market);
+                        if (edgeBadge) {
+                          return (
+                            <Badge className={`${edgeBadge.color} text-xs font-bold`}>
+                              {edgeBadge.label}
+                            </Badge>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {market.status === "DISPUTED" && (
+                        <Badge className="bg-red-500/10 text-red-500 border-red-500/30 text-xs">
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          DISPUTE
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Prediction Card */}
@@ -307,6 +390,101 @@ export default function OracleBot() {
                       </div>
                     </div>
                   </div>
+
+                  {/* LLM Analysis (if available) */}
+                  {market.llmAnalysis && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => toggleExpanded(market.marketId)}
+                        className="w-full bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg p-3 hover:border-purple-500/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-purple-400" />
+                            <span className="text-sm font-semibold text-foreground">AI Analysis</span>
+                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
+                              {(market.llmAnalysis.confidence * 100).toFixed(0)}% Confidence
+                            </Badge>
+                          </div>
+                          {expandedMarkets.has(market.marketId) ? (
+                            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        
+                        {!expandedMarkets.has(market.marketId) && (
+                          <div className="mt-2 text-left">
+                            <p className="text-sm text-foreground font-medium">
+                              💡 Bet {market.llmAnalysis.betSide} • 
+                              {market.llmAnalysis.edge > 0 ? ` +${market.llmAnalysis.edge.toFixed(0)}% Edge` : ` ${market.llmAnalysis.edge.toFixed(0)}% Edge`} • 
+                              {market.llmAnalysis.risk} Risk
+                            </p>
+                          </div>
+                        )}
+                      </button>
+
+                      {expandedMarkets.has(market.marketId) && (
+                        <div className="mt-2 p-4 bg-muted/20 border border-border rounded-lg space-y-3">
+                          {/* Bet Recommendation */}
+                          <div className="p-3 bg-primary/5 border-l-4 border-primary rounded">
+                            <p className="text-xs font-semibold text-muted-foreground mb-1">RECOMMENDED BET</p>
+                            <p className="text-lg font-bold text-foreground">
+                              {market.llmAnalysis.betSide} at {(market.llmAnalysis.marketPrice * 100).toFixed(0)}¢
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                              <div>
+                                <p className="text-muted-foreground">True Prob</p>
+                                <p className="font-semibold text-foreground">
+                                  {market.llmAnalysis.betSide === 'YES' 
+                                    ? (market.llmAnalysis.yesProb * 100).toFixed(0)
+                                    : (market.llmAnalysis.noProb * 100).toFixed(0)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">Edge</p>
+                                <p className={`font-semibold ${market.llmAnalysis.edge > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  {market.llmAnalysis.edge > 0 ? '+' : ''}{market.llmAnalysis.edge.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">Risk</p>
+                                <p className={`font-semibold ${
+                                  market.llmAnalysis.risk === 'LOW' ? 'text-green-400' : 
+                                  market.llmAnalysis.risk === 'MEDIUM' ? 'text-yellow-400' : 'text-red-400'
+                                }`}>
+                                  {market.llmAnalysis.risk}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Rationale */}
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-1">ANALYSIS</p>
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {market.llmAnalysis.rationale}
+                            </p>
+                          </div>
+
+                          {/* News Sources */}
+                          {market.llmAnalysis.sources && market.llmAnalysis.sources.length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground mb-1">NEWS CONTEXT</p>
+                              <ul className="space-y-1">
+                                {market.llmAnalysis.sources.slice(0, 3).map((source, idx) => (
+                                  <li key={idx} className="text-xs text-muted-foreground flex items-start gap-1">
+                                    <span className="text-primary mt-0.5">•</span>
+                                    <span>{source}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Footer */}
                   <div className="flex items-center justify-between mt-3 text-xs">
