@@ -101,32 +101,6 @@ export default function OracleBot() {
     return () => clearInterval(interval);
   }, []);
 
-  const formatTimestamp = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    
-    if (seconds < 10) return "just now";
-    if (seconds < 60) return `${seconds} seconds ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    const days = Math.floor(hours / 24);
-    return `${days} day${days > 1 ? 's' : ''} ago`;
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "MONITORING": return <Badge variant="outline" className="border-muted-foreground/50">MONITORING</Badge>;
-      case "CONSENSUS": return <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10">CONSENSUS</Badge>;
-      case "DISPUTED": return <Badge variant="outline" className="border-destructive text-destructive bg-destructive/10">DISPUTED</Badge>;
-      case "RESOLVED": return <Badge variant="outline" className="border-primary text-primary bg-primary/10">RESOLVED</Badge>;
-      case "UNCERTAIN": return <Badge variant="outline" className="border-yellow-500 text-yellow-500 bg-yellow-500/10">UNCERTAIN</Badge>;
-      default: return <Badge variant="outline">UNKNOWN</Badge>;
-    }
-  };
-
   const sortMarkets = (markets: Market[]) => {
     const sorted = [...markets];
     switch (sortBy) {
@@ -290,198 +264,55 @@ export default function OracleBot() {
                 <div className="space-y-3">{sortedMarkets.map((market) => (
                 <div
                   key={market.marketId}
-                  className="p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors"
+                  className="p-5 border border-border rounded-xl hover:border-primary/50 transition-all bg-card"
                 >
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1">
-                      <a 
-                        href={`https://polymarket.com/event/${market.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-foreground hover:text-primary hover:underline mb-2 inline-block"
-                      >
-                        {market.title} ↗
-                      </a>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <code className="text-xs text-muted-foreground font-mono">
-                          {market.marketId.slice(0, 10)}...{market.marketId.slice(-8)}
-                        </code>
-                        <Badge variant="outline" className="text-xs">
-                          Liquidity: ${(market.liquidity / 1000).toFixed(1)}k
-                        </Badge>
-                      </div>
-                    </div>
-                    {getStatusBadge(market.status)}
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <a 
+                      href={`https://polymarket.com/event/${market.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 text-lg font-semibold text-foreground hover:text-primary transition-colors"
+                    >
+                      {market.title}
+                    </a>
+                    <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10 shrink-0">
+                      CONSENSUS
+                    </Badge>
                   </div>
 
-                  {market.status === "CONSENSUS" && market.outcome !== "N/A" && (
-                    <div className="mt-3 p-3 bg-chart-2/10 border border-chart-2/50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="w-4 h-4 text-chart-2" />
-                          <span className="text-sm font-semibold text-chart-2">
-                            Consensus Detected: {market.outcome}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-chart-2 tabular-nums">
-                            {market.consensus.toFixed(0)}%
-                          </span>
-                          <p className="text-xs text-muted-foreground">
-                            {market.outcome === "YES" ? "Yes votes" : "No votes"}
-                          </p>
-                        </div>
+                  {/* Consensus Info */}
+                  <div className="flex items-center justify-between p-4 bg-chart-2/5 rounded-lg border border-chart-2/20">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-chart-2/20 flex items-center justify-center">
+                        <TrendingUp className="w-5 h-5 text-chart-2" />
                       </div>
-                      {market.proposer && market.proposer !== 'N/A' && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Proposer: <code className="font-mono">{market.proposer.slice(0, 10)}...{market.proposer.slice(-8)}</code>
-                        </p>
-                      )}
-                      {market.alerts && (
-                        <p className="text-xs text-chart-2 mt-2 font-semibold">
-                          🚨 {market.alerts}
-                        </p>
-                      )}
-                      
-                      {/* EV Display */}
-                      {market.ev && market.ev > 0 && (
-                        <div className="mt-3 p-2 bg-primary/10 border border-primary/30 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground">Expected Value (EV)</p>
-                            <p className="text-sm font-bold text-primary">
-                              ${(market.ev / 1000).toFixed(1)}k
-                            </p>
-                          </div>
-                          {market.ev > 10000 && (
-                            <p className="text-xs text-primary font-semibold mt-1">
-                              🚨 High-value opportunity!
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* AI Analysis with Enhanced Details */}
-                      {market.llmAnalysis && (
-                        <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs font-bold text-purple-600">🤖 AI DEEP ANALYSIS</span>
-                            {market.aiRecommendation && (
-                              <Badge 
-                                variant={market.aiRecommendation === 'YES' ? 'default' : 'destructive'}
-                                className="text-xs"
-                              >
-                                BET {market.aiRecommendation}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          {/* AI Metrics Grid */}
-                          {(market.aiConfidence || market.aiTrueProb || market.aiEdge || market.aiRisk) && (
-                            <div className="grid grid-cols-2 gap-2 mb-3">
-                              {market.aiConfidence && (
-                                <div className="p-2 bg-background/50 rounded">
-                                  <p className="text-xs text-muted-foreground">Confidence</p>
-                                  <p className="text-sm font-bold text-purple-600">{market.aiConfidence}/10</p>
-                                </div>
-                              )}
-                              {market.aiTrueProb && (
-                                <div className="p-2 bg-background/50 rounded">
-                                  <p className="text-xs text-muted-foreground">True Probability</p>
-                                  <p className="text-sm font-bold text-purple-600">{market.aiTrueProb}%</p>
-                                </div>
-                              )}
-                              {market.aiEdge !== undefined && market.aiEdge !== null && (
-                                <div className="p-2 bg-background/50 rounded">
-                                  <p className="text-xs text-muted-foreground">Market Edge</p>
-                                  <p className={`text-sm font-bold ${market.aiEdge > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {market.aiEdge > 0 ? '+' : ''}{market.aiEdge}%
-                                  </p>
-                                </div>
-                              )}
-                              {market.aiRisk && (
-                                <div className="p-2 bg-background/50 rounded">
-                                  <p className="text-xs text-muted-foreground">Risk Level</p>
-                                  <p className={`text-sm font-bold ${
-                                    market.aiRisk === 'LOW' ? 'text-green-600' : 
-                                    market.aiRisk === 'MEDIUM' ? 'text-yellow-600' : 'text-red-600'
-                                  }`}>
-                                    {market.aiRisk}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          <p className="text-xs text-foreground leading-relaxed">
-                            {market.llmAnalysis}
-                          </p>
-                        </div>
-                      )}
-                      
-                      <div className="mt-3 p-2 bg-muted rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Expected Edge</p>
-                        <p className="text-sm font-semibold text-foreground">
-                          5-15 second advantage before market adjusts
-                        </p>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <Button 
-                          size="sm" 
-                          variant="default" 
-                          className="flex-1"
-                          onClick={() => window.open(`https://polymarket.com/event/${market.marketId}`, '_blank')}
-                        >
-                          <Zap className="w-3 h-3 mr-1" />
-                          Bet {market.outcome} @ {(market.consensus / 100).toFixed(2)}
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => window.open(`https://polymarket.com/event/${market.marketId}`, '_blank')}
-                        >
-                          View Market
-                        </Button>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Prediction</p>
+                        <p className="text-xl font-bold text-chart-2">{market.outcome}</p>
                       </div>
                     </div>
-                  )}
-
-                  {market.status === "DISPUTED" && (
-                    <div className="mt-3 p-3 bg-destructive/10 border border-destructive/50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-destructive">
-                          ⚠️ Dispute Active - Outcome Uncertain
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Wait for dispute resolution before placing bets
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Consensus</p>
+                      <p className="text-3xl font-bold text-chart-2 tabular-nums">
+                        {market.consensus.toFixed(0)}%
                       </p>
                     </div>
-                  )}
+                  </div>
 
-                  {market.status === "UNCERTAIN" && (
-                    <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-yellow-600">
-                          ⚡ No Clear Consensus (40-60% range)
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        High dispute risk - wait for clearer market signal
-                      </p>
+                  {/* Footer Meta */}
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>💰 ${(market.liquidity / 1000).toFixed(1)}k liquidity</span>
                     </div>
-                  )}
-
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">
-                      Last Update: {formatTimestamp(market.lastUpdate)}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {market.status === "MONITORING" && (
-                        <Badge variant="outline" className="text-xs">
-                          Watching for oracle events
-                        </Badge>
-                      )}
-                    </div>
+                    <a 
+                      href={`https://polymarket.com/event/${market.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      View Market →
+                    </a>
                   </div>
                 </div>
               ))}
