@@ -194,9 +194,9 @@ export default function Dashboard() {
         <div className="border-b border-border bg-card/50">
           <div className="container mx-auto px-6 py-6">
             <div className="flex items-center gap-4">
-              <Avatar className="w-16 h-16" data-testid="avatar-profile">
+              <Avatar className="w-16 h-16 rounded-none" data-testid="avatar-profile">
                 <AvatarImage src={profile.profileImage} alt={profile.username} />
-                <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
+                <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold rounded-none">
                   {profile.username.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -232,25 +232,25 @@ export default function Dashboard() {
         <div className="container mx-auto px-6 py-8 space-y-8">
           {/* Key Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6 border-l-4 border-green-500">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Open Positions Value</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground tabular-nums" data-testid="text-portfolio-value">
                 ${stats.openPositionsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6 border-l-4 border-blue-500">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Total PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.totalPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-total-pnl">
                 {stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6 border-l-4 border-yellow-500">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Realized PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.realizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-realized-pnl">
                 {stats.realizedPnL >= 0 ? '+' : ''}${stats.realizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-6 hover-elevate">
+            <Card className="p-6 border-l-4 border-red-500">
               <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Unrealized PnL</p>
               <p className={`text-2xl md:text-3xl font-bold tabular-nums ${stats.unrealizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-unrealized-pnl">
                 {stats.unrealizedPnL >= 0 ? '+' : ''}${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

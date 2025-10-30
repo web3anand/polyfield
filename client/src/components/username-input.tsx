@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search } from "lucide-react";
@@ -103,7 +102,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               <div className="absolute top-full left-0 right-0 z-50">
                 <div
                   ref={suggestionsRef}
-                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-1.5 space-y-0.5 max-h-60 overflow-y-auto scrollbar-hidden">
                     {suggestions.map((suggestion, index) => (
@@ -125,7 +124,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               <div className="absolute top-full left-0 right-0 z-50">
                 <div
                   ref={suggestionsRef}
-                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-3">
                     <p className="text-xs text-muted-foreground text-center">
@@ -184,7 +183,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               <div className="absolute top-full left-0 right-0 z-50">
                 <div
                   ref={suggestionsRef}
-                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-2 space-y-1 max-h-60 overflow-y-auto scrollbar-hidden">
                     {suggestions.map((suggestion, index) => (
@@ -206,7 +205,7 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
               <div className="absolute top-full left-0 right-0 z-50">
                 <div
                   ref={suggestionsRef}
-                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm shadow-xl transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
+                  className="w-full border border-border/50 border-t-0  bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-4">
                     <p className="text-sm text-muted-foreground text-center">
