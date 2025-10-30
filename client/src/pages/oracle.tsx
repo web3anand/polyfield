@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, Zap, TrendingUp, RefreshCw, ExternalLink } from "lucide-react";
+import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
 import { Navbar } from "@/components/navbar";
 import {
   Select,
@@ -22,6 +22,7 @@ interface Market {
   lastUpdate: number;
   alerts: string;
   liquidity: number;
+  slug: string;
   ev?: number;
   llmAnalysis?: string;
   aiRecommendation?: string;
@@ -294,13 +295,12 @@ export default function OracleBot() {
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
                       <a 
-                        href={`https://polymarket.com/event/${market.marketId}`}
+                        href={`https://polymarket.com/event/${market.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-foreground hover:text-primary transition-colors mb-2 inline-flex items-center gap-1 group"
+                        className="font-medium text-foreground hover:text-primary hover:underline mb-2 inline-block"
                       >
-                        <span className="group-hover:underline">{market.title}</span>
-                        <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100" />
+                        {market.title} ↗
                       </a>
                       <div className="flex items-center gap-3 flex-wrap">
                         <code className="text-xs text-muted-foreground font-mono">

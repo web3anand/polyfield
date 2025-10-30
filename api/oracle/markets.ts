@@ -33,6 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastUpdate: new Date(m.timestamp).getTime(),
       alerts: m.disputes?.toString() || '0',
       liquidity: m.liquidity || 0,
+      slug: m.slug || m.market_id,
       ev: m.ev || 0,
       llmAnalysis: m.llm_analysis || null,
       aiRecommendation: m.ai_recommendation || null,

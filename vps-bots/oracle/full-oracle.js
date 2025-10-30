@@ -14,103 +14,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const SCAN_INTERVAL = 60000; // 1 minute (60 seconds)
 const MIN_LIQUIDITY = 10000; // $10k minimum
 const CONSENSUS_THRESHOLD = 0.60; // 60% consensus (lowered to find more markets)
-const EV_ALERT_THRESHOLD = 5000; // Alert on >$5k EV opportunities
-const AI_ANALYSIS_INTERVAL = 60000; // Re-analyze with AI every 1 minute
-
-// Deep AI Analysis with real-time data research using Gemini
-async function getDeepAIAnalysis(market) {
-  if (!GEMINI_API_KEY) {
-    return null;
-  }
-  
-  try {
-    const yesPrice = parseFloat(market.outcomePrices?.[0] || 0.5);
-    const noPrice = parseFloat(market.outcomePrices?.[1] || 0.5);
-    
-    // Comprehensive prompt for deep analysis
-    const prompt = `You are an expert prediction market analyst with access to historical data and market patterns.
-
-MARKET DETAILS:
-Question: "${market.question}"
-Current YES price: ${(yesPrice * 100).toFixed(1)}% (Market thinks ${(yesPrice * 100).toFixed(1)}% chance of YES)
-Current NO price: ${(noPrice * 100).toFixed(1)}%
-Liquidity: $${(market.liquidity / 1000).toFixed(1)}k
-Volume: $${(parseFloat(market.volume || 0) / 1000).toFixed(1)}k
-End Date: ${market.endDate ? new Date(market.endDate).toLocaleDateString() : 'Unknown'}
-
-ANALYSIS TASK:
-1. **True Probability Assessment**: Based on historical patterns, current events, and logical reasoning, what is the REAL probability of YES? Give specific percentage with reasoning.
-
-2. **Market Mispricing**: Is this market overpriced or underpriced? Calculate the edge (difference between true probability and market price).
-
-3. **Key Factors**: What are the 3 most important factors that will determine the outcome?
-
-4. **Bet Recommendation**: 
-   - Should we bet YES or NO?
-   - What's the expected value?
-   - Risk level: LOW/MEDIUM/HIGH
-   - Confidence: 1-10
-
-5. **Price Target**: Where should this market be priced? What's fair value?
-
-Format your response as:
-TRUE_PROB: XX%
-MARKET_EDGE: +XX% or -XX%
-RECOMMENDATION: BET YES/NO
-CONFIDENCE: X/10
-RISK: LOW/MEDIUM/HIGH
-REASONING: [2-3 sentences with specific facts]`;
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.3, // Lower temperature for more factual analysis
-          maxOutputTokens: 500
-        }
-      })
-    });
-    
-    if (!response.ok) {
-      console.log(`⚠️ Gemini API error: ${response.status}`);
-      return null;
-    }
-    
-    const data = await response.json();
-    const analysis = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (analysis) {
-      // Parse AI response to extract structured data
-      const trueProbMatch = analysis.match(/TRUE_PROB:\s*(\d+)%/i);
-      const edgeMatch = analysis.match(/MARKET_EDGE:\s*([+-]?\d+)%/i);
-      const recommendationMatch = analysis.match(/RECOMMENDATION:\s*BET\s*(YES|NO)/i);
-      const confidenceMatch = analysis.match(/CONFIDENCE:\s*(\d+)\/10/i);
-      const riskMatch = analysis.match(/RISK:\s*(LOW|MEDIUM|HIGH)/i);
-      
-      return {
-        fullAnalysis: analysis,
-        trueProbability: trueProbMatch ? parseInt(trueProbMatch[1]) : null,
-        edge: edgeMatch ? parseInt(edgeMatch[1]) : null,
-        recommendation: recommendationMatch ? recommendationMatch[1] : null,
-        confidence: confidenceMatch ? parseInt(confidenceMatch[1]) : null,
-        risk: riskMatch ? riskMatch[1] : null
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('❌ Deep AI analysis error:', error.message);
-    return null;
-  }
-}
 
 async function fetchAllMarkets() {
   try {
@@ -186,8 +89,6 @@ async function analyzeMarket(market) {
   let consensus = yesPrice * 100;
   let outcome = 'N/A';
   let disputes = 0;
-  let ev = 0;
-  let aiData = null;
   
   // ONLY TRACK HIGH-LIQUIDITY MARKETS (show ALL, not just consensus)
   // Skip low liquidity markets (< $10k)
@@ -195,37 +96,25 @@ async function analyzeMarket(market) {
     return null; // Filter out noise
   }
   
+  // Skip 99.5%+ consensus - no profit opportunity
+  if (yesPrice >= 0.995 || noPrice >= 0.995) {
+    return null;
+  }
+  
   // Determine market direction
   if (yesPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
     outcome = 'YES';
     consensus = yesPrice * 100;
-    ev = (0.95 - yesPrice) * liquidity;
-    
   } else if (noPrice >= CONSENSUS_THRESHOLD) {
     status = 'CONSENSUS';
     outcome = 'NO';
     consensus = noPrice * 100;
-    ev = (0.95 - noPrice) * liquidity;
   } else {
     // Track all markets, even uncertain ones
     status = 'UNCERTAIN';
     outcome = yesPrice > noPrice ? 'YES_LEAN' : 'NO_LEAN';
     consensus = Math.max(yesPrice, noPrice) * 100;
-    ev = 0; // No clear edge
-  }
-  
-  // Get DEEP AI analysis for high-value or important markets
-  const isHighValue = liquidity > 50000;
-  const keywords = ['trump', 'election', 'president', 'government', 'war', 'supreme court', 'bitcoin', 'eth', 'fed'];
-  const isPolitical = keywords.some(kw => market.question?.toLowerCase().includes(kw));
-  
-  if (ev > 5000 || isHighValue || isPolitical) {
-    aiData = await getDeepAIAnalysis(market);
-    if (aiData?.fullAnalysis) {
-      console.log(`🤖 AI: ${market.question?.substring(0, 50)}...`);
-      console.log(`   → ${aiData.recommendation} | Confidence: ${aiData.confidence}/10 | True Prob: ${aiData.trueProbability}% | Edge: ${aiData.edge}%`);
-    }
   }
   
   return { 
@@ -233,14 +122,8 @@ async function analyzeMarket(market) {
     consensus, 
     outcome, 
     disputes, 
-    liquidity, 
-    ev, 
-    llm_analysis: aiData?.fullAnalysis || null,
-    ai_recommendation: aiData?.recommendation || null,
-    ai_confidence: aiData?.confidence || null,
-    ai_true_prob: aiData?.trueProbability || null,
-    ai_edge: aiData?.edge || null,
-    ai_risk: aiData?.risk || null
+    liquidity,
+    slug: market.slug || market.id
   };
 }
 
@@ -269,7 +152,7 @@ async function saveOracle(oracle) {
         return 'deleted';
       }
       
-      // Update existing market with AI data
+      // Update existing market
       const { error } = await supabase
         .from('oracles')
         .update({
@@ -278,13 +161,7 @@ async function saveOracle(oracle) {
           outcome: oracle.outcome,
           disputes: oracle.disputes,
           liquidity: oracle.liquidity,
-          ev: oracle.ev,
-          llm_analysis: oracle.llm_analysis,
-          ai_recommendation: oracle.ai_recommendation,
-          ai_confidence: oracle.ai_confidence,
-          ai_true_prob: oracle.ai_true_prob,
-          ai_edge: oracle.ai_edge,
-          ai_risk: oracle.ai_risk,
+          slug: oracle.slug,
           timestamp: new Date().toISOString()
         })
         .eq('market_id', oracle.marketId);
@@ -300,7 +177,7 @@ async function saveOracle(oracle) {
         return 'skipped';
       }
       
-      // Insert new market with AI data
+      // Insert new market
       const { error } = await supabase
         .from('oracles')
         .insert([{
@@ -312,13 +189,7 @@ async function saveOracle(oracle) {
           proposer: oracle.proposer,
           disputes: oracle.disputes,
           liquidity: oracle.liquidity,
-          ev: oracle.ev,
-          llm_analysis: oracle.llm_analysis,
-          ai_recommendation: oracle.ai_recommendation,
-          ai_confidence: oracle.ai_confidence,
-          ai_true_prob: oracle.ai_true_prob,
-          ai_edge: oracle.ai_edge,
-          ai_risk: oracle.ai_risk
+          slug: oracle.slug
         }]);
       
       if (error) {
@@ -369,73 +240,10 @@ async function scanAllOracles() {
   let consensusCount = 0;
   let disputeCount = 0;
   let filteredCount = 0;
-  let highEVCount = 0;
-  let totalEV = 0;
   let lowLiquidityCount = 0;
   let weakConsensusCount = 0;
   
-  // Sample some markets for debugging
-  let highConsensusLowLiq = [];
-  let highLiqWeakConsensus = [];
-  let potentialMatches = [];
-  
   for (const market of markets) {
-    // Parse outcome prices - they come as a JSON string!
-    let outcomePrices = [];
-    try {
-      if (typeof market.outcomePrices === 'string') {
-        outcomePrices = JSON.parse(market.outcomePrices);
-      } else if (Array.isArray(market.outcomePrices)) {
-        outcomePrices = market.outcomePrices;
-      }
-    } catch (e) {
-      outcomePrices = [0.5, 0.5];
-    }
-    
-    const yesPrice = parseFloat(outcomePrices[0] || 0.5);
-    const noPrice = parseFloat(outcomePrices[1] || 0.5);
-    const liquidity = parseFloat(market.liquidity) || 0;
-    const maxPrice = Math.max(yesPrice, noPrice);
-    
-    // Debug first market to see data structure
-    if (potentialMatches.length === 0 && liquidity > MIN_LIQUIDITY) {
-      console.log(`\n🔍 DEBUG - First high liquidity market:`);
-      console.log(`   Question: ${market.question}`);
-      console.log(`   outcomePrices: ${JSON.stringify(market.outcomePrices)}`);
-      console.log(`   yesPrice parsed: ${yesPrice}`);
-      console.log(`   noPrice parsed: ${noPrice}`);
-      console.log(`   liquidity: ${liquidity}`);
-      console.log(`   maxPrice: ${maxPrice}`);
-      console.log(`   CONSENSUS_THRESHOLD: ${CONSENSUS_THRESHOLD}\n`);
-    }
-    
-    // Debug: Track why markets are filtered
-    if (liquidity < MIN_LIQUIDITY) {
-      lowLiquidityCount++;
-      if (maxPrice >= CONSENSUS_THRESHOLD) {
-        highConsensusLowLiq.push({
-          title: market.question?.substring(0, 60),
-          consensus: (maxPrice * 100).toFixed(1),
-          liquidity: liquidity.toFixed(0)
-        });
-      }
-    } else if (maxPrice < CONSENSUS_THRESHOLD) {
-      weakConsensusCount++;
-      highLiqWeakConsensus.push({
-        title: market.question?.substring(0, 60),
-        consensus: (maxPrice * 100).toFixed(1),
-        liquidity: (liquidity / 1000).toFixed(1)
-      });
-    } else {
-      // This market should pass!
-      potentialMatches.push({
-        title: market.question?.substring(0, 60),
-        consensus: (maxPrice * 100).toFixed(1),
-        liquidity: (liquidity / 1000).toFixed(1)
-      });
-    }
-    
-    const analysis = await analyzeMarket(market);
     
     // Skip low-quality markets
     if (!analysis) {
@@ -452,13 +260,7 @@ async function scanAllOracles() {
       proposer: market.creatorAddress || '0x000000000000',
       disputes: analysis.disputes,
       liquidity: analysis.liquidity,
-      ev: analysis.ev,
-      llm_analysis: analysis.llm_analysis,
-      ai_recommendation: analysis.ai_recommendation,
-      ai_confidence: analysis.ai_confidence,
-      ai_true_prob: analysis.ai_true_prob,
-      ai_edge: analysis.ai_edge,
-      ai_risk: analysis.ai_risk
+      slug: analysis.slug
     };
     
     const result = await saveOracle(oracle);
@@ -470,19 +272,10 @@ async function scanAllOracles() {
     
     if (analysis.status === 'CONSENSUS') {
       consensusCount++;
-      totalEV += analysis.ev || 0;
-      
-      // Alert on high EV opportunities
-      if (analysis.ev > EV_ALERT_THRESHOLD) {
-        highEVCount++;
-        console.log(`🚨 HIGH EV ALERT: ${oracle.title.substring(0, 60)}...`);
-        console.log(`   ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | EV: $${(analysis.ev/1000).toFixed(1)}k | Liq: $${(analysis.liquidity/1000).toFixed(1)}k`);
-        if (analysis.llm_analysis) {
-          console.log(`   🤖 ${analysis.llm_analysis.substring(0, 120)}...`);
-        }
-      } else {
-        console.log(`✅ Alpha: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}% | EV: $${(analysis.ev/1000).toFixed(1)}k`);
-      }
+      console.log(`✅ Consensus: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}%`);
+    }
+    if (analysis.status === 'UNCERTAIN') {
+      console.log(`⚠️ Uncertain: ${oracle.title.substring(0, 60)}... | ${analysis.outcome} @ ${analysis.consensus.toFixed(1)}%`);
     }
     if (analysis.status === 'DISPUTED') {
       disputeCount++;
