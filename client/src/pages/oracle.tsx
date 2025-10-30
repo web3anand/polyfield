@@ -289,8 +289,14 @@ export default function OracleBot() {
                           <TrendingUp className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Prediction</p>
-                          <p className="text-lg font-bold text-primary">{market.outcome}</p>
+                          <p className="text-xs text-muted-foreground mb-1">Prediction</p>
+                          <button
+                            onClick={() => window.open(`https://polymarket.com/event/${market.slug}`, '_blank')}
+                            className="px-3 py-1 bg-primary text-primary-foreground font-bold text-sm rounded-sm border-2 border-primary hover:bg-primary/90 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,0.3)] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
+                            style={{ fontFamily: 'monospace' }}
+                          >
+                            {market.outcome.toUpperCase()}
+                          </button>
                         </div>
                       </div>
                       <div className="text-right">
