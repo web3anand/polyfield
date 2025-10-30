@@ -295,7 +295,7 @@ export default function OracleBot() {
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
                       <a 
-                        href={`https://polymarket.com/event/${market.slug}`}
+                        href={`https://polymarket.com/event/${market.marketId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-medium text-foreground hover:text-primary hover:underline mb-2 inline-block"
