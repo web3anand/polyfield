@@ -66,8 +66,10 @@ function analyzeMarket(market) {
     const maxPrice = Math.max(yesPrice, noPrice);
     if (maxPrice < CONSENSUS_THRESHOLD) return null;
     
-    // Use conditionId for the URL - this is what Polymarket uses in their URLs
-    const slug = market.conditionId || market.id;
+    // Polymarket URL format: /event/{slug}/{conditionId}
+    // We'll store both slug and conditionId
+    const slug = market.slug || market.id;
+    const conditionId = market.conditionId || market.id;
     
     return {
       status: yesPrice > noPrice ? 'yes_likely' : 'no_likely',
@@ -75,7 +77,7 @@ function analyzeMarket(market) {
       outcome: yesPrice > noPrice ? 'Yes' : 'No',
       disputes: 0,
       liquidity: liquidity,
-      slug: slug
+      slug: `${slug}/${conditionId}`
     };
   } catch (error) {
     return null;
