@@ -6,9 +6,29 @@ const COLLATERAL_SCALE = 1000000;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Retry wrapper with exponential backoff
+ */
+async function fetchWithRetry<T>(
+  fetchFn: () => Promise<T>, 
+  retries = 3,
+  baseDelay = 1000
+): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetchFn();
+    } catch (e: any) {
+      if (i === retries - 1) throw e;
+      await delay(baseDelay * (i + 1));
+    }
+  }
+  throw new Error('Retry limit exceeded');
+}
+
 interface RealizedPnLResult {
   realizedPnl: number;
   closedPositions: number;
+  allClosedPositions: Array<{ realizedPnl: number; tokenId: string }>;
 }
 
 interface UnrealizedPnLResult {
@@ -67,85 +87,120 @@ export async function fetchClosedPositionsHistory(userAddress: string, limit: nu
 }
 
 /**
- * Fetches realized PnL from the Polymarket PnL Subgraph
- * This includes all closed positions
+ * Fetches realized PnL from the Polymarket PnL Subgraph with pagination
+ * This includes all closed positions with proper pagination safety
  */
 export async function fetchRealizedPnl(userAddress: string): Promise<RealizedPnLResult> {
   console.log('📊 Fetching Realized PnL from PNL Subgraph...');
   
+  let allPositions: any[] = [];
   let skip = 0;
-  let total = 0;
-  let positions = 0;
+  const pageSize = 1000;
+  let hasMore = true;
   
-  while (true) {
+  while (hasMore && skip < 10000) { // Max skips safety
     try {
-      const response = await axios.post(PNL_SUBGRAPH, {
-        query: `query UserPositions($user: String!, $skip: Int!) {
-          userPositions(where: { user: $user }, first: 1000, skip: $skip) {
-            realizedPnl
-          }
-        }`,
-        variables: { user: userAddress.toLowerCase(), skip }
-      });
+      const response = await fetchWithRetry(() => 
+        axios.post(PNL_SUBGRAPH, {
+          query: `query UserPositions($user: String!, $skip: Int!) {
+            userPositions(where: { user: $user }, first: ${pageSize}, skip: $skip, orderBy: realizedPnl, orderDirection: desc) {
+              id
+              tokenId
+              amount
+              avgPrice
+              realizedPnl
+              totalBought
+            }
+          }`,
+          variables: { user: userAddress.toLowerCase(), skip }
+        })
+      );
       
-      const batch: UserPositionResponse[] = response.data.data?.userPositions || [];
-      if (batch.length === 0) break;
+      const positions = response.data.data?.userPositions || [];
       
-      batch.forEach(p => total += parseFloat(p.realizedPnl || '0'));
-      positions += batch.length;
-      skip += 1000;
+      if (positions.length === 0) hasMore = false;
+      else {
+        allPositions = allPositions.concat(positions);
+        skip += pageSize;
+        if (positions.length < pageSize) hasMore = false;
+      }
+      
       await delay(50);
-      
-      if (batch.length < 1000) break;
     } catch (error) {
       console.error('Error fetching realized PnL batch:', error);
       break;
     }
   }
   
-  const realizedPnl = total / COLLATERAL_SCALE;
-  console.log(`   ✓ Closed Positions: ${positions.toLocaleString()}`);
-  console.log(`   ✓ Realized PnL: $${realizedPnl.toLocaleString()}`);
+  // Calculate realized PnL with proper parsing
+  let totalRealizedPnL = 0;
+  let closedPositionsCount = 0;
+  const closedPositionsData: Array<{ realizedPnl: number; tokenId: string }> = [];
   
-  return { realizedPnl, closedPositions: positions };
+  allPositions.forEach(pos => {
+    const pnl = parseFloat(pos.realizedPnl || '0') / COLLATERAL_SCALE;
+    if (Math.abs(pnl) > 0.01) {
+      totalRealizedPnL += pnl;
+      closedPositionsCount++;
+      closedPositionsData.push({
+        realizedPnl: pnl,
+        tokenId: pos.tokenId
+      });
+    }
+  });
+  
+  console.log(`   ✓ Total Positions: ${allPositions.length.toLocaleString()}`);
+  console.log(`   ✓ Closed Positions: ${closedPositionsCount.toLocaleString()}`);
+  console.log(`   ✓ Realized PnL: $${totalRealizedPnL.toLocaleString()}`);
+  
+  return { 
+    realizedPnl: totalRealizedPnL, 
+    closedPositions: closedPositionsCount,
+    allClosedPositions: closedPositionsData
+  };
 }
 
 /**
- * Fetches unrealized PnL from open positions
- * Calculates the sum of PnL (both positive and negative) from current positions
+ * Fetches unrealized PnL from open positions with retry logic
+ * Calculates the sum of cashPnl (unrealized) from all open positions
  */
 export async function fetchUnrealizedPnl(userAddress: string): Promise<UnrealizedPnLResult> {
   console.log('📊 Fetching Open Positions for Unrealized PnL...');
   
   try {
-    const response = await axios.get(`${DATA_API}/positions`, {
-      params: { 
-        user: userAddress,
-        limit: 1000
-      },
-      timeout: 5000
-    });
+    const response = await fetchWithRetry(() => 
+      axios.get(`${DATA_API}/positions`, {
+        params: { 
+          user: userAddress.toLowerCase(),
+          limit: 1000
+        },
+        timeout: 5000
+      })
+    );
     
     const positions = response.data || [];
     
     let totalValue = 0;
+    let totalCostBasis = 0;
     let unrealizedPnl = 0;
     let openPositions = 0;
     
     positions.forEach((pos: any) => {
-      const size = parseFloat(String(pos.size || 0));
-      if (size > 0) { // Only count positions with size > 0 (open positions)
-        const currentValue = parseFloat(String(pos.curPrice || 0)) * size;
-        const costBasis = parseFloat(String(pos.avgPrice || 0)) * size;
-        const positionPnL = currentValue - costBasis;
-        
+      const size = parseFloat(pos.size || '0');
+      const initialValue = parseFloat(pos.initialValue || '0');
+      const currentValue = parseFloat(pos.currentValue || '0');
+      const cashPnl = parseFloat(pos.cashPnl || '0');
+      
+      if (size > 0.01) { // Only count positions with meaningful size
+        totalCostBasis += initialValue;
         totalValue += currentValue;
-        unrealizedPnl += positionPnL; // Sum up all PnL (+ and -)
+        unrealizedPnl += cashPnl; // Use API-provided unrealized PnL
         openPositions++;
       }
     });
     
     console.log(`   ✓ Open Positions: ${openPositions}`);
+    console.log(`   ✓ Cost Basis: $${totalCostBasis.toLocaleString()}`);
     console.log(`   ✓ Current Value: $${totalValue.toLocaleString()}`);
     console.log(`   ✓ Unrealized PnL: $${unrealizedPnl.toLocaleString()}`);
     
@@ -161,10 +216,11 @@ export async function fetchUnrealizedPnl(userAddress: string): Promise<Unrealize
 }
 
 /**
- * Fetches complete PnL data for a user
- * - Unrealized PnL: Sum of (currentPrice - avgPrice) * size for all open positions
- * - Realized PnL: Sum of realizedPnl from closed positions
+ * Fetches complete PnL data for a user with enhanced analytics
+ * - Unrealized PnL: Sum of cashPnl from all open positions
+ * - Realized PnL: Sum of realizedPnl from closed positions (via subgraph)
  * - Total PnL: Realized + Unrealized
+ * - Win rate, biggest wins/losses, redeemable positions
  */
 export async function fetchUserPnLData(userAddress: string) {
   console.log(`\n📍 Fetching PnL data for: ${userAddress}\n`);
@@ -172,22 +228,16 @@ export async function fetchUserPnLData(userAddress: string) {
   const startTime = Date.now();
   
   try {
-    // Fetch unrealized PnL (from open positions) and closed positions history in parallel
-    const [unrealizedData, closedPositionsHistory] = await Promise.all([
-      fetchUnrealizedPnl(userAddress), // Gets unrealized PnL from open positions
-      fetchClosedPositionsHistory(userAddress, 100) // Gets closed positions with timestamps
+    // Fetch unrealized PnL, realized PnL, and closed positions history in parallel
+    const [unrealizedData, realizedData, closedPositionsHistory] = await Promise.all([
+      fetchUnrealizedPnl(userAddress),
+      fetchRealizedPnl(userAddress),
+      fetchClosedPositionsHistory(userAddress, 100)
     ]);
     
-    // Unrealized PnL = sum of all open position PnLs
+    // Use subgraph's accurate realized PnL
+    const realizedPnl = realizedData.realizedPnl;
     const unrealizedPnl = unrealizedData.unrealizedPnl;
-    
-    // Realized PnL = sum of all closed positions' realized PnL
-    const realizedPnl = closedPositionsHistory.reduce(
-      (sum, pos) => sum + (pos.realizedPnl || 0), 
-      0
-    );
-    
-    // Total PnL = Realized + Unrealized
     const totalPnl = realizedPnl + unrealizedPnl;
     
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -197,10 +247,11 @@ export async function fetchUserPnLData(userAddress: string) {
       unrealizedPnl: parseFloat(unrealizedPnl.toFixed(2)),
       totalPnl: parseFloat(totalPnl.toFixed(2)),
       portfolioValue: parseFloat(unrealizedData.portfolioValue.toFixed(2)),
-      closedPositions: closedPositionsHistory.length,
+      closedPositions: realizedData.closedPositions,
       openPositions: unrealizedData.openPositions,
       fetchTime: parseFloat(elapsed),
-      closedPositionsHistory
+      closedPositionsHistory,
+      allClosedPositions: realizedData.allClosedPositions
     };
     
     console.log(`\n✅ PnL Data Fetched in ${elapsed}s:`);

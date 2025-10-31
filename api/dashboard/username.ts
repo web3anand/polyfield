@@ -154,6 +154,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return sum + Math.abs(trade.outcomeTokenAmount * trade.outcomeTokenPrice);
     }, 0);
 
+    // Calculate best trade and worst trade from ALL positions (open + closed)
+    let bestTrade = 0;
+    let worstTrade = 0;
+    
+    // Check open positions
+    positions.forEach((pos: any) => {
+      const unrealizedPnL = parseFloat(pos.cashPnl || 0);
+      if (unrealizedPnL > bestTrade) bestTrade = unrealizedPnL;
+      if (unrealizedPnL < worstTrade) worstTrade = unrealizedPnL;
+    });
+    
+    console.log(`📊 Checking ${pnlData.allClosedPositions?.length || 0} closed positions from subgraph...`);
+    
+    // Check ALL closed positions from subgraph (not just the 100 in history)
+    (pnlData.allClosedPositions || []).forEach((pos: any) => {
+      const realizedPnL = parseFloat(pos.realizedPnl || 0);
+      if (realizedPnL > bestTrade) {
+        console.log(`   New best trade found: $${realizedPnL.toFixed(2)}`);
+        bestTrade = realizedPnL;
+      }
+      if (realizedPnL < worstTrade) {
+        console.log(`   New worst trade found: $${realizedPnL.toFixed(2)}`);
+        worstTrade = realizedPnL;
+      }
+    });
+
+    console.log(`📊 Final - Best Trade: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
+
     // Generate PnL history from closed positions
     const pnlHistory = [];
     let cumulativePnl = 0;
@@ -193,6 +221,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalTrades: trades.length,
         activePositions: pnlData.openPositions,
         closedPositions: pnlData.closedPositions,
+        bestTrade,
+        worstTrade,
       },
       pnlHistory,
       positions: positions.map((pos: any) => ({
@@ -205,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         size: parseFloat(pos.size || 0),
         entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
         currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
-        unrealizedPnL: (parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0) - parseFloat(pos.avgPrice || pos.price || 0)) * parseFloat(pos.size || 0),
+        unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
         status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
         openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
       })),
