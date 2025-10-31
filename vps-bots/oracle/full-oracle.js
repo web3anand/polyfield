@@ -158,13 +158,6 @@ async function scanAllMarkets() {
 
   console.log(`\n✅ Scan complete: ${count} consensus markets saved (${llmCount} with LLM analysis)\n`);
 }
-      const saved = await saveOracle(market.id, title, analysis);
-      if (saved) count++;
-    }
-  }
-
-  console.log(`\n✅ Scan complete: ${count} consensus markets saved\n`);
-}
 
 async function init() {
   console.log('🚀 ORACLE SCANNER');

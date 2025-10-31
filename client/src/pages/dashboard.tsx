@@ -170,13 +170,14 @@ export default function Dashboard() {
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <Navbar />
-      
-      {/* Header with Search Bar */}
-      <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
-        <div className="container mx-auto px-6 py-4">
+    <div className="min-h-screen bg-background p-4">
+      <div className="h-full border-2 border-primary/30">
+        {/* Navbar */}
+        <Navbar />
+        
+        {/* Header with Search Bar */}
+        <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
+          <div className="container mx-auto px-6 py-4">
           <div className="flex justify-center items-center gap-4">
             <div className="flex-1 max-w-md">
               <UsernameInput onSubmit={handleConnect} compact />
@@ -291,6 +292,7 @@ export default function Dashboard() {
           {/* Recent Activity */}
           <RecentActivity trades={recentTrades} />
         </div>
+      </div>
       </div>
     </div>
   );

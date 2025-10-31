@@ -7,11 +7,12 @@ interface StatCardProps {
   value: string | number;
   suffix?: string;
   color?: string;
+  borderColor?: string;
 }
 
-export function StatCard({ icon, label, value, suffix, color = "text-foreground" }: StatCardProps) {
+export function StatCard({ icon, label, value, suffix, color = "text-foreground", borderColor }: StatCardProps) {
   return (
-    <Card className="p-6 h-[120px] flex flex-col justify-between">
+    <Card className={`p-6 h-[120px] flex flex-col justify-between ${borderColor ? `border-t-2 ${borderColor}` : ''}`}>
       <div className="flex items-start justify-between mb-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {label}

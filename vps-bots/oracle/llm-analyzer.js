@@ -21,14 +21,14 @@ async function fetchNewsContext(query, maxResults = 5) {
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.error(`NewsAPI error: ${response.status}`);
+      // Silently skip news on rate limit, don't block LLM analysis
       return [];
     }
 
     const data = await response.json();
     return data.articles?.map(a => `${a.title} (${a.source.name})`) || [];
   } catch (error) {
-    console.error('Failed to fetch news:', error.message);
+    // Silently skip news errors, don't block LLM analysis
     return [];
   }
 }

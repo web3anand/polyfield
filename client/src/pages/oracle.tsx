@@ -185,12 +185,13 @@ export default function OracleBot() {
   const sortedMarkets = sortMarkets(filteredMarkets);
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      {/* Navbar */}
-      <Navbar />
+    <div className="h-screen bg-background flex flex-col overflow-hidden p-4">
+      <div className="h-full flex flex-col border-2 border-primary/30">
+        {/* Navbar */}
+        <Navbar />
       
-      {/* Fixed Header */}
-      <div className="border-b border-border bg-card/50 flex-shrink-0">
+        {/* Fixed Header */}
+        <div className="border-b border-border bg-card/50 flex-shrink-0">
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10">
@@ -442,6 +443,7 @@ export default function OracleBot() {
             </div>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   );
