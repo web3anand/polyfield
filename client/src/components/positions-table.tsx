@@ -146,13 +146,13 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                         {position.outcome}
                       </Badge>
                     </td>
-                    <td className="py-4 px-4 text-right font-mono text-foreground">
+                    <td className="py-4 px-4 text-right font-bold tabular-nums text-foreground">
                       ${position.entryPrice.toFixed(3)}
                     </td>
-                    <td className="py-4 px-4 text-right font-mono text-foreground">
+                    <td className="py-4 px-4 text-right font-bold tabular-nums text-foreground">
                       ${position.currentPrice.toFixed(3)}
                     </td>
-                    <td className="py-4 px-4 text-right font-mono text-foreground">
+                    <td className="py-4 px-4 text-right font-bold tabular-nums text-foreground">
                       {position.size.toLocaleString()}
                     </td>
                     <td className="py-4 px-4 text-right">
@@ -162,7 +162,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                         ) : (
                           <TrendingDown className="w-4 h-4 text-destructive" />
                         )}
-                        <span className={`font-mono font-semibold ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
+                        <span className={`font-bold tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
                           {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
@@ -204,15 +204,15 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-muted-foreground">Entry Price</p>
-                    <p className="font-mono text-foreground">${position.entryPrice.toFixed(3)}</p>
+                    <p className="font-bold tabular-nums text-foreground">${position.entryPrice.toFixed(3)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Current Price</p>
-                    <p className="font-mono text-foreground">${position.currentPrice.toFixed(3)}</p>
+                    <p className="font-bold tabular-nums text-foreground">${position.currentPrice.toFixed(3)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Size</p>
-                    <p className="font-mono text-foreground">{position.size.toLocaleString()}</p>
+                    <p className="font-bold tabular-nums text-foreground">{position.size.toLocaleString()}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Unrealized PnL</p>
@@ -222,7 +222,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                       ) : (
                         <TrendingDown className="w-3 h-3 text-destructive" />
                       )}
-                      <p className={`font-mono font-semibold ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
+                      <p className={`font-bold tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
                         {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>

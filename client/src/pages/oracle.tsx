@@ -377,12 +377,12 @@ export default function OracleBot() {
 
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Liquidity</p>
-                      <p className="text-sm font-mono text-foreground tabular-nums">${(market.liquidity / 1000).toFixed(1)}k</p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">${(market.liquidity / 1000).toFixed(1)}k</p>
                     </div>
 
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Signal</p>
-                      <p className="text-sm font-semibold text-chart-2 tabular-nums">
+                      <p className="text-sm font-bold text-chart-2 tabular-nums">
                         {market.status === "CONSENSUS" ? "STRONG" : market.status === "DISPUTED" ? "WEAK" : "NEUTRAL"}
                       </p>
                     </div>
