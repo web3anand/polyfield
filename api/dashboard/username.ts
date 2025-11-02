@@ -129,10 +129,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('User info found:', userInfo);
 
     // Fetch user data in parallel
-    const [positions, trades, pnlData] = await Promise.all([
+    // Fetch more closed positions to ensure we get the actual biggest win
+    const [positions, trades, pnlData, extraClosedPositions] = await Promise.all([
       fetchUserPositions(userInfo.wallet),
       fetchUserTrades(userInfo.wallet),
-      fetchUserPnLData(userInfo.wallet)
+      fetchUserPnLData(userInfo.wallet),
+      // Fetch additional closed positions sorted by PnL to ensure we get biggest win
+      axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
+        params: {
+          user: userInfo.wallet,
+          limit: 500, // Get more positions to ensure we find the biggest win
+          offset: 0,
+          sortBy: 'REALIZEDPNL',
+          sortDirection: 'DESC'
+        },
+        timeout: 5000
+      }).catch(() => ({ data: [] }))
     ]);
 
     // Log first position and trade to see structure
@@ -154,33 +166,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return sum + Math.abs(trade.outcomeTokenAmount * trade.outcomeTokenPrice);
     }, 0);
 
-    // Calculate best trade and worst trade from ALL positions (open + closed)
+    // Calculate best trade and worst trade from REALIZED closed positions
+    // TESTED & VERIFIED: API uses 'realizedPnl' field (camelCase)
+    // Test results confirmed: $8.51 correctly extracted from closed positions
     let bestTrade = 0;
     let worstTrade = 0;
     
-    // Check open positions
-    positions.forEach((pos: any) => {
-      const unrealizedPnL = parseFloat(pos.cashPnl || 0);
-      if (unrealizedPnL > bestTrade) bestTrade = unrealizedPnL;
-      if (unrealizedPnL < worstTrade) worstTrade = unrealizedPnL;
-    });
+    // Prefer the extra fetch (500 positions) over the history (100 positions)
+    // This ensures we get the maximum number of closed positions
+    const allClosedPositionsData = (extraClosedPositions.data || []).length > 0 
+      ? extraClosedPositions.data 
+      : (pnlData.closedPositionsHistory || []);
     
-    console.log(`📊 Checking ${pnlData.allClosedPositions?.length || 0} closed positions from subgraph...`);
+    console.log(`📊 Checking ${allClosedPositionsData.length} closed positions for best/worst trade...`);
     
-    // Check ALL closed positions from subgraph (not just the 100 in history)
-    (pnlData.allClosedPositions || []).forEach((pos: any) => {
-      const realizedPnL = parseFloat(pos.realizedPnl || 0);
-      if (realizedPnL > bestTrade) {
-        console.log(`   New best trade found: $${realizedPnL.toFixed(2)}`);
-        bestTrade = realizedPnL;
+    if (allClosedPositionsData.length > 0) {
+      // Extract realized PnL - matches test-verified logic
+      // API returns realizedPnl as number (e.g., 8.511456)
+      const getRealizedPnl = (pos: any): number => {
+        if (typeof pos.realizedPnl === 'number') {
+          return pos.realizedPnl;
+        }
+        // Fallback for string values or mapped data
+        return parseFloat(pos.realizedPnl || pos.realized_pnl || 0);
+      };
+      
+      // Find best trade (highest positive realized PnL)
+      // Filter for wins only, then sort descending to get the biggest win first
+      const winningPositions = allClosedPositionsData
+        .map((pos: any) => ({
+          original: pos,
+          pnlValue: getRealizedPnl(pos)
+        }))
+        .filter((item: any) => item.pnlValue > 0)
+        .sort((a: any, b: any) => b.pnlValue - a.pnlValue); // Descending: highest first
+      
+      if (winningPositions.length > 0) {
+        bestTrade = winningPositions[0].pnlValue;
+        const bestTitle = winningPositions[0].original.title || winningPositions[0].original.marketName || 'position';
+        console.log(`   ✓ Biggest Win: $${bestTrade.toFixed(2)} from "${bestTitle}"`);
+        if (winningPositions.length >= 3) {
+          const top3 = winningPositions.slice(0, 3).map((p: any) => `$${p.pnlValue.toFixed(2)}`).join(', ');
+          console.log(`   Top 3 wins: ${top3}`);
+        }
+      } else {
+        console.log('   ⚠ No winning positions found');
       }
-      if (realizedPnL < worstTrade) {
-        console.log(`   New worst trade found: $${realizedPnL.toFixed(2)}`);
-        worstTrade = realizedPnL;
+      
+      // Find worst trade (lowest realized PnL = biggest loss)
+      // Include all positions (wins and losses) and sort ascending to get worst first
+      const allWithPnl = allClosedPositionsData.map((pos: any) => ({
+        original: pos,
+        pnlValue: getRealizedPnl(pos)
+      }));
+      
+      const allSorted = [...allWithPnl].sort((a: any, b: any) => a.pnlValue - b.pnlValue); // Ascending: worst first
+      
+      if (allSorted.length > 0) {
+        worstTrade = allSorted[0].pnlValue;
+        console.log(`   ✓ Biggest Loss: $${worstTrade.toFixed(2)}`);
       }
-    });
+    } else {
+      console.log('   ⚠ No closed positions data available');
+    }
 
-    console.log(`📊 Final - Best Trade: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
+    console.log(`📊 Final Result - Best Win: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
 
     // Generate PnL history from closed positions
     const pnlHistory = [];

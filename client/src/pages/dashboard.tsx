@@ -28,7 +28,7 @@ export default function Dashboard() {
     retryDelay: 1000,
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for live updates
     queryFn: async () => {
-      const res = await fetch(`http://localhost:3000/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
+      const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
       if (!res.ok) throw new Error('Failed to fetch dashboard data');
       return res.json();
     },
