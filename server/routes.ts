@@ -1284,13 +1284,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Micro-Edge Scanner endpoints
   app.get("/api/scanner/alerts", (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'scanner/edges.db');
-      const db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.log('Scanner DB not available, returning empty data');
-          return res.json([]);
+      // Try multiple possible database paths (local dev and VPS)
+      const possiblePaths = [
+        path.join(process.cwd(), 'scanner/edges.db'),
+        path.join(process.cwd(), 'vps-bots/scanner/edges.db'),
+        '/home/linuxuser/polyfield-bots/scanner/edges.db',
+        path.join(__dirname, '../scanner/edges.db'),
+        path.join(__dirname, '../../scanner/edges.db')
+      ];
+
+      let db: sqlite3.Database | null = null;
+      let dbPath = '';
+
+      // Try each path until one works
+      for (const dbPathAttempt of possiblePaths) {
+        try {
+          if (require('fs').existsSync(dbPathAttempt)) {
+            db = new sqlite3.Database(dbPathAttempt);
+            dbPath = dbPathAttempt;
+            console.log(`✅ Found scanner DB at: ${dbPath}`);
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
         }
-      });
+      }
+
+      if (!db) {
+        console.log('⚠️  Scanner DB not found in any known location');
+        return res.json([]);
+      }
 
       const limit = parseInt(req.query.limit as string) || 20;
       
@@ -1302,7 +1325,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error('Scanner DB error:', err);
             res.json([]);
           } else {
-            res.json(rows || []);
+            // Transform data to match frontend expectations
+            const alerts = (rows || []).map((row: any) => ({
+              id: row.id || row.market_id || '',
+              title: row.title || row.market_title || 'Unknown Market',
+              outcome: row.outcome || 'YES',
+              ev: row.ev || 0,
+              marketPrice: row.marketPrice || row.market_price || 0,
+              trueProb: row.trueProb || row.true_prob || 0,
+              liquidity: row.liquidity || 0,
+              timestamp: row.timestamp || Date.now(),
+              status: row.status || 'active'
+            }));
+            console.log(`📊 Returning ${alerts.length} scanner alerts`);
+            res.json(alerts);
           }
           db.close();
         }
@@ -1315,20 +1351,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/scanner/metrics", (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'scanner/edges.db');
-      const db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.log('Scanner DB not available, returning empty metrics');
-          return res.json({
-            alertsThisMonth: 0,
-            avgEV: 0,
-            hitRate: 0,
-            conversion: 0,
-            avgLatency: "N/A",
-            activeScans: 0
-          });
+      // Try multiple possible database paths
+      const possiblePaths = [
+        path.join(process.cwd(), 'scanner/edges.db'),
+        path.join(process.cwd(), 'vps-bots/scanner/edges.db'),
+        '/home/linuxuser/polyfield-bots/scanner/edges.db',
+        path.join(__dirname, '../scanner/edges.db'),
+        path.join(__dirname, '../../scanner/edges.db')
+      ];
+
+      let db: sqlite3.Database | null = null;
+      let dbPath = '';
+
+      for (const dbPathAttempt of possiblePaths) {
+        try {
+          if (require('fs').existsSync(dbPathAttempt)) {
+            db = new sqlite3.Database(dbPathAttempt);
+            dbPath = dbPathAttempt;
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
         }
-      });
+      }
+
+      if (!db) {
+        console.log('⚠️  Scanner DB not found for metrics');
+        return res.json({
+          alertsThisMonth: 0,
+          avgEV: 0,
+          hitRate: 0,
+          conversion: 0,
+          avgLatency: "N/A",
+          activeScans: 0
+        });
+      }
 
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
       

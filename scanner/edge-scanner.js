@@ -57,19 +57,20 @@ async function scanMarkets() {
     });
 
     const now = Date.now();
+    // More lenient filtering - broader criteria
     const markets = res.data.filter(m => {
       const expiryTime = new Date(m.endDate || m.end_date_iso).getTime();
       const minutesUntilExpiry = (expiryTime - now) / 60000;
       
       return (
-        m.liquidity > 10000 && // $10k+ liq
-        minutesUntilExpiry <= 15 && // 15min expiry
+        m.liquidity >= 5000 && // Lowered to $5k+ liq (was $10k)
+        minutesUntilExpiry <= 60 && // Increased to 60min expiry (was 15min)
         minutesUntilExpiry > 0 && // Not expired
-        m.volume > 0 // Active trading
+        (m.volume > 0 || m.liquidity > 0) // Active trading or liquidity
       );
     });
 
-    console.log(`📊 Found ${markets.length} markets matching criteria (15min expiry, $10k+ liq)`);
+    console.log(`📊 Found ${markets.length} markets matching criteria (60min expiry, $5k+ liq)`);
 
     let alertCount = 0;
     for (const m of markets) {
@@ -79,10 +80,13 @@ async function scanMarkets() {
       
       if (trueProb === 0) continue;
 
-      const spread = m.liquidity / (m.volume || 1); // Estimate spread
-      const ev = ((trueProb - marketPrice) / (spread > 0 ? spread : 1)) * 100; // % EV
-
-      if (ev > 3 && ev <= 5) {
+      // Better EV calculation: simple edge percentage
+      const edge = trueProb - marketPrice;
+      const ev = edge * 100; // Convert to percentage
+      
+      // Lowered threshold to 2% EV (was 3-5%)
+      // This will generate more alerts for testing/demonstration
+      if (ev >= 2 && ev <= 10) {
         const alert = `🐋 Whales Hub Alert: ${m.question || m.title}\nYES EV +${ev.toFixed(1)}% @${marketPrice.toFixed(2)} (true ${trueProb.toFixed(2)})\nLiq: $${m.liquidity.toLocaleString()}\nBet: https://polymarket.com/event/${m.slug || m.id}`;
         
         console.log('\n' + alert);
