@@ -373,20 +373,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         worstTrade,
       },
       pnlHistory,
-      positions: positions.map((pos: any) => ({
-        id: pos.id || `pos-${Math.random()}`,
-        marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
-        marketId: pos.marketId || pos.market?.id || "",
-        marketSlug: pos.marketSlug || pos.market?.slug || "",
-        eventSlug: pos.eventSlug || pos.market?.eventSlug || "",
-        outcome: pos.outcome || "YES",
-        size: parseFloat(pos.size || 0),
-        entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
-        currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
-        unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
-        status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
-        openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
-      })),
+      positions: positions.map((pos: any) => {
+        // Extract slug from various possible fields - Polymarket uses same slug for event and market
+        const slug = pos.marketSlug || pos.slug || pos.eventSlug || pos.market?.slug || pos.market?.eventSlug || pos.market?.id || "";
+        // Condition ID for the tid parameter
+        const conditionId = pos.marketId || pos.conditionId || pos.market?.id || pos.market?.condition_id || pos.condition_id || "";
+        
+        return {
+          id: pos.id || `pos-${Math.random()}`,
+          marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
+          marketId: conditionId,
+          marketSlug: slug, // Use slug for URL (same for event and market)
+          eventSlug: slug, // Same as marketSlug per Polymarket URL structure
+          outcome: pos.outcome || "YES",
+          size: parseFloat(pos.size || 0),
+          entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
+          currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
+          unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
+          status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
+          openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
+        };
+      }),
       recentTrades: trades.slice(0, 10).map((trade: any) => ({
         id: trade.id || `trade-${Math.random()}`,
         marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",

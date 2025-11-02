@@ -20,11 +20,30 @@ type SortOption = "pnl-desc" | "pnl-asc" | "size-desc" | "size-asc" | "market-as
 // Generate Polymarket URL
 function getPolymarketUrl(eventSlug?: string, marketSlug?: string, marketId?: string): string {
   // Polymarket URL format: https://polymarket.com/event/[eventSlug]/[marketSlug]?tid=[conditionId]
-  if (eventSlug && marketSlug && marketId) {
+  // Note: eventSlug and marketSlug are often the same value
+  const slug = marketSlug || eventSlug;
+  
+  if (slug && marketId) {
     // Convert conditionId hex to decimal for tid parameter
-    const tid = marketId.startsWith('0x') ? BigInt(marketId).toString() : marketId;
-    return `https://polymarket.com/event/${eventSlug}/${marketSlug}?tid=${tid}`;
+    let tid: string;
+    if (marketId.startsWith('0x')) {
+      // Hex format - convert to decimal
+      try {
+        tid = BigInt(marketId).toString();
+      } catch (e) {
+        // If BigInt conversion fails, try removing 0x and using as-is
+        tid = marketId.replace('0x', '');
+      }
+    } else {
+      // Already decimal or string format
+      tid = marketId.toString();
+    }
+    
+    // Use the slug for both event and market (as per Polymarket URL structure)
+    const finalSlug = slug.trim();
+    return `https://polymarket.com/event/${finalSlug}/${finalSlug}?tid=${tid}`;
   }
+  
   // Fallback if missing data
   return `https://polymarket.com`;
 }

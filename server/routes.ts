@@ -301,23 +301,32 @@ async function fetchUserPositions(address: string): Promise<Position[]> {
         return [];
       }
 
-      const allPositions = response.data.map((pos: any, index: number) => ({
-        id: pos.asset || pos.id || `pos-${index}`,
-        marketName: pos.title || pos.market?.question || "Unknown Market",
-        marketId: pos.conditionId || pos.market?.condition_id || `market-${index}`,
-        outcome: (pos.outcome === "YES" || pos.outcome === "NO" ? pos.outcome : "YES") as "YES" | "NO",
-        entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
-        currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
-        size: parseFloat(pos.size || "0"),
-        unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
-        status: (parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED") as "ACTIVE" | "CLOSED",
-        openedAt: pos.created_at
-          ? new Date(pos.created_at).toISOString()
-          : new Date().toISOString(),
-        closedAt: pos.closed_at
-          ? new Date(pos.closed_at).toISOString()
-          : undefined,
-      }));
+      const allPositions = response.data.map((pos: any, index: number) => {
+        // Extract slug from various possible fields
+        const slug = pos.slug || pos.market?.slug || pos.eventSlug || pos.market?.eventSlug || pos.market?.id;
+        // Condition ID for the tid parameter
+        const conditionId = pos.conditionId || pos.market?.condition_id || pos.condition_id || pos.market?.conditionId;
+        
+        return {
+          id: pos.asset || pos.id || `pos-${index}`,
+          marketName: pos.title || pos.market?.question || pos.market?.title || "Unknown Market",
+          marketId: conditionId || `market-${index}`,
+          marketSlug: slug, // Use slug for URL (same for event and market in Polymarket format)
+          eventSlug: slug, // Same as marketSlug per Polymarket URL structure
+          outcome: (pos.outcome === "YES" || pos.outcome === "NO" ? pos.outcome : "YES") as "YES" | "NO",
+          entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
+          currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
+          size: parseFloat(pos.size || "0"),
+          unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
+          status: (parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED") as "ACTIVE" | "CLOSED",
+          openedAt: pos.created_at
+            ? new Date(pos.created_at).toISOString()
+            : new Date().toISOString(),
+          closedAt: pos.closed_at
+            ? new Date(pos.closed_at).toISOString()
+            : undefined,
+        };
+      });
 
       console.log(`Found ${allPositions.length} positions in single request`);
       
@@ -355,25 +364,32 @@ async function fetchUserPositions(address: string): Promise<Position[]> {
             break;
           }
 
-          const batchPositions = response.data.map((pos: any, index: number) => ({
-            id: pos.asset || pos.id || `pos-${offset + index}`,
-            marketName: pos.title || pos.market?.question || "Unknown Market",
-            marketId: pos.conditionId || pos.market?.condition_id || `market-${offset + index}`,
-            marketSlug: pos.slug, // Question slug for URL
-            eventSlug: pos.eventSlug, // Event slug for URL
-            outcome: (pos.outcome === "YES" || pos.outcome === "NO" ? pos.outcome : "YES") as "YES" | "NO",
-            entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
-            currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
-            size: parseFloat(pos.size || "0"),
-            unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
-            status: (parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED") as "ACTIVE" | "CLOSED",
-            openedAt: pos.created_at
-              ? new Date(pos.created_at).toISOString()
-              : new Date().toISOString(),
-            closedAt: pos.closed_at
-              ? new Date(pos.closed_at).toISOString()
-              : undefined,
-          }));
+          const batchPositions = response.data.map((pos: any, index: number) => {
+            // Extract slug from various possible fields
+            const slug = pos.slug || pos.market?.slug || pos.eventSlug || pos.market?.eventSlug || pos.market?.id;
+            // Condition ID for the tid parameter
+            const conditionId = pos.conditionId || pos.market?.condition_id || pos.condition_id || pos.market?.conditionId;
+            
+            return {
+              id: pos.asset || pos.id || `pos-${offset + index}`,
+              marketName: pos.title || pos.market?.question || pos.market?.title || "Unknown Market",
+              marketId: conditionId || `market-${offset + index}`,
+              marketSlug: slug, // Use slug for URL (same for event and market in Polymarket format)
+              eventSlug: slug, // Same as marketSlug per Polymarket URL structure
+              outcome: (pos.outcome === "YES" || pos.outcome === "NO" ? pos.outcome : "YES") as "YES" | "NO",
+              entryPrice: parseFloat(pos.avgPrice || pos.average_price || "0"),
+              currentPrice: parseFloat(pos.curPrice || pos.current_price || "0"),
+              size: parseFloat(pos.size || "0"),
+              unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || "0"),
+              status: (parseFloat(pos.size || "0") > 0 ? "ACTIVE" : "CLOSED") as "ACTIVE" | "CLOSED",
+              openedAt: pos.created_at
+                ? new Date(pos.created_at).toISOString()
+                : new Date().toISOString(),
+              closedAt: pos.closed_at
+                ? new Date(pos.closed_at).toISOString()
+                : undefined,
+            };
+          });
 
           if (batchCount === 0 && batchPositions.length > 0) {
             console.log(`Sample position: ${batchPositions[0].marketName}`);
