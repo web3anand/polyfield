@@ -71,19 +71,20 @@ export function PositionsTable({ positions }: PositionsTableProps) {
   }
 
   return (
-    <Card className="p-6 hover-elevate">
-      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+    <Card className="p-3 md:p-6 hover-elevate">
+      <div className="flex items-center justify-between mb-3 md:mb-4 gap-2 md:gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Active Positions</h2>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <h2 className="text-base md:text-xl font-semibold text-foreground">Active Positions</h2>
+          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide">
             {positions.length} position{positions.length !== 1 ? 's' : ''}
           </p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" data-testid="button-sort-positions">
-              <ArrowUpDown className="w-4 h-4 mr-2" />
-              {sortLabels[sortBy]}
+            <Button variant="outline" size="sm" data-testid="button-sort-positions" className="text-xs md:text-sm h-8 md:h-9 px-2 md:px-3">
+              <ArrowUpDown className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">{sortLabels[sortBy]}</span>
+              <span className="sm:hidden">Sort</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" data-testid="dropdown-sort-menu">
@@ -176,53 +177,53 @@ export function PositionsTable({ positions }: PositionsTableProps) {
       </div>
 
       {/* Mobile Card View - Scrollable with max 5 cards visible */}
-      <div className="md:hidden max-h-[500px] overflow-y-auto scrollbar-hidden space-y-4" data-testid="scrollable-positions-mobile">
+      <div className="md:hidden max-h-[400px] overflow-y-auto scrollbar-hidden space-y-2" data-testid="scrollable-positions-mobile">
         {sortedPositions.map((position, index) => {
           const isProfitable = position.unrealizedPnL >= 0;
           const marketUrl = getPolymarketUrl(position.eventSlug, position.marketSlug, position.marketId);
           return (
-            <Card key={position.id} className="p-6" data-testid={`card-position-${index}`}>
-              <div className="space-y-3">
+            <Card key={position.id} className="p-3" data-testid={`card-position-${index}`}>
+              <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <a 
                     href={marketUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2 group flex-1"
+                    className="font-medium text-xs text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group flex-1 min-w-0"
                   >
-                    <span className="group-hover:underline">{position.marketName}</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                    <span className="truncate group-hover:underline">{position.marketName}</span>
+                    <ExternalLink className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
                   </a>
                   <Badge 
                     variant="outline"
-                    className="outcome-badge-dotted flex-shrink-0"
+                    className="outcome-badge-dotted flex-shrink-0 text-[10px] px-1.5 py-0.5"
                     data-outcome={position.outcome}
                   >
                     {position.outcome}
                   </Badge>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <p className="text-muted-foreground">Entry Price</p>
-                    <p className="font-bold tabular-nums text-foreground">${position.entryPrice.toFixed(3)}</p>
+                    <p className="text-[10px] text-muted-foreground">Entry Price</p>
+                    <p className="font-bold text-sm tabular-nums text-foreground">${position.entryPrice.toFixed(3)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Current Price</p>
-                    <p className="font-bold tabular-nums text-foreground">${position.currentPrice.toFixed(3)}</p>
+                    <p className="text-[10px] text-muted-foreground">Current Price</p>
+                    <p className="font-bold text-sm tabular-nums text-foreground">${position.currentPrice.toFixed(3)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Size</p>
-                    <p className="font-bold tabular-nums text-foreground">{position.size.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Size</p>
+                    <p className="font-bold text-sm tabular-nums text-foreground">{position.size.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Unrealized PnL</p>
+                    <p className="text-[10px] text-muted-foreground">Unrealized PnL</p>
                     <div className="flex items-center gap-1">
                       {isProfitable ? (
                         <TrendingUp className="w-3 h-3 text-chart-2" />
                       ) : (
                         <TrendingDown className="w-3 h-3 text-destructive" />
                       )}
-                      <p className={`font-bold tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
+                      <p className={`font-bold text-sm tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
                         {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>

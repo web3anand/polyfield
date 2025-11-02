@@ -52,9 +52,70 @@ function setCache<T>(key: string, data: T): void {
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 
+// Cache for profile searches to avoid redundant API calls
+const profileCache = new Map<string, { data: { wallet: string; profileImage?: string; bio?: string }, timestamp: number }>();
+const PROFILE_CACHE_TTL = 300000; // 5 minutes
+
+// Helper to batch profile searches concurrently
+async function findUsersByUsernameBatch(usernames: string[]): Promise<Map<string, { wallet: string; profileImage?: string; bio?: string }>> {
+  const results = new Map<string, { wallet: string; profileImage?: string; bio?: string }>();
+  const uncachedUsernames: string[] = [];
+
+  // Check cache first
+  const now = Date.now();
+  usernames.forEach(username => {
+    const cacheKey = username.toLowerCase();
+    const cached = profileCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < PROFILE_CACHE_TTL) {
+      results.set(username, cached.data);
+    } else {
+      uncachedUsernames.push(username);
+    }
+  });
+
+  if (uncachedUsernames.length === 0) {
+    return results;
+  }
+
+  // Batch concurrent requests (max 10 at a time to avoid rate limiting)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < uncachedUsernames.length; i += BATCH_SIZE) {
+    const batch = uncachedUsernames.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(async (username) => {
+      try {
+        const profile = await findUserByUsername(username, true); // skipCache=true for batch
+        results.set(username, profile);
+        // Update cache
+        profileCache.set(username.toLowerCase(), { data: profile, timestamp: now });
+      } catch (error) {
+        console.error(`Error fetching profile for ${username}:`, error);
+        // Don't throw - continue with other usernames
+      }
+    });
+    await Promise.all(batchPromises);
+    
+    // Small delay between batches to respect rate limits
+    if (i + BATCH_SIZE < uncachedUsernames.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  return results;
+}
+
 // Helper to search for a user by username and get their wallet address and profile
-async function findUserByUsername(username: string): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
+async function findUserByUsername(username: string, skipCache = false): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
   try {
+    // Check cache first (unless skipCache is true)
+    if (!skipCache) {
+      const cacheKey = username.toLowerCase();
+      const cached = profileCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < PROFILE_CACHE_TTL) {
+        console.log(`Using cached profile for: ${username}`);
+        return cached.data;
+      }
+    }
+
     console.log(`Searching for user: ${username}`);
 
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
@@ -62,7 +123,7 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
         q: username,
         search_profiles: true,
       },
-      timeout: 5000,
+      timeout: 3000, // Reduced timeout for faster failure
     });
 
     // Log the full response structure for debugging
@@ -150,11 +211,16 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
           console.log(
             `✓ Exact match found: ${profileName} -> ${walletAddress}`,
           );
-          return {
+          const result = {
             wallet: walletAddress,
             profileImage: profile.profileImage || profile.profile_image,
             bio: profile.bio,
           };
+          // Cache the result
+          if (!skipCache) {
+            profileCache.set(username.toLowerCase(), { data: result, timestamp: Date.now() });
+          }
+          return result;
         }
       }
 
@@ -167,11 +233,16 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
               possibleNameFields.map((f) => profile[f]).find(Boolean) ||
               "unknown";
             console.log(`→ Using first match: ${name} -> ${wallet}`);
-            return {
+            const result = {
               wallet,
               profileImage: profile.profileImage || profile.profile_image,
               bio: profile.bio,
             };
+            // Cache the result
+            if (!skipCache) {
+              profileCache.set(username.toLowerCase(), { data: result, timestamp: Date.now() });
+            }
+            return result;
           }
         }
       }

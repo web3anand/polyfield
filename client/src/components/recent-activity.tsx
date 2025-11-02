@@ -12,14 +12,14 @@ export function RecentActivity({ trades }: RecentActivityProps) {
   const recentTrades = trades.slice(0, 10);
 
   return (
-    <Card className="p-6 hover-elevate">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-foreground">Recent Activity</h2>
-        <p className="text-xs text-muted-foreground uppercase tracking-wide">Your latest trades and positions</p>
+    <Card className="p-3 md:p-6 hover-elevate">
+      <div className="mb-3 md:mb-4">
+        <h2 className="text-base md:text-xl font-semibold text-foreground">Recent Activity</h2>
+        <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide">Your latest trades and positions</p>
       </div>
 
-      <ScrollArea className="h-[400px] pr-4 scrollbar-hidden" data-testid="activity-feed">
-        <div className="space-y-2">
+      <ScrollArea className="h-[300px] md:h-[400px] pr-2 md:pr-4 scrollbar-hidden" data-testid="activity-feed">
+        <div className="space-y-1.5 md:space-y-2">
           {recentTrades.map((trade, index) => {
             const isBuy = trade.type === "BUY";
             const hasProfit = trade.profit !== undefined;
@@ -27,24 +27,24 @@ export function RecentActivity({ trades }: RecentActivityProps) {
             return (
               <div
                 key={trade.id}
-                className="flex items-start gap-2 p-2 border border-border relative"
+                className="flex items-start gap-1.5 md:gap-2 p-1.5 md:p-2 border border-border relative"
                 data-testid={`trade-${index}`}
               >
-                <div className={`p-1.5 ${isBuy ? 'bg-chart-2/10 text-chart-2' : 'bg-chart-1/10 text-chart-1'}`}>
+                <div className={`p-1 md:p-1.5 flex-shrink-0 ${isBuy ? 'bg-chart-2/10 text-chart-2' : 'bg-chart-1/10 text-chart-1'}`}>
                   {isBuy ? (
-                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <ArrowUpRight className="w-3 h-3 md:w-3.5 md:h-3.5" />
                   ) : (
-                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    <ArrowDownRight className="w-3 h-3 md:w-3.5 md:h-3.5" />
                   )}
                 </div>
                 
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground text-sm truncate">
+                <div className="flex-1 min-w-0 pr-12 md:pr-16">
+                  <p className="font-medium text-foreground text-xs md:text-sm truncate">
                     {trade.marketName}
                   </p>
                   
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-0.5 md:gap-0 text-[10px] md:text-xs text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-1.5 md:gap-2">
                       <span className={isBuy ? 'text-chart-2' : 'text-chart-1'}>
                         {trade.type}
                       </span>
@@ -59,16 +59,16 @@ export function RecentActivity({ trades }: RecentActivityProps) {
                     )}
                   </div>
                   
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 truncate">
                     {new Date(trade.timestamp).toLocaleString()}
                   </p>
                 </div>
                 
                 {/* Outcome badge positioned in top-right corner, vertically centered */}
-                <div className="absolute top-1/2 right-4 transform -translate-y-1/2">
+                <div className="absolute top-1/2 right-2 md:right-4 transform -translate-y-1/2">
                   <Badge 
                     variant="outline"
-                    className="outcome-badge-dotted"
+                    className="outcome-badge-dotted text-[10px] px-1.5 py-0.5 md:text-xs md:px-2 md:py-1"
                     data-outcome={trade.outcome}
                   >
                     {trade.outcome}

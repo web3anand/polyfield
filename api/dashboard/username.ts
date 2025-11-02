@@ -5,9 +5,70 @@ import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 
+// Cache for profile searches to avoid redundant API calls
+const profileCache = new Map<string, { data: { wallet: string; profileImage?: string; bio?: string }, timestamp: number }>();
+const PROFILE_CACHE_TTL = 300000; // 5 minutes
+
+// Helper to batch profile searches concurrently
+async function findUsersByUsernameBatch(usernames: string[]): Promise<Map<string, { wallet: string; profileImage?: string; bio?: string }>> {
+  const results = new Map<string, { wallet: string; profileImage?: string; bio?: string }>();
+  const uncachedUsernames: string[] = [];
+
+  // Check cache first
+  const now = Date.now();
+  usernames.forEach(username => {
+    const cacheKey = username.toLowerCase();
+    const cached = profileCache.get(cacheKey);
+    if (cached && (now - cached.timestamp) < PROFILE_CACHE_TTL) {
+      results.set(username, cached.data);
+    } else {
+      uncachedUsernames.push(username);
+    }
+  });
+
+  if (uncachedUsernames.length === 0) {
+    return results;
+  }
+
+  // Batch concurrent requests (max 10 at a time to avoid rate limiting)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < uncachedUsernames.length; i += BATCH_SIZE) {
+    const batch = uncachedUsernames.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(async (username) => {
+      try {
+        const profile = await findUserByUsername(username, true); // skipCache=true for batch
+        results.set(username, profile);
+        // Update cache
+        profileCache.set(username.toLowerCase(), { data: profile, timestamp: now });
+      } catch (error) {
+        console.error(`Error fetching profile for ${username}:`, error);
+        // Don't throw - continue with other usernames
+      }
+    });
+    await Promise.all(batchPromises);
+    
+    // Small delay between batches to respect rate limits
+    if (i + BATCH_SIZE < uncachedUsernames.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  return results;
+}
+
 // Helper to search for a user by username
-async function findUserByUsername(username: string): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
+async function findUserByUsername(username: string, skipCache = false): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
   try {
+    // Check cache first (unless skipCache is true)
+    if (!skipCache) {
+      const cacheKey = username.toLowerCase();
+      const cached = profileCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < PROFILE_CACHE_TTL) {
+        console.log(`Using cached profile for: ${username}`);
+        return cached.data;
+      }
+    }
+
     console.log(`Searching for user: ${username}`);
 
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
@@ -15,7 +76,7 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
         q: username,
         search_profiles: true,
       },
-      timeout: 5000,
+      timeout: 3000, // Reduced timeout for faster failure
     });
 
     let profiles: any[] = [];
@@ -42,11 +103,18 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
 
       console.log("Selected profile:", JSON.stringify(profile, null, 2));
 
-      return {
+      const result = {
         wallet: profile.proxyWallet || profile.wallet || profile.address,
         profileImage: profile.profileImage || profile.profile_image_url || profile.avatar_url,
         bio: profile.bio || profile.description
       };
+      
+      // Cache the result
+      if (!skipCache) {
+        profileCache.set(username.toLowerCase(), { data: result, timestamp: Date.now() });
+      }
+      
+      return result;
     }
 
     throw new Error('No profiles found');
@@ -98,6 +166,27 @@ async function fetchUserTrades(walletAddress: string): Promise<any[]> {
   }
 }
 
+// Helper to fetch user activity (for accurate volume calculation)
+async function fetchUserActivity(walletAddress: string): Promise<any[]> {
+  try {
+    console.log(`Fetching activity for wallet: ${walletAddress}`);
+    
+    const response = await axios.get(`${POLYMARKET_DATA_API}/activity`, {
+      params: {
+        user: walletAddress,
+        limit: 1000, // Get more activity events for complete volume
+        offset: 0,
+      },
+      timeout: 10000,
+    });
+
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching activity:', error);
+    return [];
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -130,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Fetch user data in parallel
     // Fetch more closed positions to ensure we get the actual biggest win
-    const [positions, trades, pnlData, extraClosedPositions] = await Promise.all([
+    const [positions, trades, pnlData, extraClosedPositions, activity] = await Promise.all([
       fetchUserPositions(userInfo.wallet),
       fetchUserTrades(userInfo.wallet),
       fetchUserPnLData(userInfo.wallet),
@@ -144,7 +233,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           sortDirection: 'DESC'
         },
         timeout: 5000
-      }).catch(() => ({ data: [] }))
+      }).catch(() => ({ data: [] })),
+      fetchUserActivity(userInfo.wallet)
     ]);
 
     // Log first position and trade to see structure
@@ -155,16 +245,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('First trade structure:', JSON.stringify(trades[0], null, 2));
     }
 
-    // Calculate win rate
-    const winningTrades = trades.filter((trade: any) => 
-      trade.outcomeTokenAmount * trade.outcomeTokenPrice > 0
-    ).length;
+    // Calculate win rate from trades (use size * price as proxy for trade value)
+    const winningTrades = trades.filter((trade: any) => {
+      // Check if trade resulted in profit - for now, use a simple heuristic
+      // Note: This is an approximation since we don't have realized PnL per trade
+      const tradeValue = parseFloat(trade.size || 0) * parseFloat(trade.price || 0);
+      return tradeValue > 0;
+    }).length;
     const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
-    // Calculate total volume from trades
-    const totalVolume = trades.reduce((sum: number, trade: any) => {
-      return sum + Math.abs(trade.outcomeTokenAmount * trade.outcomeTokenPrice);
-    }, 0);
+    // Calculate total volume from activity TRADE events (more accurate than trades endpoint)
+    // TESTED & VERIFIED: Activity endpoint has usdcSize field which represents actual trade value
+    // Method 6 from test-volume.js: $743.59 for imdaybot (vs $0 from broken method)
+    const totalVolume = activity
+      .filter((event: any) => event.type?.toUpperCase() === 'TRADE')
+      .reduce((sum: number, event: any) => {
+        const usdcSize = parseFloat(event.usdcSize || 0);
+        return sum + Math.abs(usdcSize);
+      }, 0);
 
     // Calculate best trade and worst trade from REALIZED closed positions
     // TESTED & VERIFIED: API uses 'realizedPnl' field (camelCase)

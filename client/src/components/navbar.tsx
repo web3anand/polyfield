@@ -71,15 +71,15 @@ export function Navbar() {
 
   return (
     <nav className="w-full bg-black border-b border-gray-800">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-center h-16 relative">
+      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
+        <div className="flex items-center justify-center h-12 md:h-16 relative">
           {/* POLYFEILD BETA Brand - Fixed Left */}
-          <div className="absolute left-4 flex items-center gap-3">
-            <h2 className="text-lg sm:text-xl tracking-tight">
+          <div className="absolute left-2 md:left-4 flex items-center gap-1.5 md:gap-3">
+            <h2 className="text-sm md:text-lg lg:text-xl tracking-tight">
               <span className="poly-scramble text-green-400 drop-shadow-lg">POLY</span>
               <span className="field-scramble text-gray-300">FIELD</span>
             </h2>
-            <span className="text-xs font-medium px-2 py-1 bg-green-500/20 text-green-400 border border-green-500/30">
+            <span className="text-[10px] md:text-xs font-medium px-1.5 md:px-2 py-0.5 md:py-1 bg-green-500/20 text-green-400 border border-green-500/30">
               BETA
             </span>
           </div>
@@ -189,12 +189,12 @@ export function Navbar() {
           {/* Mobile Menu Button - Fixed Right */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="absolute right-4 md:hidden p-2 text-gray-400 hover:text-white transition-colors"
+            className="absolute right-2 md:right-4 md:hidden p-1.5 md:p-2 text-gray-400 hover:text-white transition-colors"
           >
             {isMobileMenuOpen ? (
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 md:w-6 md:h-6" />
             ) : (
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5 md:w-6 md:h-6" />
             )}
           </button>
         </div>
@@ -202,7 +202,7 @@ export function Navbar() {
         {/* Mobile Navigation Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-800 bg-black">
-            <div className="px-2 pt-2 pb-3 space-y-1">
+            <div className="px-1 pt-1 pb-2 space-y-0.5">
               {navItems.map((item) => (
                 <div key={item.id}>
                   {item.hasDropdown && item.subItems ? (
@@ -210,7 +210,7 @@ export function Navbar() {
                       <button
                         onClick={() => setOpenDropdown(openDropdown === item.id ? null : item.id)}
                         className={`
-                          w-full flex items-center justify-between space-x-2 px-4 py-3 text-sm font-mono
+                          w-full flex items-center justify-between space-x-1.5 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-mono
                           transition-all duration-200
                           ${
                             activeItem === item.id
@@ -219,7 +219,7 @@ export function Navbar() {
                           }
                         `}
                       >
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 md:space-x-2">
                           <span className="text-gray-500">[{item.id}]</span>
                           <span className="text-gray-500">//</span>
                           <span className="uppercase tracking-wide">{item.label}</span>
@@ -228,7 +228,7 @@ export function Navbar() {
                       </button>
                       
                       {openDropdown === item.id && (
-                        <div className="ml-4 border-l border-gray-800">
+                        <div className="ml-3 md:ml-4 border-l border-gray-800">
                           {item.subItems.map((subItem, idx) => (
                             <Link
                               key={idx}
@@ -239,7 +239,7 @@ export function Navbar() {
                                 setOpenDropdown(null);
                               }}
                               className={`
-                                block px-4 py-2 text-sm font-mono
+                                block px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-mono
                                 ${
                                   location === subItem.href
                                     ? "text-white bg-gray-900"
@@ -258,7 +258,7 @@ export function Navbar() {
                       href={item.href}
                       onClick={() => handleItemClick(item.id)}
                       className={`
-                        w-full flex items-center space-x-2 px-4 py-3 text-sm font-mono
+                        w-full flex items-center space-x-1.5 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-mono
                         transition-all duration-200 group relative
                         ${
                           activeItem === item.id
