@@ -12,7 +12,7 @@ import type {
   PnLDataPoint,
   PortfolioStats,
 } from "@shared/schema";
-import { fetchUserPnLData } from "../api/utils/polymarket-pnl";
+import { fetchUserPnLData, generateFullPnLHistory } from "../api/utils/polymarket-pnl";
 
 // Simple in-memory cache and rate limiting
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -1237,7 +1237,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const stats = await calculateStats(positions, trades, activity, walletAddress);
-      const pnlHistory = generatePnLHistory(stats.closedPositionsHistory, stats.totalPnL);
+      
+      // Fetch full PnL data with activity history for detailed timeline
+      let fullActivityHistory: any[] = [];
+      try {
+        const pnlData = await fetchUserPnLData(walletAddress, true); // Include full history
+        fullActivityHistory = pnlData.fullActivityHistory || [];
+      } catch (error) {
+        console.error('Error fetching full PnL history:', error);
+        // Continue with basic history if full fetch fails
+      }
+      
+      // Generate full historical PnL timeline with actual fluctuations
+      const pnlHistory = generateFullPnLHistory(
+        fullActivityHistory,
+        stats.closedPositionsHistory || [],
+        stats.totalPnL
+      );
+      
       const achievements = calculateAchievements(stats, trades);
 
       const dashboardData: DashboardData = {

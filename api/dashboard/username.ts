@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
-import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
+import { fetchUserPnLData, generateFullPnLHistory } from '../utils/polymarket-pnl.js';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
@@ -330,27 +330,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`📊 Final Result - Best Win: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
 
-    // Generate PnL history from closed positions
-    const pnlHistory = [];
-    let cumulativePnl = 0;
-    
-    // Sort by date and create cumulative PnL chart data
-    const sortedPositions = (pnlData.closedPositionsHistory || [])
-      .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
-    
-    for (const pos of sortedPositions) {
-      cumulativePnl += pos.realizedPnl;
-      pnlHistory.push({
-        timestamp: pos.endDate,
-        value: cumulativePnl
-      });
-    }
-    
-    // Always add a current point with total PnL (or starting point if no history)
-    pnlHistory.push({
-      timestamp: new Date().toISOString(),
-      value: pnlData.totalPnl
-    });
+    // Generate full historical PnL timeline with actual fluctuations
+    // Uses activity events and closed positions to show complete history
+    const pnlHistory = generateFullPnLHistory(
+      pnlData.fullActivityHistory || [],
+      pnlData.closedPositionsHistory || [],
+      pnlData.totalPnl
+    );
 
     const dashboardData = {
       profile: {

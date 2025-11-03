@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
@@ -40,13 +40,16 @@ export function Navbar() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Determine active item based on current route
-  const activeItem = navItems.find(item => {
-    if (item.subItems) {
-      return item.subItems.some(sub => sub.href === location);
-    }
-    return item.href === location;
-  })?.id || "01";
+  // Memoize active item calculation to prevent unnecessary re-renders
+  const activeItem = useMemo(() => {
+    const found = navItems.find(item => {
+      if (item.subItems) {
+        return item.subItems.some(sub => sub.href === location);
+      }
+      return item.href === location;
+    });
+    return found?.id || "01";
+  }, [location]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -59,9 +62,15 @@ export function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close dropdown when location changes
+  useEffect(() => {
+    setOpenDropdown(null);
+  }, [location]);
+
   const handleItemClick = (itemId: string) => {
     setClickedItem(itemId);
     setIsMobileMenuOpen(false); // Close mobile menu on click
+    setOpenDropdown(null); // Close dropdown on navigation
     
     // Reset clicked state after animation completes
     setTimeout(() => {
