@@ -64,22 +64,22 @@ export function PnLChart({ data }: PnLChartProps) {
   const isPositive = currentPnL >= 0;
 
   return (
-    <Card className="p-6 hover-elevate">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+    <Card className="p-3 md:p-6 hover-elevate">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-3 mb-3 md:mb-4">
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">All-Time PnL</p>
-          <p className={`text-3xl font-bold tabular-nums ${isPositive ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-chart-pnl">
+          <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">All-Time PnL</p>
+          <p className={`text-xl md:text-3xl font-bold tabular-nums ${isPositive ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-chart-pnl">
             {isPositive ? '+' : ''}${currentPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         
         {/* Time Range Selector */}
-        <div className="flex gap-1 bg-muted p-1 rounded-md border border-border">
+        <div className="flex gap-0.5 md:gap-1 bg-muted p-0.5 md:p-1 rounded-md border border-border">
           <Button
             variant={timeRange === '1D' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setTimeRange('1D')}
-            className="h-8 px-3 text-xs font-semibold"
+            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
           >
             1D
           </Button>
@@ -87,7 +87,7 @@ export function PnLChart({ data }: PnLChartProps) {
             variant={timeRange === '1W' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setTimeRange('1W')}
-            className="h-8 px-3 text-xs font-semibold"
+            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
           >
             1W
           </Button>
@@ -95,7 +95,7 @@ export function PnLChart({ data }: PnLChartProps) {
             variant={timeRange === '1M' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setTimeRange('1M')}
-            className="h-8 px-3 text-xs font-semibold"
+            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
           >
             1M
           </Button>
@@ -103,14 +103,14 @@ export function PnLChart({ data }: PnLChartProps) {
             variant={timeRange === 'ALL' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setTimeRange('ALL')}
-            className="h-8 px-3 text-xs font-semibold"
+            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
           >
             ALL
           </Button>
         </div>
       </div>
 
-      <div className="h-[270px]" data-testid="chart-pnl">
+      <div className="h-[200px] md:h-[270px]" data-testid="chart-pnl">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
@@ -131,14 +131,18 @@ export function PnLChart({ data }: PnLChartProps) {
             <XAxis 
               dataKey="date" 
               stroke="hsl(var(--muted-foreground))" 
-              fontSize={12}
+              fontSize={10}
+              tick={{ fontSize: 10 }}
               tickLine={false}
+              className="md:text-xs"
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))" 
-              fontSize={12}
+              fontSize={10}
+              tick={{ fontSize: 10 }}
               tickLine={false}
               tickFormatter={(value) => `$${value}`}
+              className="md:text-xs"
             />
             <Tooltip
               contentStyle={{

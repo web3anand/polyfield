@@ -185,22 +185,23 @@ export default function OracleBot() {
   const sortedMarkets = sortMarkets(filteredMarkets);
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      {/* Navbar */}
-      <Navbar />
+    <div className="h-screen bg-background flex flex-col overflow-hidden p-1 md:p-4">
+      <div className="h-full flex flex-col border-2 border-primary/30">
+        {/* Navbar */}
+        <Navbar />
       
-      {/* Fixed Header */}
-      <div className="border-b border-border bg-card/50 flex-shrink-0">
-        <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10">
-              <Zap className="w-8 h-8 text-primary" />
+        {/* Fixed Header */}
+        <div className="border-b border-border bg-card/50 flex-shrink-0 z-40">
+        <div className="container mx-auto px-2 md:px-6 py-2 md:py-6">
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="p-1.5 md:p-3 bg-primary/10">
+              <Zap className="w-5 h-5 md:w-8 md:h-8 text-primary" />
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl font-black text-foreground tracking-tight">
+              <h1 className="text-lg md:text-3xl font-black text-foreground tracking-tight">
                 ORACLE BOT
               </h1>
-              <p className="text-sm text-muted-foreground uppercase tracking-wider mt-1">
+              <p className="text-[10px] md:text-sm text-muted-foreground uppercase tracking-wider mt-0.5 md:mt-1">
                 UMA Optimistic Oracle Monitor • 1-min Updates • AI-Powered
               </p>
             </div>
@@ -210,17 +211,17 @@ export default function OracleBot() {
 
       {/* Fixed Bot Status */}
       <div className="border-b border-border bg-background flex-shrink-0">
-        <div className="container mx-auto px-6 py-4">
-          <Card className="p-6 border-primary/50">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
+        <div className="container mx-auto px-2 md:px-6 py-2 md:py-4">
+          <Card className="p-3 md:p-6 border-primary/50">
+            <div className="flex items-center justify-between mb-3 md:mb-6 flex-wrap gap-2">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className="relative">
-                  <Zap className="w-6 h-6 text-primary animate-pulse" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 animate-pulse" />
+                  <Zap className="w-4 h-4 md:w-6 md:h-6 text-primary animate-pulse" />
+                  <div className="absolute -top-0.5 -right-0.5 md:-top-1 md:-right-1 w-2 h-2 md:w-3 md:h-3 bg-green-500 animate-pulse" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Scanner Status: LIVE</p>
-                  <p className="text-xs text-muted-foreground">Polling every minute • Web-only alerts (no Telegram)</p>
+                  <p className="text-xs md:text-sm font-semibold text-foreground">Scanner Status: LIVE</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Polling every minute • Web-only alerts (no Telegram)</p>
                 </div>
               </div>
               <Button
@@ -228,34 +229,34 @@ export default function OracleBot() {
                 size="sm"
                 onClick={handleRefresh}
                 disabled={isLoading}
-                className="focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="focus-visible:ring-0 focus-visible:ring-offset-0 h-8 md:h-9 px-2 md:px-3 text-xs"
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
+                <RefreshCw className={`w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4">
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Total Markets</p>
-                <p className="text-2xl font-bold text-primary tabular-nums">{botStats.marketsTracked}</p>
+                <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">Total Markets</p>
+                <p className="text-lg md:text-2xl font-bold text-primary tabular-nums">{botStats.marketsTracked}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Consensus</p>
-                <p className="text-2xl font-bold text-chart-2 tabular-nums">{botStats.consensusDetected}</p>
+                <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">Consensus</p>
+                <p className="text-lg md:text-2xl font-bold text-chart-2 tabular-nums">{botStats.consensusDetected}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Disputed</p>
-                <p className="text-2xl font-bold text-destructive tabular-nums">{botStats.disputed}</p>
+                <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">Disputed</p>
+                <p className="text-lg md:text-2xl font-bold text-destructive tabular-nums">{botStats.disputed}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Win Rate</p>
-                <p className="text-2xl font-bold text-chart-2 tabular-nums">{botStats.winRate.toFixed(1)}%</p>
+                <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">Win Rate</p>
+                <p className="text-lg md:text-2xl font-bold text-chart-2 tabular-nums">{botStats.winRate.toFixed(1)}%</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Avg Latency</p>
-                <p className="text-2xl font-bold text-foreground tabular-nums">{botStats.edgeTime}</p>
+                <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">Avg Latency</p>
+                <p className="text-lg md:text-2xl font-bold text-foreground tabular-nums">{botStats.edgeTime}</p>
               </div>
             </div>
           </Card>
@@ -264,27 +265,27 @@ export default function OracleBot() {
 
       {/* Scrollable Markets Section */}
       <div className="flex-1 overflow-hidden">
-        <div className="container mx-auto px-6 h-full py-8">
-          <Card className="h-full flex flex-col p-6">
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <div className="container mx-auto px-2 md:px-6 h-full py-2 md:py-8">
+          <Card className="h-full flex flex-col p-2 md:p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 md:mb-4 flex-shrink-0 gap-2">
               <div>
-                <h2 className="text-xl font-semibold text-foreground">Oracle Market Insights</h2>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mt-1">
+                <h2 className="text-base md:text-xl font-semibold text-foreground">Oracle Market Insights</h2>
+                <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide mt-0.5 md:mt-1">
                   AI-Powered Analysis • Real-time Signals • High-Confidence Bets
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <div className="flex items-center gap-1.5 md:gap-3">
+                <div className="relative flex-1 md:flex-none">
+                  <Search className="absolute left-1.5 md:left-2 top-1/2 -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search (e.g. 'Trump')..."
+                    placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8 w-[200px] bg-background focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="pl-6 md:pl-8 w-full md:w-[200px] h-8 md:h-10 text-xs md:text-sm bg-background focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                 </div>
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-[200px] focus:ring-0 focus:ring-offset-0">
+                  <SelectTrigger className="w-full md:w-[200px] h-8 md:h-10 text-xs md:text-sm focus:ring-0 focus:ring-offset-0">
                     <SelectValue placeholder="Sort by..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -300,37 +301,37 @@ export default function OracleBot() {
             </div>
 
             {/* Scrollable Markets List */}
-            <div className="flex-1 overflow-y-auto pr-2 scrollbar-hidden">
+            <div className="flex-1 overflow-y-auto pr-1 md:pr-2 scrollbar-hidden">
               {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
-                  <p>Loading oracle data...</p>
+                <div className="text-center py-4 md:py-8 text-muted-foreground">
+                  <RefreshCw className="w-6 h-6 md:w-8 md:h-8 animate-spin mx-auto mb-2" />
+                  <p className="text-xs md:text-sm">Loading oracle data...</p>
                 </div>
               ) : trackedMarkets.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="font-semibold">No oracle markets yet</p>
-                  <p className="text-sm">Bot is running. Markets will appear when oracle proposals are detected.</p>
+                <div className="text-center py-4 md:py-8 text-muted-foreground">
+                  <Activity className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-2 md:mb-3 opacity-30" />
+                  <p className="font-semibold text-xs md:text-sm">No oracle markets yet</p>
+                  <p className="text-[10px] md:text-sm">Bot is running. Markets will appear when oracle proposals are detected.</p>
                 </div>
               ) : (
-                <div className="space-y-4">{sortedMarkets.map((market) => (
+                <div className="space-y-2 md:space-y-4">{sortedMarkets.map((market) => (
                 <div
                   key={market.marketId}
-                  className="p-4 border border-border hover:bg-muted/50 transition-colors"
+                  className="p-2 md:p-4 border border-border hover:bg-muted/50 transition-colors"
                 >
                   {/* Title with Badges */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-start justify-between gap-2 md:gap-3 mb-2 md:mb-3">
                     <a 
                       href={`https://polymarket.com/event/${market.slug}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 font-medium text-foreground hover:text-primary transition-colors focus:outline-none"
+                      className="flex-1 font-medium text-xs md:text-sm text-foreground hover:text-primary transition-colors focus:outline-none"
                     >
                       {market.title}
                     </a>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-1 md:gap-2 shrink-0 flex-wrap">
                       {market.status === "CONSENSUS" && (
-                        <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10 uppercase tracking-wide">
+                        <Badge variant="outline" className="border-chart-2 text-chart-2 bg-chart-2/10 uppercase tracking-wide text-[10px] px-1 md:px-2 py-0.5">
                           CONSENSUS
                         </Badge>
                       )}
@@ -338,7 +339,7 @@ export default function OracleBot() {
                         const edgeBadge = getEdgeBadge(market);
                         if (edgeBadge) {
                           return (
-                            <Badge variant="outline" className={`${edgeBadge.color} font-bold uppercase tracking-wide`}>
+                            <Badge variant="outline" className={`${edgeBadge.color} font-bold uppercase tracking-wide text-[10px] px-1 md:px-2 py-0.5`}>
                               {edgeBadge.label}
                             </Badge>
                           );
@@ -346,8 +347,8 @@ export default function OracleBot() {
                         return null;
                       })()}
                       {market.status === "DISPUTED" && (
-                        <Badge variant="outline" className="border-red-500 text-red-500 bg-red-500/10 uppercase tracking-wide">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
+                        <Badge variant="outline" className="border-red-500 text-red-500 bg-red-500/10 uppercase tracking-wide text-[10px] px-1 md:px-2 py-0.5">
+                          <AlertTriangle className="w-2.5 h-2.5 md:w-3 md:h-3 mr-0.5 md:mr-1" />
                           DISPUTE
                         </Badge>
                       )}
@@ -355,12 +356,12 @@ export default function OracleBot() {
                   </div>
 
                   {/* Simplified Market Data */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-muted/50">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 p-2 md:p-3 bg-muted/50">
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Prediction</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide mb-0.5 md:mb-1">Prediction</p>
                       <Badge 
                         variant="outline"
-                        className="outcome-badge-dotted"
+                        className="outcome-badge-dotted text-[10px] md:text-xs px-1 md:px-2 py-0.5"
                         data-outcome={market.outcome}
                       >
                         {market.outcome}
@@ -368,20 +369,20 @@ export default function OracleBot() {
                     </div>
                     
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Consensus</p>
-                      <p className="text-sm font-bold text-primary tabular-nums">
+                      <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide mb-0.5 md:mb-1">Consensus</p>
+                      <p className="text-xs md:text-sm font-bold text-primary tabular-nums">
                         {market.consensus.toFixed(0)}%
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Liquidity</p>
-                      <p className="text-sm font-mono text-foreground tabular-nums">${(market.liquidity / 1000).toFixed(1)}k</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide mb-0.5 md:mb-1">Liquidity</p>
+                      <p className="text-xs md:text-sm font-bold text-foreground tabular-nums">${(market.liquidity / 1000).toFixed(1)}k</p>
                     </div>
 
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Signal</p>
-                      <p className="text-sm font-semibold text-chart-2 tabular-nums">
+                      <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide mb-0.5 md:mb-1">Signal</p>
+                      <p className="text-xs md:text-sm font-bold text-chart-2 tabular-nums">
                         {market.status === "CONSENSUS" ? "STRONG" : market.status === "DISPUTED" ? "WEAK" : "NEUTRAL"}
                       </p>
                     </div>
@@ -389,16 +390,16 @@ export default function OracleBot() {
 
                   {/* AI Analysis Alert */}
                   {market.llmAnalysis && (
-                    <div className="mt-3 p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30">
-                      <div className="flex items-start gap-3">
-                        <Sparkles className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-purple-300 uppercase tracking-wide">AI Analysis</span>
-                            <Badge variant="outline" className="border-purple-500/30 text-purple-300 bg-purple-500/10 text-xs">
+                    <div className="mt-2 md:mt-3 p-2 md:p-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30">
+                      <div className="flex items-start gap-2 md:gap-3">
+                        <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 space-y-1 md:space-y-2">
+                          <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+                            <span className="text-[10px] md:text-xs font-semibold text-purple-300 uppercase tracking-wide">AI Analysis</span>
+                            <Badge variant="outline" className="border-purple-500/30 text-purple-300 bg-purple-500/10 text-[10px] md:text-xs px-1 md:px-1.5 py-0">
                               {(market.llmAnalysis.confidence * 100).toFixed(0)}% Confidence
                             </Badge>
-                            <Badge variant="outline" className={`text-xs font-bold ${
+                            <Badge variant="outline" className={`text-[10px] md:text-xs font-bold px-1 md:px-1.5 py-0 ${
                               market.llmAnalysis.edge > 10 ? 'border-green-500/30 text-green-400 bg-green-500/10' : 
                               market.llmAnalysis.edge > 5 ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10' :
                               'border-muted-foreground/30 text-muted-foreground bg-muted/10'
@@ -407,7 +408,7 @@ export default function OracleBot() {
                             </Badge>
                           </div>
                           
-                          <p className="text-sm text-foreground leading-relaxed">
+                          <p className="text-xs md:text-sm text-foreground leading-relaxed">
                             <span className="font-semibold text-chart-2">Recommendation:</span> Bet {market.llmAnalysis.betSide} at {market.llmAnalysis.marketPrice ? (market.llmAnalysis.marketPrice * 100).toFixed(0) : market.consensus.toFixed(0)}¢ • 
                             True probability: {market.llmAnalysis.betSide === 'YES' ? (market.llmAnalysis.yesProb * 100).toFixed(0) : (market.llmAnalysis.noProb * 100).toFixed(0)}% • 
                             Risk: <span className={`font-semibold ${
@@ -416,7 +417,7 @@ export default function OracleBot() {
                             }`}>{market.llmAnalysis.risk}</span>
                           </p>
                           
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[10px] md:text-xs text-muted-foreground">
                             {market.llmAnalysis.rationale}
                           </p>
                         </div>
@@ -425,7 +426,7 @@ export default function OracleBot() {
                   )}
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between mt-3 text-xs">
+                  <div className="flex items-center justify-between mt-2 md:mt-3 text-[10px] md:text-xs">
                     <a 
                       href={`https://polymarket.com/event/${market.slug}`}
                       target="_blank"
@@ -442,6 +443,7 @@ export default function OracleBot() {
             </div>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   );
