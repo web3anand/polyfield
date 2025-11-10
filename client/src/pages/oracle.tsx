@@ -191,7 +191,7 @@ export default function OracleBot() {
         <Navbar />
       
         {/* Fixed Header */}
-        <div className="border-b border-border bg-card/50 flex-shrink-0">
+        <div className="border-b border-border bg-card/50 flex-shrink-0 z-40">
         <div className="container mx-auto px-2 md:px-6 py-2 md:py-6">
           <div className="flex items-center gap-2 md:gap-4">
             <div className="p-1.5 md:p-3 bg-primary/10">

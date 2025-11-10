@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, Target, Trophy, Clock, Copy, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, Trophy, Copy, Check, RefreshCw, DollarSign, Activity } from "lucide-react";
 import type { DashboardData } from "@shared/schema";
 import { StatCard } from "@/components/stat-card";
 import { PnLChart } from "@/components/pnl-chart";
@@ -17,29 +17,66 @@ import { Navbar } from "@/components/navbar";
 export default function Dashboard() {
   const [connectedUsername, setConnectedUsername] = useState("");
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["dashboard", connectedUsername],
+  // Invalidate cache when username changes
+  useEffect(() => {
+    if (connectedUsername) {
+      queryClient.invalidateQueries({ queryKey: ["dashboard", connectedUsername] });
+    }
+  }, [connectedUsername, queryClient]);
+
+  const { data, isLoading, error, refetch, isRefetching } = useQuery<DashboardData>({
+    queryKey: ["dashboard", connectedUsername, refreshKey],
     enabled: !!connectedUsername,
-    staleTime: 30 * 1000, // 30 seconds - refresh for live prices
-    gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime in v5)
-    retry: 2,
-    retryDelay: 1000,
-    refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds for live updates
+    staleTime: 0, // Always consider data stale to force fresh fetches
+    gcTime: 0, // No cache - always fetch fresh data
+    retry: 1, // Reduced retries to prevent infinite loops
+    retryDelay: 2000,
+    refetchInterval: (query) => {
+      // Only auto-refetch if there's no error and we have data
+      if (query.state.error || !query.state.data) {
+        return false; // Disable auto-refetch on error
+      }
+      return 30 * 1000; // Auto-refetch every 30 seconds for live updates
+    },
     queryFn: async () => {
+      // Fetch fresh data (refreshKey in queryKey ensures cache invalidation)
       const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
-      if (!res.ok) throw new Error('Failed to fetch dashboard data');
-      return res.json();
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch dashboard data' }));
+        throw new Error(errorData.error || 'Failed to fetch dashboard data');
+      }
+      const jsonData = await res.json();
+      // Validate that we got actual data
+      if (!jsonData || !jsonData.profile) {
+        throw new Error('Invalid response data');
+      }
+      return jsonData;
     },
   });
 
   const handleConnect = (username: string) => {
     setConnectedUsername(username);
+    setRefreshKey(prev => prev + 1); // Force fresh fetch
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
   };
 
   const handleDisconnect = () => {
     setConnectedUsername("");
+    setRefreshKey(0);
+    queryClient.removeQueries({ queryKey: ["dashboard"] });
+  };
+
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+    refetch();
+    toast({
+      title: "Refreshing",
+      description: "Fetching latest data...",
+    });
   };
 
   const handleCopyAddress = async () => {
@@ -176,7 +213,7 @@ export default function Dashboard() {
         <Navbar />
         
         {/* Header with Search Bar */}
-        <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-50">
+        <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-40">
           <div className="container mx-auto px-2 md:px-6 py-2 md:py-4">
           <div className="flex justify-center items-center gap-2 md:gap-4">
             <div className="flex-1 max-w-md">
@@ -205,11 +242,32 @@ export default function Dashboard() {
                 <h3 className="text-lg md:text-2xl font-black text-foreground tracking-tight truncate" data-testid="text-username">
                   {profile.username}
                 </h3>
-                {profile.walletAddress && (
-                  <div className="flex items-center gap-1.5 md:gap-2 mt-0.5 md:mt-1">
-                    <code className="text-xs md:text-sm text-muted-foreground font-mono tracking-wider" data-testid="text-wallet-address">
-                      {profile.walletAddress.slice(0, 6)}...{profile.walletAddress.slice(-4)}
-                    </code>
+                <div className="flex items-center gap-2 md:gap-3 mt-1 md:mt-2 flex-wrap">
+                  {profile.xUsername && (
+                    <a 
+                      href={`https://x.com/${profile.xUsername}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs md:text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 group"
+                    >
+                      <svg className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#1DA1F2] group-hover:text-[#1a8cd8] transition-colors" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      <span className="font-medium">@{profile.xUsername}</span>
+                    </a>
+                  )}
+                  {profile.rank && (
+                    <div className="flex items-center gap-1.5 text-xs md:text-sm">
+                      <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-chart-2" />
+                      <span className="text-muted-foreground font-medium">Rank</span>
+                      <span className="font-bold text-chart-2">#{profile.rank}</span>
+                    </div>
+                  )}
+                  {profile.walletAddress && (
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <code className="text-xs md:text-sm text-muted-foreground font-mono tracking-wider" data-testid="text-wallet-address">
+                        {profile.walletAddress.slice(0, 6)}...{profile.walletAddress.slice(-4)}
+                      </code>
                     <button
                       onClick={handleCopyAddress}
                       className="p-0.5 md:p-1 transition-all"
@@ -222,8 +280,19 @@ export default function Dashboard() {
                         <Copy className="w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground" />
                       )}
                     </button>
+                    <button
+                      onClick={handleRefresh}
+                      disabled={isRefetching}
+                      className="p-0.5 md:p-1 transition-all disabled:opacity-50"
+                      data-testid="button-refresh"
+                      aria-label="Refresh data"
+                      title="Refresh dashboard data"
+                    >
+                      <RefreshCw className={`w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground ${isRefetching ? 'animate-spin' : ''}`} />
+                    </button>
                   </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -264,25 +333,48 @@ export default function Dashboard() {
             <div className="lg:col-span-2">
               <PnLChart data={pnlHistory} />
             </div>
-            <div className="space-y-2 md:space-y-4">
-              <StatCard
-                icon={<TrendingUp className="w-5 h-5 md:w-6 md:h-6" />}
-                label="Best Trade"
-                value={`$${(stats.bestTrade ?? 0).toFixed(2)}`}
-                color="text-chart-2"
-              />
-              <StatCard
-                icon={<Trophy className="w-5 h-5 md:w-6 md:h-6" />}
-                label="Active Positions"
-                value={stats.activePositions}
-                color="text-primary"
-              />
-              <StatCard
-                icon={<Clock className="w-5 h-5 md:w-6 md:h-6" />}
-                label="Trading Volume"
-                value={`$${(stats.totalVolume / 1000).toFixed(1)}K`}
-                color="text-chart-1"
-              />
+            <div className="flex flex-col gap-3 h-[280px] md:h-[350px]">
+              <div className="flex-1">
+                <StatCard
+                  icon={<TrendingUp className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.5} />}
+                  label="Best Trade"
+                  value={`$${(stats.bestTrade ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  color="text-emerald-500"
+                />
+              </div>
+              <div className="flex-1">
+                <StatCard
+                  icon={<TrendingDown className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.5} />}
+                  label="Worst Trade"
+                  value={`$${(stats.worstTrade ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  color="text-rose-500"
+                />
+              </div>
+              <div className="flex-1">
+                <StatCard
+                  icon={<Activity className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.5} />}
+                  label="Active Positions"
+                  value={stats.activePositions.toLocaleString()}
+                  color="text-violet-500"
+                />
+              </div>
+              <div className="flex-1">
+                <StatCard
+                  icon={<DollarSign className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.5} />}
+                  label="Trading Volume"
+                  value={(() => {
+                    const vol = stats.totalVolume || 0;
+                    if (vol >= 1000000) {
+                      return `$${(vol / 1000000).toFixed(2)}M`;
+                    } else if (vol >= 1000) {
+                      return `$${(vol / 1000).toFixed(1)}K`;
+                    } else {
+                      return `$${vol.toFixed(2)}`;
+                    }
+                  })()}
+                  color="text-cyan-500"
+                />
+              </div>
             </div>
           </div>
 

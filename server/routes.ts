@@ -17,6 +17,8 @@ import { fetchUserPnLData, generateFullPnLHistory } from "../api/utils/polymarke
 // Simple in-memory cache and rate limiting
 const cache = new Map<string, { data: any; timestamp: number }>();
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+// Track ongoing requests to prevent duplicate fetches
+const ongoingRequests = new Map<string, Promise<any>>();
 
 // Rate limiting helper
 function checkRateLimit(key: string, limit: number, windowMs: number): boolean {
@@ -646,7 +648,14 @@ function calculateBalanceFromActivity(activity: any[]): { cashBalance: number; r
 }
 
 // Calculate realized PnL from buy/sell trade pairs
-function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number; winRate: number; bestTrade: number; worstTrade: number; winStreak: number } {
+function calculateRealizedPnLFromTrades(trades: Trade[]): { 
+  realizedPnL: number; 
+  winRate: number; 
+  bestTrade: number; 
+  worstTrade: number; 
+  winStreak: number;
+  tradesWithPnL: Trade[]; // Return trades with PnL attached to SELL trades
+} {
   // Group trades by market and outcome
   const marketPositions: Record<string, { buys: Trade[], sells: Trade[] }> = {};
   
@@ -664,6 +673,7 @@ function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number;
 
   let totalRealizedPnL = 0;
   const tradePnLs: number[] = [];
+  const tradePnLMap = new Map<string, number>(); // Map trade ID to PnL
   let wins = 0;
   let losses = 0;
   let currentStreak = 0;
@@ -690,6 +700,9 @@ function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number;
         totalRealizedPnL += pnl;
         tradePnLs.push(pnl);
         
+        // Store PnL for this sell trade
+        tradePnLMap.set(sell.id, pnl);
+        
         if (pnl > 0) {
           wins++;
           currentStreak++;
@@ -708,6 +721,17 @@ function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number;
     }
   }
 
+  // Attach PnL to trades
+  const tradesWithPnL = trades.map(trade => {
+    if (trade.type === "SELL" && tradePnLMap.has(trade.id)) {
+      return {
+        ...trade,
+        profit: parseFloat(tradePnLMap.get(trade.id)!.toFixed(2))
+      };
+    }
+    return trade;
+  });
+
   const totalTrades = wins + losses;
   const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
   const bestTrade = tradePnLs.length > 0 ? Math.max(...tradePnLs) : 0;
@@ -719,15 +743,59 @@ function calculateRealizedPnLFromTrades(trades: Trade[]): { realizedPnL: number;
     bestTrade: parseFloat(bestTrade.toFixed(2)),
     worstTrade: parseFloat(worstTrade.toFixed(2)),
     winStreak: maxStreak,
+    tradesWithPnL,
   };
 }
 
-// Calculate portfolio statistics
-async function calculateStats(
+// Helper to fetch user volume and additional data from leaderboard API
+async function fetchUserVolume(walletAddress: string): Promise<{ volume: number; xUsername?: string; rank?: string }> {
+  try {
+    console.log(`📊 Fetching volume from leaderboard for wallet: ${walletAddress}`);
+    
+    const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
+      params: {
+        timePeriod: 'all',
+        orderBy: 'VOL',
+        limit: 1,
+        offset: 0,
+        category: 'overall',
+        user: walletAddress,
+      },
+      timeout: 5000,
+    });
+
+    const data = response.data;
+    if (Array.isArray(data) && data.length > 0 && data[0].vol) {
+      const volume = parseFloat(data[0].vol);
+      const username = data[0].userName || 'Unknown';
+      const xUsername = data[0].xUsername;
+      const rank = data[0].rank;
+      console.log(`   ✓ Leaderboard data: $${volume.toLocaleString()} (User: ${username}, X: @${xUsername || 'N/A'}, Rank: #${rank || 'N/A'})`);
+      return { volume, xUsername, rank };
+    }
+
+    console.log('   ⚠ No volume data in leaderboard response (user may not be ranked)');
+    return { volume: 0 };
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      console.log('   ⚠ User not found in leaderboard (404)');
+    } else if (error.response?.status) {
+      console.error(`   ❌ Leaderboard API error: ${error.response.status} - ${error.response.statusText}`);
+    } else {
+      console.error(`   ❌ Error fetching volume from leaderboard: ${error.message}`);
+    }
+    return { volume: 0 };
+  }
+}
+
+// Calculate portfolio statistics - accepts pre-fetched PnL data to avoid duplicate fetches
+async function calculateStatsWithPnLData(
   positions: Position[],
   trades: Trade[],
   activity: any[] = [],
   walletAddress?: string,
+  pnlData?: any | null,
+  leaderboardVolume?: { volume: number; xUsername?: string; rank?: string },
 ): Promise<PortfolioStats> {
   const activePositions = positions.filter((p) => p.status === "ACTIVE");
 
@@ -737,40 +805,22 @@ async function calculateStats(
   let closedPositions = 0;
   let closedPositionsHistory: any[] | undefined = undefined;
 
-  // Use the new PnL fetching method if wallet address is provided
-  if (walletAddress) {
-    try {
-      const pnlData = await fetchUserPnLData(walletAddress);
-      realizedPnL = pnlData.realizedPnl;
-      unrealizedPnL = pnlData.unrealizedPnl;
-      portfolioValue = pnlData.portfolioValue;
-      closedPositions = pnlData.closedPositions;
-      closedPositionsHistory = pnlData.closedPositionsHistory; // Capture the history
-      
-      console.log(`\n💼 Portfolio Summary (from PnL API):`);
-      console.log(`  Portfolio value: $${portfolioValue.toFixed(2)}`);
-      console.log(`  Realized PnL: $${realizedPnL.toFixed(2)}`);
-      console.log(`  Unrealized PnL: $${unrealizedPnL.toFixed(2)}`);
-      console.log(`  Total PnL: $${pnlData.totalPnl.toFixed(2)}`);
-      console.log(`  Open Positions: ${pnlData.openPositions}`);
-      console.log(`  Closed Positions: ${closedPositions}`);
-    } catch (error) {
-      console.error('Error fetching PnL data, falling back to old method:', error);
-      // Fallback to old calculation method
-      const { cashBalance, realizedPnL: ledgerRealizedPnL } = calculateBalanceFromActivity(activity);
-      const tradeMetrics = calculateRealizedPnLFromTrades(trades);
-      
-      realizedPnL = tradeMetrics.realizedPnL;
-      unrealizedPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
-      
-      const positionValue = activePositions.reduce((sum, pos) => {
-        return sum + pos.currentPrice * pos.size;
-      }, 0);
-      portfolioValue = cashBalance + positionValue;
-      closedPositions = positions.filter((p) => p.status === "CLOSED").length;
-    }
+  // Use pre-fetched PnL data if available, otherwise use fallback
+  if (pnlData && walletAddress) {
+    realizedPnL = pnlData.realizedPnl || 0;
+    unrealizedPnL = pnlData.unrealizedPnl || 0;
+    portfolioValue = pnlData.portfolioValue || 0;
+    closedPositions = pnlData.closedPositions || 0;
+    closedPositionsHistory = pnlData.closedPositionsHistory;
+    
+    console.log(`\n💼 Portfolio Summary (from PnL API):`);
+    console.log(`  Portfolio value: $${portfolioValue.toFixed(2)}`);
+    console.log(`  Realized PnL: $${realizedPnL.toFixed(2)}`);
+    console.log(`  Unrealized PnL: $${unrealizedPnL.toFixed(2)}`);
+    console.log(`  Total PnL: $${(realizedPnL + unrealizedPnL).toFixed(2)}`);
+    console.log(`  Closed Positions: ${closedPositions}`);
   } else {
-    // Fallback when no wallet address
+    // Fallback to old calculation method
     const { cashBalance, realizedPnL: ledgerRealizedPnL } = calculateBalanceFromActivity(activity);
     const tradeMetrics = calculateRealizedPnLFromTrades(trades);
     
@@ -782,6 +832,10 @@ async function calculateStats(
     }, 0);
     portfolioValue = cashBalance + positionValue;
     closedPositions = positions.filter((p) => p.status === "CLOSED").length;
+    console.log(`\n💼 Portfolio Summary (from fallback calculation):`);
+    console.log(`  Portfolio value: $${portfolioValue.toFixed(2)}`);
+    console.log(`  Realized PnL: $${realizedPnL.toFixed(2)}`);
+    console.log(`  Unrealized PnL: $${unrealizedPnL.toFixed(2)}`);
   }
 
   const totalPnL = realizedPnL + unrealizedPnL;
@@ -789,14 +843,66 @@ async function calculateStats(
   // Calculate trade metrics
   const tradeMetrics = calculateRealizedPnLFromTrades(trades);
   
-  const totalVolume = trades.reduce((sum, trade) => {
-    return sum + trade.price * trade.size;
-  }, 0);
+  // Use leaderboard volume if available, otherwise calculate from trades as fallback
+  let totalVolume = (leaderboardVolume && leaderboardVolume.volume) || 0;
+  if (totalVolume === 0 && trades.length > 0) {
+    console.log('   ⚠ Leaderboard volume is 0, calculating from trades as fallback...');
+    totalVolume = trades.reduce((sum, trade) => {
+      return sum + trade.price * trade.size;
+    }, 0);
+    console.log(`   ✓ Fallback volume from trades: $${totalVolume.toLocaleString()}`);
+  }
 
-  // Use trade-based metrics if we have trades, otherwise fall back to positions
+  // Calculate best trade from closed positions (most accurate - uses actual realized PnL)
+  // Try multiple sources: allClosedPositions (from subgraph), closedPositionsHistory (from API), then fallback
+  let bestTrade = 0;
+  let worstTrade = 0;
+  
+  // First try: Use allClosedPositions from subgraph (most accurate, has all positions)
+  // Note: allClosedPositions from subgraph already has realizedPnl in USD (already scaled)
+  if (pnlData && pnlData.allClosedPositions && pnlData.allClosedPositions.length > 0) {
+    const positionPnLs = pnlData.allClosedPositions
+      .map((p: any) => {
+        // The realizedPnl from subgraph is already in USD (scaled by COLLATERAL_SCALE in fetchRealizedPnl)
+        return parseFloat(p.realizedPnl || 0);
+      })
+      .filter((pnl: number) => Math.abs(pnl) > 0.01);
+    
+    if (positionPnLs.length > 0) {
+      bestTrade = Math.max(...positionPnLs);
+      worstTrade = Math.min(...positionPnLs);
+      console.log(`✓ Best trade from subgraph: $${bestTrade.toFixed(2)}, Worst: $${worstTrade.toFixed(2)} (from ${positionPnLs.length} positions)`);
+    }
+  }
+  
+  // Second try: Use closedPositionsHistory from API if subgraph data not available
+  if (bestTrade === 0 && closedPositionsHistory && closedPositionsHistory.length > 0) {
+    const positionPnLs = closedPositionsHistory
+      .map((p: any) => parseFloat(p.realizedPnl || 0))
+      .filter((pnl: number) => Math.abs(pnl) > 0.01);
+    
+    if (positionPnLs.length > 0) {
+      bestTrade = Math.max(...positionPnLs);
+      worstTrade = Math.min(...positionPnLs);
+      console.log(`✓ Best trade from API closed positions: $${bestTrade.toFixed(2)} (from ${positionPnLs.length} positions)`);
+    }
+  }
+  
+  // Fallback to trade-based metrics if no closed positions available
+  if (!bestTrade && !worstTrade && trades.length > 0) {
+    bestTrade = tradeMetrics.bestTrade;
+    worstTrade = tradeMetrics.worstTrade;
+    console.log(`✓ Best trade from trades (fallback): $${bestTrade.toFixed(2)}`);
+  } else if (!bestTrade && !worstTrade && positions.length > 0) {
+    // Last resort: use unrealized PnL from active positions
+    const unrealizedPnLs = positions.map(p => p.unrealizedPnL).filter(pnl => Math.abs(pnl) > 0.01);
+    if (unrealizedPnLs.length > 0) {
+      bestTrade = Math.max(...unrealizedPnLs);
+      worstTrade = Math.min(...unrealizedPnLs);
+    }
+  }
+  
   const winRate = trades.length > 0 ? tradeMetrics.winRate : 0;
-  const bestTrade = trades.length > 0 ? tradeMetrics.bestTrade : (positions.length > 0 ? Math.max(...positions.map(p => p.unrealizedPnL)) : 0);
-  const worstTrade = trades.length > 0 ? tradeMetrics.worstTrade : (positions.length > 0 ? Math.min(...positions.map(p => p.unrealizedPnL)) : 0);
   const winStreak = trades.length > 0 ? tradeMetrics.winStreak : 0;
 
   return {
@@ -815,6 +921,16 @@ async function calculateStats(
     winStreak,
     closedPositionsHistory, // Add the history data
   } as any; // Type assertion to allow the new field
+}
+
+// Legacy function for backwards compatibility
+async function calculateStats(
+  positions: Position[],
+  trades: Trade[],
+  activity: any[] = [],
+  walletAddress?: string,
+): Promise<PortfolioStats> {
+  return calculateStatsWithPnLData(positions, trades, activity, walletAddress, null);
 }
 
 // Generate PnL history from activity ledger (optimized for performance)
@@ -1143,29 +1259,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/dashboard/username?username=xxx - Fetch dashboard data by username
   app.get("/api/dashboard/username", async (req, res) => {
+    let responseSent = false;
+    let requestTimeout: NodeJS.Timeout | null = null;
+    
+    // Helper to safely send response only once
+    const sendResponse = (status: number, data: any) => {
+      if (responseSent || res.headersSent) {
+        return;
+      }
+      responseSent = true;
+      if (requestTimeout) {
+        clearTimeout(requestTimeout);
+      }
+      res.status(status).json(data);
+    };
+    
     // Set a timeout for the entire request
-    const requestTimeout = setTimeout(() => {
-      if (!res.headersSent) {
+    requestTimeout = setTimeout(() => {
+      if (!responseSent && !res.headersSent) {
+        responseSent = true;
         res.status(504).json({
           error: "Request timeout. The dashboard is taking too long to load. Please try again.",
         });
       }
-    }, 15000); // 15 second timeout
+    }, 35000); // 35 second timeout to allow complete data fetch (PnL fetch takes ~26s)
 
     try {
       const { username } = req.query;
 
       if (!username || typeof username !== 'string') {
-        clearTimeout(requestTimeout);
-        return res.status(400).json({ error: 'Username query parameter is required' });
+        if (requestTimeout) clearTimeout(requestTimeout);
+        if (!responseSent && !res.headersSent) {
+          return res.status(400).json({ error: 'Username query parameter is required' });
+        }
+        return;
       }
 
       const usernameSchema = z
         .string()
-        .regex(/^[a-zA-Z0-9_-]+$/, "Invalid username format");
+        .regex(/^[a-zA-Z0-9_.-]+$/, "Invalid username format");
       const validatedUsername = usernameSchema.parse(username);
 
-      console.log(`\n=== Fetching dashboard for: ${validatedUsername} ===`);
+          console.log(`\n📍 [EXPRESS SERVER ROUTE] === Fetching dashboard for: ${validatedUsername} ===`);
 
       let walletAddress: string = "";
       let profileImage: string | undefined;
@@ -1179,6 +1314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bio = userProfile.bio;
         console.log(`✓ Wallet found: ${walletAddress}`);
       } catch (error: any) {
+        if (responseSent) return;
         if (error.message === "USER_NOT_FOUND") {
           console.log(`✗ User '${validatedUsername}' not found in Polymarket - using demo data`);
           useDemoData = true;
@@ -1202,11 +1338,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ]);
 
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Data fetch timeout')), 5000); // 5 second timeout
+            setTimeout(() => reject(new Error('Data fetch timeout')), 4000); // 4 second timeout
           });
 
           [positions, trades, activity] = await Promise.race([dataPromise, timeoutPromise]) as [Position[], Trade[], any[]];
         } catch (error) {
+          if (responseSent) return;
           if (axios.isAxiosError(error)) {
             const status = error.response?.status;
             console.log(`API error: status ${status}`);
@@ -1215,7 +1352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log("→ Using demo data");
               useDemoData = true;
             } else {
-              return res.status(503).json({
+              return sendResponse(503, {
                 error: "Unable to reach Polymarket API. Please try again later.",
               });
             }
@@ -1230,29 +1367,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Only use demo data if explicitly requested (user not found or API auth failed)
       if (useDemoData) {
+        if (responseSent) return;
         console.log("→ Returning demo data");
         const demoData = await generateDemoData();
-        clearTimeout(requestTimeout);
-        return res.json(demoData);
+        return sendResponse(200, demoData);
       }
 
-      const stats = await calculateStats(positions, trades, activity, walletAddress);
-      
-      // Fetch full PnL data with activity history for detailed timeline
+      if (responseSent) return;
+
+      // Fetch PnL data - wait for actual completion (takes ~26s) to get accurate data
+      // Deduplicate concurrent requests for the same wallet
+      let pnlData: any = null;
       let fullActivityHistory: any[] = [];
       try {
-        const pnlData = await fetchUserPnLData(walletAddress, true); // Include full history
-        fullActivityHistory = pnlData.fullActivityHistory || [];
+        // Check if there's already an ongoing request for this wallet
+        const requestKey = `pnl_${walletAddress}`;
+        let pnlPromise = ongoingRequests.get(requestKey);
+        
+        if (!pnlPromise) {
+          // Create new fetch promise
+          pnlPromise = fetchUserPnLData(walletAddress, true).catch(err => {
+            console.error('PnL fetch error:', err);
+            return null;
+          }).finally(() => {
+            // Clean up after 5 seconds (allow time for other requests to use the result)
+            setTimeout(() => {
+              ongoingRequests.delete(requestKey);
+            }, 5000);
+          });
+          ongoingRequests.set(requestKey, pnlPromise);
+        } else {
+          console.log(`⚠ Reusing ongoing PnL fetch for ${walletAddress}`);
+        }
+        
+        // Wait for the fetch to complete (either new or existing)
+        pnlData = await pnlPromise;
+        
+        if (pnlData) {
+          fullActivityHistory = pnlData.fullActivityHistory || [];
+          console.log(`✓ PnL data fetched successfully: ${fullActivityHistory.length} activity events`);
+          if (pnlData && pnlData.realizedPnL !== undefined && pnlData.totalPnL !== undefined) {
+            console.log(`✓ Realized PnL: $${pnlData.realizedPnL.toLocaleString()}, Total PnL: $${pnlData.totalPnL.toLocaleString()}`);
+          } else {
+            console.log(`✓ PnL data structure:`, { realizedPnL: pnlData?.realizedPnL, totalPnL: pnlData?.totalPnL });
+          }
+        } else {
+          console.log('⚠ PnL fetch failed - will use trades data for history');
+        }
       } catch (error) {
-        console.error('Error fetching full PnL history:', error);
-        // Continue with basic history if full fetch fails
+        console.error('Error fetching PnL data:', error);
+        // Continue without PnL data - will use fallback calculation
+        ongoingRequests.delete(`pnl_${walletAddress}`);
       }
       
-      // Generate full historical PnL timeline with actual fluctuations
+      // Fetch volume and additional data from leaderboard API
+      let leaderboardData: { volume: number; xUsername?: string; rank?: string } = { volume: 0 };
+      if (walletAddress) {
+        try {
+          leaderboardData = await fetchUserVolume(walletAddress);
+        } catch (error) {
+          console.warn('Failed to fetch leaderboard data, will use fallback:', error);
+        }
+      }
+
+      // Calculate stats - use fetched PnL data if available, otherwise use fallback
+      const stats = await calculateStatsWithPnLData(positions, trades, activity, walletAddress, pnlData, leaderboardData);
+      
+      if (responseSent) return;
+      
+      // Calculate PnL for each trade (attaches profit to SELL trades)
+      const tradeMetrics = calculateRealizedPnLFromTrades(trades);
+      const tradesWithPnL = tradeMetrics.tradesWithPnL;
+      
+      // Generate full historical PnL timeline from actual trades
+      // Pass stats.totalPnL which includes unrealized PnL - this shows today's moment-by-moment PnL
       const pnlHistory = generateFullPnLHistory(
         fullActivityHistory,
         stats.closedPositionsHistory || [],
-        stats.totalPnL
+        stats.totalPnL, // Total PnL includes unrealized - shows current moment
+        trades.map(t => ({
+          timestamp: t.timestamp,
+          type: t.type,
+          price: t.price,
+          size: t.size,
+          marketName: t.marketName
+        }))
       );
       
       const achievements = calculateAchievements(stats, trades);
@@ -1263,11 +1462,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           profileImage,
           bio,
           walletAddress,
+          xUsername: leaderboardData.xUsername,
+          rank: leaderboardData.rank,
         },
         stats,
         pnlHistory,
         positions,
-        recentTrades: trades.slice(0, 20),
+        recentTrades: tradesWithPnL.slice(0, 20), // Use trades with PnL attached
       };
 
       console.log(
@@ -1275,19 +1476,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       console.log("=== Complete ===\n");
 
-      clearTimeout(requestTimeout);
-      res.json(dashboardData);
+      sendResponse(200, dashboardData);
     } catch (error) {
-      clearTimeout(requestTimeout);
+      if (responseSent) return;
       console.error("Error fetching dashboard data:", error);
 
       if (error instanceof z.ZodError) {
-        res.status(400).json({
+        sendResponse(400, {
           error:
             "Invalid username format. Please use only letters, numbers, underscores, and hyphens.",
         });
       } else {
-        res.status(500).json({
+        sendResponse(500, {
           error: "Failed to fetch dashboard data. Please try again later.",
         });
       }
@@ -1465,13 +1665,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Oracle Bot endpoints
   app.get("/api/oracle/markets", (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'oracle/oracles.db');
-      const db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.log('Oracle DB not available, returning empty data');
-          return res.json([]);
+      // Try multiple possible database paths (dev, VPS, relative)
+      const possiblePaths = [
+        path.join(process.cwd(), 'oracle/oracles.db'),
+        path.join(process.cwd(), '..', 'oracle/oracles.db'),
+        path.join(__dirname, '..', 'oracle/oracles.db'),
+        '/home/ubuntu/oracle/oracles.db', // VPS path
+        'oracle/oracles.db' // Relative path
+      ];
+      
+      let dbPath = possiblePaths[0];
+      let db: sqlite3.Database | null = null;
+      
+      // Try to find existing database
+      for (const tryPath of possiblePaths) {
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(tryPath)) {
+            dbPath = tryPath;
+            db = new sqlite3.Database(dbPath, (err) => {
+              if (err) {
+                console.log(`Oracle DB error at ${tryPath}:`, err.message);
+                return;
+              }
+            });
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
         }
-      });
+      }
+      
+      // If no existing DB found, use default path
+      if (!db) {
+        dbPath = possiblePaths[0];
+        db = new sqlite3.Database(dbPath, (err) => {
+          if (err) {
+            console.log('Oracle DB not available, returning empty data');
+            return res.json([]);
+          }
+        });
+      }
 
       const limit = parseInt(req.query.limit as string) || 20;
       
@@ -1496,21 +1730,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/oracle/stats", (req, res) => {
     try {
-      const dbPath = path.join(process.cwd(), 'oracle/oracles.db');
-      const db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.log('Oracle DB not available, returning empty stats');
-          return res.json({
-            marketsTracked: 0,
-            totalAlerts: 0,
-            consensusDetected: 0,
-            disputed: 0,
-            autoBets: 0,
-            winRate: 0,
-            edgeTime: "N/A"
-          });
+      // Try multiple possible database paths (dev, VPS, relative)
+      const possiblePaths = [
+        path.join(process.cwd(), 'oracle/oracles.db'),
+        path.join(process.cwd(), '..', 'oracle/oracles.db'),
+        path.join(__dirname, '..', 'oracle/oracles.db'),
+        '/home/ubuntu/oracle/oracles.db', // VPS path
+        'oracle/oracles.db' // Relative path
+      ];
+      
+      let dbPath = possiblePaths[0];
+      let db: sqlite3.Database | null = null;
+      
+      // Try to find existing database
+      for (const tryPath of possiblePaths) {
+        try {
+          const fs = require('fs');
+          if (fs.existsSync(tryPath)) {
+            dbPath = tryPath;
+            db = new sqlite3.Database(dbPath, (err) => {
+              if (err) {
+                console.log(`Oracle DB error at ${tryPath}:`, err.message);
+                return;
+              }
+            });
+            break;
+          }
+        } catch (e) {
+          // Continue to next path
         }
-      });
+      }
+      
+      // If no existing DB found, use default path
+      if (!db) {
+        dbPath = possiblePaths[0];
+        db = new sqlite3.Database(dbPath, (err) => {
+          if (err) {
+            console.log('Oracle DB not available, returning empty stats');
+            return res.json({
+              marketsTracked: 0,
+              totalAlerts: 0,
+              consensusDetected: 0,
+              disputed: 0,
+              autoBets: 0,
+              winRate: 0,
+              edgeTime: "N/A"
+            });
+          }
+        });
+      }
 
       db.get(
         `SELECT 

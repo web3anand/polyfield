@@ -79,7 +79,7 @@ export function Navbar() {
   };
 
   return (
-    <nav className="w-full bg-black border-b border-gray-800">
+    <nav className="w-full bg-black border-b border-gray-800 relative z-[60]">
       <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
         <div className="flex items-center justify-center h-12 md:h-16 relative">
           {/* POLYFEILD BETA Brand - Fixed Left */}
@@ -131,7 +131,7 @@ export function Navbar() {
                     
                     {/* Dropdown Menu */}
                     {openDropdown === item.id && (
-                      <div className="absolute top-full left-0 mt-2 w-56 bg-black border border-gray-800 shadow-lg z-50">
+                      <div className="absolute top-full left-0 mt-2 w-56 bg-black border border-gray-800 shadow-lg z-[100]">
                         {item.subItems.map((subItem, idx) => (
                           <Link
                             key={idx}

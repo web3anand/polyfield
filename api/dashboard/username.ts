@@ -1,74 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
-import { fetchUserPnLData, generateFullPnLHistory } from '../utils/polymarket-pnl.js';
+import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
 
-// Cache for profile searches to avoid redundant API calls
-const profileCache = new Map<string, { data: { wallet: string; profileImage?: string; bio?: string }, timestamp: number }>();
-const PROFILE_CACHE_TTL = 300000; // 5 minutes
-
-// Helper to batch profile searches concurrently
-async function findUsersByUsernameBatch(usernames: string[]): Promise<Map<string, { wallet: string; profileImage?: string; bio?: string }>> {
-  const results = new Map<string, { wallet: string; profileImage?: string; bio?: string }>();
-  const uncachedUsernames: string[] = [];
-
-  // Check cache first
-  const now = Date.now();
-  usernames.forEach(username => {
-    const cacheKey = username.toLowerCase();
-    const cached = profileCache.get(cacheKey);
-    if (cached && (now - cached.timestamp) < PROFILE_CACHE_TTL) {
-      results.set(username, cached.data);
-    } else {
-      uncachedUsernames.push(username);
-    }
-  });
-
-  if (uncachedUsernames.length === 0) {
-    return results;
-  }
-
-  // Batch concurrent requests (max 10 at a time to avoid rate limiting)
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < uncachedUsernames.length; i += BATCH_SIZE) {
-    const batch = uncachedUsernames.slice(i, i + BATCH_SIZE);
-    const batchPromises = batch.map(async (username) => {
-      try {
-        const profile = await findUserByUsername(username, true); // skipCache=true for batch
-        results.set(username, profile);
-        // Update cache
-        profileCache.set(username.toLowerCase(), { data: profile, timestamp: now });
-      } catch (error) {
-        console.error(`Error fetching profile for ${username}:`, error);
-        // Don't throw - continue with other usernames
-      }
-    });
-    await Promise.all(batchPromises);
-    
-    // Small delay between batches to respect rate limits
-    if (i + BATCH_SIZE < uncachedUsernames.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-
-  return results;
-}
-
 // Helper to search for a user by username
-async function findUserByUsername(username: string, skipCache = false): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
+async function findUserByUsername(username: string): Promise<{ wallet: string; profileImage?: string; bio?: string }> {
   try {
-    // Check cache first (unless skipCache is true)
-    if (!skipCache) {
-      const cacheKey = username.toLowerCase();
-      const cached = profileCache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < PROFILE_CACHE_TTL) {
-        console.log(`Using cached profile for: ${username}`);
-        return cached.data;
-      }
-    }
-
     console.log(`Searching for user: ${username}`);
 
     const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
@@ -76,7 +15,7 @@ async function findUserByUsername(username: string, skipCache = false): Promise<
         q: username,
         search_profiles: true,
       },
-      timeout: 3000, // Reduced timeout for faster failure
+      timeout: 5000,
     });
 
     let profiles: any[] = [];
@@ -103,18 +42,11 @@ async function findUserByUsername(username: string, skipCache = false): Promise<
 
       console.log("Selected profile:", JSON.stringify(profile, null, 2));
 
-      const result = {
+      return {
         wallet: profile.proxyWallet || profile.wallet || profile.address,
         profileImage: profile.profileImage || profile.profile_image_url || profile.avatar_url,
         bio: profile.bio || profile.description
       };
-      
-      // Cache the result
-      if (!skipCache) {
-        profileCache.set(username.toLowerCase(), { data: result, timestamp: Date.now() });
-      }
-      
-      return result;
     }
 
     throw new Error('No profiles found');
@@ -166,24 +98,133 @@ async function fetchUserTrades(walletAddress: string): Promise<any[]> {
   }
 }
 
-// Helper to fetch user activity (for accurate volume calculation)
-async function fetchUserActivity(walletAddress: string): Promise<any[]> {
-  try {
-    console.log(`Fetching activity for wallet: ${walletAddress}`);
+// Helper to calculate PnL for each trade (FIFO method)
+function calculateTradesWithPnL(trades: any[]): any[] {
+  console.log(`📊 Calculating PnL for ${trades.length} trades...`);
+  
+  // Group trades by market and outcome
+  const marketPositions: Record<string, { buys: any[], sells: any[] }> = {};
+  
+  for (const trade of trades) {
+    const marketName = (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market";
+    const outcome = trade.outcome || "YES";
+    const key = `${marketName}_${outcome}`;
     
-    const response = await axios.get(`${POLYMARKET_DATA_API}/activity`, {
+    if (!marketPositions[key]) {
+      marketPositions[key] = { buys: [], sells: [] };
+    }
+    
+    const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+    if (side === "BUY") {
+      marketPositions[key].buys.push(trade);
+    } else {
+      marketPositions[key].sells.push(trade);
+    }
+  }
+
+  const tradePnLMap = new Map<string, number>(); // Map trade ID to PnL
+
+  // Match buys with sells to calculate realized PnL
+  for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
+    if (sells.length === 0) continue; // Skip if no sells
+    
+    let remainingBuySize = 0;
+    let avgBuyPrice = 0;
+    let totalBuyCost = 0;
+
+    // Calculate FIFO cost basis from buys
+    for (const buy of buys.sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime())) {
+      const price = parseFloat(buy.outcomeTokenPrice || buy.price || 0);
+      const size = parseFloat(buy.outcomeTokenAmount || buy.size || 0);
+      totalBuyCost += price * size;
+      remainingBuySize += size;
+      avgBuyPrice = totalBuyCost / remainingBuySize;
+    }
+
+    console.log(`   Market: ${key}`);
+    console.log(`     ${buys.length} BUYs (total size: ${remainingBuySize.toFixed(2)}, avg price: $${avgBuyPrice.toFixed(3)})`);
+    console.log(`     ${sells.length} SELLs`);
+
+    // Match with sells
+    for (const sell of sells.sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime())) {
+      const price = parseFloat(sell.outcomeTokenPrice || sell.price || 0);
+      const size = parseFloat(sell.outcomeTokenAmount || sell.size || 0);
+      const sizeToMatch = Math.min(size, remainingBuySize);
+      
+      if (sizeToMatch > 0) {
+        const pnl = (price - avgBuyPrice) * sizeToMatch;
+        
+        // Store PnL for this sell trade
+        const tradeId = sell.id || `trade-${Math.random()}`;
+        tradePnLMap.set(tradeId, pnl);
+        console.log(`       SELL ${size.toFixed(2)} @ $${price.toFixed(3)} → PnL: $${pnl.toFixed(2)} (matched ${sizeToMatch.toFixed(2)})`);
+        
+        remainingBuySize -= sizeToMatch;
+        totalBuyCost -= avgBuyPrice * sizeToMatch;
+        if (remainingBuySize > 0) {
+          avgBuyPrice = totalBuyCost / remainingBuySize;
+        }
+      } else {
+        console.log(`       SELL ${size.toFixed(2)} @ $${price.toFixed(3)} → No matching BUYs!`);
+      }
+    }
+  }
+
+  console.log(`   ✓ Calculated PnL for ${tradePnLMap.size} SELL trades`);
+
+  // Return trades with PnL attached
+  return trades.map(trade => {
+    const tradeId = trade.id || `trade-${Math.random()}`;
+    const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+    
+    if (side === "SELL" && tradePnLMap.has(tradeId)) {
+      return {
+        ...trade,
+        profit: parseFloat(tradePnLMap.get(tradeId)!.toFixed(2))
+      };
+    }
+    return trade;
+  });
+}
+
+// Helper to fetch user volume and additional data from leaderboard API
+async function fetchUserVolume(walletAddress: string): Promise<{ volume: number; xUsername?: string; rank?: string }> {
+  try {
+    console.log(`📊 Fetching volume from leaderboard for wallet: ${walletAddress}`);
+    
+    const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
       params: {
-        user: walletAddress,
-        limit: 1000, // Get more activity events for complete volume
+        timePeriod: 'all',
+        orderBy: 'VOL',
+        limit: 1,
         offset: 0,
+        category: 'overall',
+        user: walletAddress,
       },
-      timeout: 10000,
+      timeout: 5000,
     });
 
-    return response.data || [];
-  } catch (error) {
-    console.error('Error fetching activity:', error);
-    return [];
+    const data = response.data;
+    if (Array.isArray(data) && data.length > 0 && data[0].vol) {
+      const volume = parseFloat(data[0].vol);
+      const username = data[0].userName || 'Unknown';
+      const xUsername = data[0].xUsername;
+      const rank = data[0].rank;
+      console.log(`   ✓ Leaderboard data: $${volume.toLocaleString()} (User: ${username}, X: @${xUsername || 'N/A'}, Rank: #${rank || 'N/A'})`);
+      return { volume, xUsername, rank };
+    }
+
+    console.log('   ⚠ No volume data in leaderboard response (user may not be ranked)');
+    return { volume: 0 };
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      console.log('   ⚠ User not found in leaderboard (404)');
+    } else if (error.response?.status) {
+      console.error(`   ❌ Leaderboard API error: ${error.response.status} - ${error.response.statusText}`);
+    } else {
+      console.error(`   ❌ Error fetching volume from leaderboard: ${error.message}`);
+    }
+    return { volume: 0 };
   }
 }
 
@@ -192,6 +233,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Cache-busting headers to prevent stale data
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -211,31 +257,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    console.log(`Dashboard request for username: ${username}`);
+    console.log(`📍 [VERCEL API ROUTE] Dashboard request for username: ${username}`);
 
     // Find user by username
     const userInfo = await findUserByUsername(username);
     console.log('User info found:', userInfo);
 
     // Fetch user data in parallel
-    // Fetch more closed positions to ensure we get the actual biggest win
-    const [positions, trades, pnlData, extraClosedPositions, activity] = await Promise.all([
+    const [positions, trades, pnlData, leaderboardData] = await Promise.all([
       fetchUserPositions(userInfo.wallet),
       fetchUserTrades(userInfo.wallet),
       fetchUserPnLData(userInfo.wallet),
-      // Fetch additional closed positions sorted by PnL to ensure we get biggest win
-      axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
-        params: {
-          user: userInfo.wallet,
-          limit: 500, // Get more positions to ensure we find the biggest win
-          offset: 0,
-          sortBy: 'REALIZEDPNL',
-          sortDirection: 'DESC'
-        },
-        timeout: 5000
-      }).catch(() => ({ data: [] })),
-      fetchUserActivity(userInfo.wallet)
+      fetchUserVolume(userInfo.wallet)
     ]);
+    
+    // Use leaderboard volume if available, otherwise calculate from trades as fallback
+    let totalVolume = leaderboardData.volume;
+    const xUsername = leaderboardData.xUsername;
+    const rank = leaderboardData.rank;
+    
+    if (totalVolume === 0 && trades.length > 0) {
+      console.log('   ⚠ Leaderboard volume is 0, calculating from trades as fallback...');
+      totalVolume = trades.reduce((sum: number, trade: any) => {
+        return sum + Math.abs((trade.outcomeTokenAmount || 0) * (trade.outcomeTokenPrice || 0));
+      }, 0);
+      console.log(`   ✓ Fallback volume from trades: $${totalVolume.toLocaleString()}`);
+    }
 
     // Log first position and trade to see structure
     if (positions.length > 0) {
@@ -245,98 +292,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('First trade structure:', JSON.stringify(trades[0], null, 2));
     }
 
-    // Calculate win rate from trades (use size * price as proxy for trade value)
-    const winningTrades = trades.filter((trade: any) => {
-      // Check if trade resulted in profit - for now, use a simple heuristic
-      // Note: This is an approximation since we don't have realized PnL per trade
-      const tradeValue = parseFloat(trade.size || 0) * parseFloat(trade.price || 0);
-      return tradeValue > 0;
-    }).length;
+    // Calculate win rate
+    const winningTrades = trades.filter((trade: any) => 
+      trade.outcomeTokenAmount * trade.outcomeTokenPrice > 0
+    ).length;
     const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
 
-    // Calculate total volume from activity TRADE events (more accurate than trades endpoint)
-    // TESTED & VERIFIED: Activity endpoint has usdcSize field which represents actual trade value
-    // Method 6 from test-volume.js: $743.59 for imdaybot (vs $0 from broken method)
-    const totalVolume = activity
-      .filter((event: any) => event.type?.toUpperCase() === 'TRADE')
-      .reduce((sum: number, event: any) => {
-        const usdcSize = parseFloat(event.usdcSize || 0);
-        return sum + Math.abs(usdcSize);
-      }, 0);
-
-    // Calculate best trade and worst trade from REALIZED closed positions
-    // TESTED & VERIFIED: API uses 'realizedPnl' field (camelCase)
-    // Test results confirmed: $8.51 correctly extracted from closed positions
+    // Calculate best trade and worst trade from ALL positions (open + closed)
     let bestTrade = 0;
     let worstTrade = 0;
     
-    // Prefer the extra fetch (500 positions) over the history (100 positions)
-    // This ensures we get the maximum number of closed positions
-    const allClosedPositionsData = (extraClosedPositions.data || []).length > 0 
-      ? extraClosedPositions.data 
-      : (pnlData.closedPositionsHistory || []);
+    // Check open positions
+    positions.forEach((pos: any) => {
+      const unrealizedPnL = parseFloat(pos.cashPnl || 0);
+      if (unrealizedPnL > bestTrade) bestTrade = unrealizedPnL;
+      if (unrealizedPnL < worstTrade) worstTrade = unrealizedPnL;
+    });
     
-    console.log(`📊 Checking ${allClosedPositionsData.length} closed positions for best/worst trade...`);
+    console.log(`📊 Checking ${pnlData.allClosedPositions?.length || 0} closed positions from subgraph...`);
     
-    if (allClosedPositionsData.length > 0) {
-      // Extract realized PnL - matches test-verified logic
-      // API returns realizedPnl as number (e.g., 8.511456)
-      const getRealizedPnl = (pos: any): number => {
-        if (typeof pos.realizedPnl === 'number') {
-          return pos.realizedPnl;
-        }
-        // Fallback for string values or mapped data
-        return parseFloat(pos.realizedPnl || pos.realized_pnl || 0);
-      };
-      
-      // Find best trade (highest positive realized PnL)
-      // Filter for wins only, then sort descending to get the biggest win first
-      const winningPositions = allClosedPositionsData
-        .map((pos: any) => ({
-          original: pos,
-          pnlValue: getRealizedPnl(pos)
-        }))
-        .filter((item: any) => item.pnlValue > 0)
-        .sort((a: any, b: any) => b.pnlValue - a.pnlValue); // Descending: highest first
-      
-      if (winningPositions.length > 0) {
-        bestTrade = winningPositions[0].pnlValue;
-        const bestTitle = winningPositions[0].original.title || winningPositions[0].original.marketName || 'position';
-        console.log(`   ✓ Biggest Win: $${bestTrade.toFixed(2)} from "${bestTitle}"`);
-        if (winningPositions.length >= 3) {
-          const top3 = winningPositions.slice(0, 3).map((p: any) => `$${p.pnlValue.toFixed(2)}`).join(', ');
-          console.log(`   Top 3 wins: ${top3}`);
-        }
-      } else {
-        console.log('   ⚠ No winning positions found');
+    // Check ALL closed positions from subgraph (not just the 100 in history)
+    (pnlData.allClosedPositions || []).forEach((pos: any) => {
+      const realizedPnL = parseFloat(pos.realizedPnl || 0);
+      if (realizedPnL > bestTrade) {
+        console.log(`   New best trade found: $${realizedPnL.toFixed(2)}`);
+        bestTrade = realizedPnL;
       }
-      
-      // Find worst trade (lowest realized PnL = biggest loss)
-      // Include all positions (wins and losses) and sort ascending to get worst first
-      const allWithPnl = allClosedPositionsData.map((pos: any) => ({
-        original: pos,
-        pnlValue: getRealizedPnl(pos)
-      }));
-      
-      const allSorted = [...allWithPnl].sort((a: any, b: any) => a.pnlValue - b.pnlValue); // Ascending: worst first
-      
-      if (allSorted.length > 0) {
-        worstTrade = allSorted[0].pnlValue;
-        console.log(`   ✓ Biggest Loss: $${worstTrade.toFixed(2)}`);
+      if (realizedPnL < worstTrade) {
+        console.log(`   New worst trade found: $${realizedPnL.toFixed(2)}`);
+        worstTrade = realizedPnL;
       }
-    } else {
-      console.log('   ⚠ No closed positions data available');
+    });
+
+    console.log(`📊 Final - Best Trade: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
+
+    // Generate PnL history from closed positions
+    const pnlHistory = [];
+    let cumulativePnl = 0;
+    
+    // Sort by date and create cumulative PnL chart data
+    const sortedPositions = (pnlData.closedPositionsHistory || [])
+      .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
+    
+    for (const pos of sortedPositions) {
+      cumulativePnl += pos.realizedPnl;
+      pnlHistory.push({
+        timestamp: pos.endDate,
+        value: cumulativePnl
+      });
     }
+    
+    // Always add a current point with total PnL (or starting point if no history)
+    pnlHistory.push({
+      timestamp: new Date().toISOString(),
+      value: pnlData.totalPnl
+    });
 
-    console.log(`📊 Final Result - Best Win: $${bestTrade.toFixed(2)}, Worst Trade: $${worstTrade.toFixed(2)}`);
-
-    // Generate full historical PnL timeline with actual fluctuations
-    // Uses activity events and closed positions to show complete history
-    const pnlHistory = generateFullPnLHistory(
-      pnlData.fullActivityHistory || [],
-      pnlData.closedPositionsHistory || [],
-      pnlData.totalPnl
-    );
+    // Calculate PnL for each trade (attaches profit to SELL trades)
+    const tradesWithPnL = calculateTradesWithPnL(trades);
+    console.log(`📊 Calculated PnL for ${tradesWithPnL.filter((t: any) => t.profit !== undefined).length} SELL trades`);
 
     const dashboardData = {
       profile: {
@@ -344,6 +358,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         walletAddress: userInfo.wallet,
         profileImage: userInfo.profileImage,
         bio: userInfo.bio,
+        xUsername: xUsername,
+        rank: rank,
       },
       stats: {
         totalPnL: pnlData.totalPnl,
@@ -359,28 +375,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         worstTrade,
       },
       pnlHistory,
-      positions: positions.map((pos: any) => {
-        // Extract slug from various possible fields - Polymarket uses same slug for event and market
-        const slug = pos.marketSlug || pos.slug || pos.eventSlug || pos.market?.slug || pos.market?.eventSlug || pos.market?.id || "";
-        // Condition ID for the tid parameter
-        const conditionId = pos.marketId || pos.conditionId || pos.market?.id || pos.market?.condition_id || pos.condition_id || "";
-        
-        return {
-          id: pos.id || `pos-${Math.random()}`,
-          marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
-          marketId: conditionId,
-          marketSlug: slug, // Use slug for URL (same for event and market)
-          eventSlug: slug, // Same as marketSlug per Polymarket URL structure
-          outcome: pos.outcome || "YES",
-          size: parseFloat(pos.size || 0),
-          entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
-          currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
-          unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
-          status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
-          openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
-        };
-      }),
-      recentTrades: trades.slice(0, 10).map((trade: any) => ({
+      positions: positions.map((pos: any) => ({
+        id: pos.id || `pos-${Math.random()}`,
+        marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
+        marketId: pos.marketId || pos.market?.id || "",
+        marketSlug: pos.marketSlug || pos.market?.slug || "",
+        eventSlug: pos.eventSlug || pos.market?.eventSlug || "",
+        outcome: pos.outcome || "YES",
+        size: parseFloat(pos.size || 0),
+        entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
+        currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
+        unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
+        status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
+        openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
+      })),
+      recentTrades: tradesWithPnL.slice(0, 10).map((trade: any) => ({
         id: trade.id || `trade-${Math.random()}`,
         marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
         outcome: trade.outcome || "YES",
@@ -388,13 +397,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         price: parseFloat(trade.outcomeTokenPrice || trade.price || 0),
         timestamp: trade.timestamp || trade.created_at || new Date().toISOString(),
         type: (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL",
-        profit: trade.pnl ? parseFloat(trade.pnl) : undefined,
+        profit: trade.profit !== undefined ? trade.profit : undefined, // Use calculated PnL
       })),
     };
 
     console.log('Dashboard data prepared:', {
       profile: dashboardData.profile,
-      stats: dashboardData.stats,
+      stats: {
+        ...dashboardData.stats,
+        totalVolume: `$${dashboardData.stats.totalVolume.toLocaleString()} (${dashboardData.stats.totalVolume >= 1000000 ? `${(dashboardData.stats.totalVolume / 1000000).toFixed(2)}M` : `${(dashboardData.stats.totalVolume / 1000).toFixed(1)}K`})`
+      },
       pnlHistoryCount: dashboardData.pnlHistory.length,
       positionsCount: dashboardData.positions.length,
       tradesCount: dashboardData.recentTrades.length,

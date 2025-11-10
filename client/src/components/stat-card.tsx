@@ -11,22 +11,24 @@ interface StatCardProps {
 
 export function StatCard({ icon, label, value, suffix, color = "text-foreground" }: StatCardProps) {
   return (
-    <Card className="p-3 md:p-6 h-[90px] md:h-[120px] flex flex-col justify-between">
-      <div className="flex items-start justify-between mb-1 md:mb-2">
-        <p className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {label}
-        </p>
-        <div className={`p-1.5 md:p-2 bg-primary/5 ${color}`}>
+    <Card className="h-full p-4 md:p-5 border-border/50">
+      <div className="h-full flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+            {label}
+          </p>
+          <div className="flex items-baseline gap-1.5">
+            <p className={`text-xl md:text-2xl font-bold tabular-nums ${color}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+              {value}
+            </p>
+            {suffix && (
+              <p className="text-xs text-muted-foreground">{suffix}</p>
+            )}
+          </div>
+        </div>
+        <div className={`p-2.5 md:p-3 rounded-xl ${color} bg-gradient-to-br from-background to-muted/20 border border-border/50`}>
           {icon}
         </div>
-      </div>
-      <div className="flex items-baseline gap-1 md:gap-2">
-        <p className={`text-lg md:text-2xl font-bold tabular-nums ${color}`} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-          {value}
-        </p>
-        {suffix && (
-          <p className="text-xs md:text-sm text-muted-foreground">{suffix}</p>
-        )}
       </div>
     </Card>
   );

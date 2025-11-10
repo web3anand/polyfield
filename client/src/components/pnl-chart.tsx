@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { PnLDataPoint } from "@shared/schema";
 
@@ -8,7 +7,7 @@ interface PnLChartProps {
   data: PnLDataPoint[];
 }
 
-type TimeRange = 'ALL' | '1M' | '1W' | '1D';
+type TimeRange = 'ALL' | '1M' | '1Y' | 'YTD';
 
 export function PnLChart({ data }: PnLChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('ALL');
@@ -21,14 +20,15 @@ export function PnLChart({ data }: PnLChartProps) {
     const cutoffDate = new Date();
     
     switch (timeRange) {
-      case '1D':
-        cutoffDate.setDate(now.getDate() - 1);
-        break;
-      case '1W':
-        cutoffDate.setDate(now.getDate() - 7);
-        break;
       case '1M':
         cutoffDate.setMonth(now.getMonth() - 1);
+        break;
+      case '1Y':
+        cutoffDate.setFullYear(now.getFullYear() - 1);
+        break;
+      case 'YTD':
+        cutoffDate.setMonth(0); // January 1st of current year
+        cutoffDate.setDate(1);
         break;
       default:
         return data;
@@ -44,8 +44,8 @@ export function PnLChart({ data }: PnLChartProps) {
     return {
       date: date.toLocaleDateString(undefined, { 
         month: 'short', 
-        day: timeRange === '1D' || timeRange === '1W' ? 'numeric' : undefined,
-        year: timeRange === 'ALL' ? '2-digit' : undefined
+        day: 'numeric',
+        year: timeRange === 'ALL' || timeRange === '1Y' ? 'numeric' : undefined
       }),
       fullDate: date.toLocaleDateString(undefined, { 
         month: 'short', 
@@ -64,100 +64,131 @@ export function PnLChart({ data }: PnLChartProps) {
   const isPositive = currentPnL >= 0;
 
   return (
-    <Card className="p-3 md:p-6 hover-elevate">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-3 mb-3 md:mb-4">
-        <div>
-          <p className="text-[10px] md:text-xs font-medium text-muted-foreground mb-0.5 md:mb-1 uppercase tracking-wide">All-Time PnL</p>
-          <p className={`text-xl md:text-3xl font-bold tabular-nums ${isPositive ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-chart-pnl">
-            {isPositive ? '+' : ''}${currentPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
+    <Card className="p-0 hover-elevate overflow-hidden bg-[#0a0a0a]">
+      {/* Header Section */}
+      <div className="px-4 md:px-6 pt-4 md:pt-6 pb-3">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
+            <span className={`text-3xl md:text-4xl font-bold tabular-nums ${isPositive ? 'text-[#10b981]' : 'text-destructive'}`} data-testid="text-chart-pnl">
+              {currentPnL.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </span>
+            <span className="text-sm text-muted-foreground ml-2">PnL</span>
+          </div>
         </div>
-        
-        {/* Time Range Selector */}
-        <div className="flex gap-0.5 md:gap-1 bg-muted p-0.5 md:p-1 rounded-md border border-border">
-          <Button
-            variant={timeRange === '1D' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setTimeRange('1D')}
-            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
-          >
-            1D
-          </Button>
-          <Button
-            variant={timeRange === '1W' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setTimeRange('1W')}
-            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
-          >
-            1W
-          </Button>
-          <Button
-            variant={timeRange === '1M' ? 'default' : 'ghost'}
-            size="sm"
+
+        {/* Time Range Selector - Predictfolio Style */}
+        <div className="flex gap-4">
+          <button
             onClick={() => setTimeRange('1M')}
-            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
+            className={`text-xs md:text-sm font-medium transition-colors ${
+              timeRange === '1M' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             1M
-          </Button>
-          <Button
-            variant={timeRange === 'ALL' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setTimeRange('ALL')}
-            className="h-7 md:h-8 px-2 md:px-3 text-[10px] md:text-xs font-semibold"
+          </button>
+          <button
+            onClick={() => setTimeRange('1Y')}
+            className={`text-xs md:text-sm font-medium transition-colors ${
+              timeRange === '1Y' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            ALL
-          </Button>
+            1Y
+          </button>
+          <button
+            onClick={() => setTimeRange('YTD')}
+            className={`text-xs md:text-sm font-medium transition-colors ${
+              timeRange === 'YTD' 
+                ? 'text-foreground' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            YTD
+          </button>
+          <button
+            onClick={() => setTimeRange('ALL')}
+            className={`text-xs md:text-sm font-medium transition-colors ${
+              timeRange === 'ALL' 
+                ? 'text-[#10b981]' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Max
+          </button>
         </div>
       </div>
 
-      <div className="h-[200px] md:h-[270px]" data-testid="chart-pnl">
+      {/* Chart Section - Clean, no padding */}
+      <div className="h-[280px] md:h-[350px]" data-testid="chart-pnl">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
+          <AreaChart 
+            data={chartData}
+            margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+          >
             <defs>
+              {/* Smooth gradient fill - Predictfolio style */}
               <linearGradient id="colorPnL" x1="0" y1="0" x2="0" y2="1">
                 <stop 
-                  offset="5%" 
-                  stopColor={isPositive ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} 
-                  stopOpacity={0.3}
+                  offset="0%" 
+                  stopColor={isPositive ? "#10b981" : "#ef4444"} 
+                  stopOpacity={0.4}
                 />
                 <stop 
                   offset="95%" 
-                  stopColor={isPositive ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"} 
+                  stopColor={isPositive ? "#10b981" : "#ef4444"} 
                   stopOpacity={0}
                 />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+            {/* Minimal grid - horizontal only, subtle */}
+            <CartesianGrid 
+              strokeDasharray="0" 
+              stroke="rgba(255, 255, 255, 0.05)" 
+              horizontal={true}
+              vertical={false}
+            />
             <XAxis 
               dataKey="date" 
-              stroke="hsl(var(--muted-foreground))" 
-              fontSize={10}
-              tick={{ fontSize: 10 }}
+              stroke="transparent" 
+              tick={false}
               tickLine={false}
-              className="md:text-xs"
+              axisLine={false}
             />
             <YAxis 
-              stroke="hsl(var(--muted-foreground))" 
-              fontSize={10}
-              tick={{ fontSize: 10 }}
+              stroke="transparent" 
+              tick={false}
               tickLine={false}
-              tickFormatter={(value) => `$${value}`}
-              className="md:text-xs"
+              axisLine={false}
+              domain={['dataMin', 'dataMax']}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "0.5rem",
-                padding: "8px 12px",
+                backgroundColor: "rgba(10, 10, 10, 0.98)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+                borderRadius: "8px",
+                padding: "12px 16px",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
               }}
-              labelStyle={{ color: "hsl(var(--foreground))" }}
+              labelStyle={{ 
+                color: "rgba(255, 255, 255, 0.7)", 
+                fontSize: "11px",
+                marginBottom: "4px",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px"
+              }}
+              itemStyle={{ 
+                color: isPositive ? "#10b981" : "#ef4444", 
+                fontSize: "16px", 
+                fontWeight: "700",
+                padding: "0"
+              }}
               labelFormatter={(label, payload) => {
                 if (payload && payload.length > 0) {
                   const point = payload[0].payload;
-                  if (timeRange === '1D') {
-                    return `${point.fullDate} ${point.time}`;
-                  }
                   return point.fullDate;
                 }
                 return label;
@@ -167,9 +198,18 @@ export function PnLChart({ data }: PnLChartProps) {
             <Area
               type="monotone"
               dataKey="value"
-              stroke={isPositive ? "hsl(var(--chart-2))" : "hsl(var(--destructive))"}
+              stroke={isPositive ? "#10b981" : "#ef4444"}
               strokeWidth={2}
               fill="url(#colorPnL)"
+              dot={false}
+              activeDot={{ 
+                r: 5, 
+                fill: isPositive ? "#10b981" : "#ef4444",
+                strokeWidth: 0
+              }}
+              connectNulls={false}
+              isAnimationActive={true}
+              animationDuration={800}
             />
           </AreaChart>
         </ResponsiveContainer>

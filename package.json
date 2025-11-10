@@ -5,9 +5,18 @@
   "license": "MIT",
   "scripts": {
     "dev": "tsx server/index.ts",
-    "build": "cd client && npm install && npm run build",
-    "start": "node dist/index.js",
+    "build": "npm run build:check && npm run build:client",
+    "build:check": "npm run check:api && npm run check:server && npm run check:client",
+    "build:client": "cd client && npm install && npm run build",
+    "build:watch": "cd client && npm run build:watch",
     "check": "tsc && cd client && tsc --noEmit && cd ../server && tsc --noEmit",
+    "check:api": "tsc --project tsconfig.json --noEmit",
+    "check:server": "cd server && tsc --noEmit",
+    "check:client": "cd client && tsc --noEmit",
+    "watch:client": "cd client && npm run build:watch",
+    "watch:api": "tsc --watch --project tsconfig.json --noEmit",
+    "watch:server": "cd server && tsc --watch --noEmit",
+    "watch:all": "npm-run-all --parallel watch:client watch:api watch:server",
     "scanner": "cd scanner && npm install && node edge-scanner.js",
     "scanner:backtest": "cd scanner && node backtest.js",
     "oracle": "cd oracle && npm install && node oracle-bot.js"
@@ -30,6 +39,7 @@
     "@types/node": "20.16.11",
     "@vercel/node": "^5.5.0",
     "esbuild": "^0.25.0",
+    "npm-run-all": "^4.1.5",
     "tsx": "^4.20.5",
     "typescript": "5.6.3"
   },

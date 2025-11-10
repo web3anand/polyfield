@@ -80,6 +80,8 @@ export const userProfileSchema = z.object({
   profileImage: z.string().optional(),
   bio: z.string().optional(),
   walletAddress: z.string().optional(),
+  xUsername: z.string().optional(),
+  rank: z.string().optional(),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
