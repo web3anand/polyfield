@@ -3,7 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "installCommand": "npm install",
-  "rootDirectory": ".",
   "rewrites": [
     {
       "source": "/api/(.*)",
