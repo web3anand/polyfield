@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Activity, Zap, RefreshCw, Search, AlertTriangle, Sparkles } from "lucide-react";
-import { Navbar } from "@/components/navbar";
 import {
   Select,
   SelectContent,
@@ -185,17 +184,14 @@ export default function OracleBot() {
   const sortedMarkets = sortMarkets(filteredMarkets);
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden p-1 md:p-4">
+    <div className="h-screen bg-background flex flex-col overflow-hidden p-1 md:p-4 pt-12 md:pt-16">
       <div className="h-full flex flex-col border-2 border-primary/30">
-        {/* Navbar */}
-        <Navbar />
-      
         {/* Fixed Header */}
         <div className="border-b border-border bg-card/50 flex-shrink-0 z-40">
         <div className="container mx-auto px-2 md:px-6 py-2 md:py-6">
-          <div className="flex items-center gap-2 md:gap-4">
-            <div className="p-1.5 md:p-3 bg-primary/10">
-              <Zap className="w-5 h-5 md:w-8 md:h-8 text-primary" />
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-2 md:p-3 bg-gradient-to-br from-primary/20 to-primary/10 rounded-lg border border-primary/30 shadow-lg">
+              <Zap className="w-5 h-5 md:w-8 md:h-8 text-primary" strokeWidth={2.5} />
             </div>
             <div className="flex-1">
               <h1 className="text-lg md:text-3xl font-black text-foreground tracking-tight">

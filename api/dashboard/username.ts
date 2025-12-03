@@ -102,10 +102,27 @@ async function fetchUserTrades(walletAddress: string): Promise<any[]> {
 function calculateTradesWithPnL(trades: any[]): any[] {
   console.log(`📊 Calculating PnL for ${trades.length} trades...`);
   
+  // First, assign stable IDs to all trades that don't have one
+  // Use a deterministic ID based on trade properties to ensure consistency
+  const tradesWithIds = trades.map((trade, index) => {
+    if (!trade.id) {
+      // Create a stable ID from trade properties
+      const timestamp = trade.timestamp || trade.created_at || Date.now();
+      const marketName = (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market";
+      const outcome = trade.outcome || "YES";
+      const price = trade.outcomeTokenPrice || trade.price || 0;
+      const size = trade.outcomeTokenAmount || trade.size || 0;
+      // Use a hash-like string for deterministic ID
+      const stableId = `trade-${timestamp}-${marketName}-${outcome}-${price}-${size}-${index}`;
+      return { ...trade, id: stableId };
+    }
+    return trade;
+  });
+  
   // Group trades by market and outcome
   const marketPositions: Record<string, { buys: any[], sells: any[] }> = {};
   
-  for (const trade of trades) {
+  for (const trade of tradesWithIds) {
     const marketName = (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market";
     const outcome = trade.outcome || "YES";
     const key = `${marketName}_${outcome}`;
@@ -154,8 +171,8 @@ function calculateTradesWithPnL(trades: any[]): any[] {
       if (sizeToMatch > 0) {
         const pnl = (price - avgBuyPrice) * sizeToMatch;
         
-        // Store PnL for this sell trade
-        const tradeId = sell.id || `trade-${Math.random()}`;
+        // Store PnL for this sell trade (use the stable ID we assigned earlier)
+        const tradeId = sell.id;
         tradePnLMap.set(tradeId, pnl);
         console.log(`       SELL ${size.toFixed(2)} @ $${price.toFixed(3)} → PnL: $${pnl.toFixed(2)} (matched ${sizeToMatch.toFixed(2)})`);
         
@@ -172,9 +189,9 @@ function calculateTradesWithPnL(trades: any[]): any[] {
 
   console.log(`   ✓ Calculated PnL for ${tradePnLMap.size} SELL trades`);
 
-  // Return trades with PnL attached
-  return trades.map(trade => {
-    const tradeId = trade.id || `trade-${Math.random()}`;
+  // Return trades with PnL attached (use tradesWithIds to ensure IDs match)
+  return tradesWithIds.map(trade => {
+    const tradeId = trade.id; // ID is guaranteed to exist from tradesWithIds
     const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
     
     if (side === "SELL" && tradePnLMap.has(tradeId)) {
@@ -292,11 +309,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('First trade structure:', JSON.stringify(trades[0], null, 2));
     }
 
-    // Calculate win rate
-    const winningTrades = trades.filter((trade: any) => 
-      trade.outcomeTokenAmount * trade.outcomeTokenPrice > 0
-    ).length;
-    const winRate = trades.length > 0 ? (winningTrades / trades.length) * 100 : 0;
+    // Calculate PnL for each trade (attaches profit to SELL trades)
+    // This must be done before win rate calculation
+    const tradesWithPnL = calculateTradesWithPnL(trades);
+    console.log(`📊 Calculated PnL for ${tradesWithPnL.filter((t: any) => t.profit !== undefined).length} SELL trades`);
+
+    // Calculate win rate from SELL trades that have profit data
+    // Only SELL trades have profit attached (realized PnL)
+    const sellTradesWithProfit = tradesWithPnL.filter((trade: any) => {
+      const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+      return side === "SELL" && trade.profit !== undefined;
+    });
+    const winningTrades = sellTradesWithProfit.filter((trade: any) => trade.profit > 0).length;
+    const winRate = sellTradesWithProfit.length > 0 ? (winningTrades / sellTradesWithProfit.length) * 100 : 0;
 
     // Calculate best trade and worst trade from ALL positions (open + closed)
     let bestTrade = 0;
@@ -347,10 +372,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timestamp: new Date().toISOString(),
       value: pnlData.totalPnl
     });
-
-    // Calculate PnL for each trade (attaches profit to SELL trades)
-    const tradesWithPnL = calculateTradesWithPnL(trades);
-    console.log(`📊 Calculated PnL for ${tradesWithPnL.filter((t: any) => t.profit !== undefined).length} SELL trades`);
 
     const dashboardData = {
       profile: {

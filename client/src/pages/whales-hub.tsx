@@ -1,13 +1,11 @@
-import { Navbar } from "@/components/navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Waves, TrendingUp, DollarSign, Activity } from "lucide-react";
 
 export default function WhalesHub() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900">
-      <Navbar />
-      
-      <div className="container mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 pt-12 md:pt-16 p-1 md:p-4">
+      <div className="h-full border-2 border-primary/30">
+        <div className="container mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
         {/* Header */}
         <div className="mb-4 md:mb-8">
           <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
@@ -85,6 +83,7 @@ export default function WhalesHub() {
               </ul>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

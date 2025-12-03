@@ -1498,6 +1498,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Builder Leaderboard endpoint
+  app.get("/api/leaderboard/builders", async (req, res) => {
+    try {
+      const timePeriod = (req.query.timePeriod as string) || "ALL";
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      console.log(`📊 Fetching builder leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
+
+      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
+        params: {
+          timePeriod: timePeriod.toUpperCase(),
+          limit: Math.min(limit, 50), // API max is 50
+          offset,
+        },
+        timeout: 10000,
+      });
+
+      const builders = response.data || [];
+      console.log(`✓ Fetched ${builders.length} builders from leaderboard`);
+
+      res.json(builders);
+    } catch (error: any) {
+      console.error("Error fetching builder leaderboard:", error);
+      res.status(error.response?.status || 500).json({
+        error: error.response?.data?.error || "Failed to fetch builder leaderboard",
+      });
+    }
+  });
+
+  // User Leaderboard endpoint
+  app.get("/api/leaderboard/users", async (req, res) => {
+    try {
+      const timePeriod = (req.query.timePeriod as string) || "all";
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      console.log(`📊 Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
+
+      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
+        params: {
+          timePeriod: timePeriod.toLowerCase(),
+          orderBy: 'VOL',
+          limit: Math.min(limit, 100), // API max is typically 100
+          offset,
+          category: 'overall',
+        },
+        timeout: 10000,
+      });
+
+      const users = response.data || [];
+      console.log(`✓ Fetched ${users.length} users from leaderboard`);
+
+      // Transform data to match frontend expectations
+      const transformedUsers = users.map((user: any, index: number) => ({
+        rank: user.rank || offset + index + 1,
+        userName: user.userName || user.name || 'Unknown',
+        xUsername: user.xUsername,
+        vol: parseFloat(user.vol || user.volume || 0),
+        walletAddress: user.user || user.walletAddress,
+        profileImage: user.profileImage || user.avatar,
+      }));
+
+      res.json(transformedUsers);
+    } catch (error: any) {
+      console.error("Error fetching user leaderboard:", error);
+      res.status(error.response?.status || 500).json({
+        error: error.response?.data?.error || "Failed to fetch user leaderboard",
+      });
+    }
+  });
+
+  // Builder Volume Time-Series endpoint
+  app.get("/api/leaderboard/builders/volume", async (req, res) => {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    
+    try {
+      let timePeriod = (req.query.timePeriod as string) || "ALL";
+
+      // ALL returns only aggregated data for one date, so use DAY for historical data
+      // But allow explicit timePeriod override
+      const apiTimePeriod = timePeriod === "ALL" ? "DAY" : timePeriod.toUpperCase();
+
+      console.log(`📊 [SERVER] Fetching builder volume time-series: requested=${timePeriod}, api=${apiTimePeriod}`);
+
+      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/volume`, {
+        params: {
+          timePeriod: apiTimePeriod,
+        },
+        timeout: 10000,
+      });
+
+      const rawData = response.data || [];
+      console.log(`✓ [SERVER] Fetched ${rawData.length} raw volume data points`);
+      console.log(`✓ [SERVER] Sample raw entry:`, JSON.stringify(rawData[0], null, 2));
+
+      // Return data per builder (not aggregated) so frontend can show different colors
+      const volumeData = rawData
+        .map((entry: any) => {
+          const builder = entry.builder || entry.Builder || 'Unknown';
+          const volume = parseFloat(entry.volume || entry.vol || 0) || 0;
+          const dt = entry.dt || entry.date || entry.timestamp;
+          
+          console.log(`   Processing entry: builder=${builder}, volume=${volume}, dt=${dt}`);
+          
+          return {
+            dt: dt,
+            builder: builder,
+            volume: volume,
+            activeUsers: parseInt(entry.activeUsers || entry.active_users || 0) || 0,
+            verified: entry.verified || false,
+          };
+        })
+        .filter((entry: any) => entry.dt && entry.builder && entry.builder !== 'Unknown') // Filter out invalid entries
+        .sort((a: { dt: string }, b: { dt: string }) => new Date(a.dt).getTime() - new Date(b.dt).getTime());
+
+      console.log(`✓ [SERVER] Sending ${volumeData.length} data points (per builder)`);
+      console.log(`✓ [SERVER] Sample processed entry:`, JSON.stringify(volumeData[0], null, 2));
+      console.log(`✓ [SERVER] Builders in response:`, Array.from(new Set(volumeData.map((e: any) => e.builder))).slice(0, 5));
+
+      return res.json(volumeData);
+    } catch (error: any) {
+      console.error("❌ [SERVER] Error fetching builder volume time-series:", error);
+      if (error.response) {
+        console.error("Response status:", error.response.status);
+        console.error("Response data:", error.response.data);
+      }
+      return res.status(error.response?.status || 500).json({
+        error: error.response?.data?.error || "Failed to fetch builder volume time-series",
+      });
+    }
+  });
+
   // Micro-Edge Scanner endpoints
   app.get("/api/scanner/alerts", (req, res) => {
     try {

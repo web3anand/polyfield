@@ -12,7 +12,7 @@ import { UsernameInput } from "@/components/username-input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Navbar } from "@/components/navbar";
+import { ShinyText } from "@/components/shiny-text";
 
 export default function Dashboard() {
   const [connectedUsername, setConnectedUsername] = useState("");
@@ -93,18 +93,15 @@ export default function Dashboard() {
 
   if (!connectedUsername) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {/* Navbar */}
-        <Navbar />
-        
+      <div className="min-h-screen bg-background flex flex-col pt-12 md:pt-16">
         {/* Hero Section */}
         <div className="flex-1 flex items-center justify-center px-3 md:px-4 py-6 md:py-12">
           <div className="w-full max-w-4xl space-y-6 md:space-y-12">
             {/* POLYFIELD Branding */}
             <div className="text-center space-y-4 md:space-y-8">
               <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tight">
-                <span className="poly-scramble text-green-400 drop-shadow-lg">POLY</span>
-                <span className="field-scramble text-gray-300 ml-1 md:ml-2">FIELD</span>
+                <ShinyText className="poly-scramble text-green-400 drop-shadow-lg">POLY</ShinyText>
+                <ShinyText className="field-scramble text-gray-300 ml-1 md:ml-2">FIELD</ShinyText>
               </h1>
               
               <div className="text-center space-y-2 md:space-y-4">
@@ -163,7 +160,7 @@ export default function Dashboard() {
     const isUserNotFound = error.message?.includes('USER_NOT_FOUND') || error.message?.includes('User Not Found');
     
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pt-12 md:pt-16">
         <div className="container mx-auto px-3 md:px-4 py-6 md:py-12">
           <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-4 md:space-y-6">
             <Card className="w-full max-w-lg p-4 md:p-6 text-center space-y-3 md:space-y-4">
@@ -207,14 +204,10 @@ export default function Dashboard() {
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
 
   return (
-    <div className="min-h-screen bg-background p-1 md:p-4">
-      <div className="h-full border-2 border-primary/30">
-        {/* Navbar */}
-        <Navbar />
-        
-        {/* Header with Search Bar */}
-        <div className="border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-40">
-          <div className="container mx-auto px-2 md:px-6 py-2 md:py-4">
+    <div className="min-h-screen bg-background pt-12 md:pt-16">
+      {/* Header with Search Bar */}
+      <div className="border-b border-border sticky top-12 md:top-16 bg-background/95 backdrop-blur-sm z-40">
+        <div className="container mx-auto px-2 md:px-6 py-2 md:py-4">
           <div className="flex justify-center items-center gap-2 md:gap-4">
             <div className="flex-1 max-w-md">
               <UsernameInput onSubmit={handleConnect} compact />
@@ -384,7 +377,6 @@ export default function Dashboard() {
           {/* Recent Activity */}
           <RecentActivity trades={recentTrades} />
         </div>
-      </div>
       </div>
     </div>
   );

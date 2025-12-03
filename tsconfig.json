@@ -1,6 +1,6 @@
 {
   "include": ["shared/**/*", "api/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "client/**/*", "server/**/*"],
   "compilerOptions": {
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
@@ -8,8 +8,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "strict": true,
-    "lib": ["ES2020", "dom", "dom.iterable"],
-    "jsx": "preserve",
+    "lib": ["ES2020"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "moduleResolution": "node",
@@ -17,7 +16,6 @@
     "baseUrl": ".",
     "types": ["node"],
     "paths": {
-      "@/*": ["./client/src/*"],
       "@shared/*": ["./shared/*"]
     }
   }

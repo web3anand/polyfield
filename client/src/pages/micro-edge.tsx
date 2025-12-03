@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Zap, Clock, Code, RefreshCw } from "lucide-react";
-import { Navbar } from "@/components/navbar";
 import { useToast } from "@/hooks/use-toast";
 
 interface EdgeAlert {
@@ -148,12 +147,10 @@ export default function MicroEdgeScanner() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <Navbar />
-      
-      {/* Header */}
-      <div className="border-b border-border bg-card/50">
+    <div className="min-h-screen bg-background pt-12 md:pt-16 p-1 md:p-4">
+      <div className="h-full border-2 border-primary/30">
+        {/* Header */}
+        <div className="border-b border-border bg-card/50">
         <div className="container mx-auto px-2 md:px-6 py-3 md:py-6">
           <div className="flex items-center gap-2 md:gap-4">
             <div className="p-1.5 md:p-3 bg-primary/10 rounded-lg">
@@ -335,6 +332,7 @@ export default function MicroEdgeScanner() {
             </div>
           )}
         </Card>
+      </div>
       </div>
     </div>
   );

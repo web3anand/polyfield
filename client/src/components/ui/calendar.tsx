@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react"
 import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
@@ -58,10 +58,19 @@ function Calendar({
           size?: number;
           disabled?: boolean;
         }) => {
-          if (orientation === "left") {
-            return <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
+          const iconProps = { className: cn("h-4 w-4", className), ...props };
+          switch (orientation) {
+            case "left":
+              return <ChevronLeft {...iconProps} />
+            case "right":
+              return <ChevronRight {...iconProps} />
+            case "up":
+              return <ChevronUp {...iconProps} />
+            case "down":
+              return <ChevronDown {...iconProps} />
+            default:
+              return <ChevronRight {...iconProps} />
           }
-          return <ChevronRight className={cn("h-4 w-4", className)} {...props} />
         },
       }}
       {...props}
