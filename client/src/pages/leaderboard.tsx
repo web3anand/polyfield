@@ -83,25 +83,41 @@ export default function Leaderboard() {
         const url = `/api/leaderboard/builders/volume?timePeriod=${volumeTimeFrame}`;
         const response = await fetch(url);
         
+        // Check if response is OK
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Failed to fetch builder volume time-series: ${response.status} - ${errorText}`);
+          console.warn(`⚠️ API returned ${response.status}: ${errorText.substring(0, 100)}`);
+          return []; // Return empty array instead of throwing
+        }
+        
+        // Check content type to ensure it's JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn(`⚠️ API returned non-JSON content: ${contentType}`);
+          return []; // Return empty array instead of throwing
         }
         
         const data = await response.json();
         
         if (!Array.isArray(data)) {
+          console.warn(`⚠️ API returned non-array data:`, typeof data);
           return [];
         }
         
         return data;
-      } catch (error) {
+      } catch (error: any) {
+        // Handle JSON parse errors (when API returns HTML instead of JSON)
+        if (error instanceof SyntaxError && error.message.includes('JSON')) {
+          console.error("❌ Error parsing JSON (likely got HTML):", error.message);
+          return []; // Return empty array instead of throwing
+        }
+        
         console.error("❌ Error in queryFn:", error);
-        throw error;
+        return []; // Return empty array instead of throwing to prevent UI crashes
       }
     },
     staleTime: 5 * 60 * 1000,
-    retry: 2,
+    retry: 1, // Reduced retries since we're handling errors gracefully
   });
 
   return (
