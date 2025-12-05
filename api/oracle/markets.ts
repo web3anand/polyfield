@@ -7,6 +7,16 @@ const supabase = createClient(
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   try {
     const limit = parseInt(req.query.limit as string) || 20;
     
@@ -21,7 +31,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .order('timestamp', { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      // Return empty array instead of throwing
+      return res.status(200).json([]);
+    }
 
     const markets = (oracles || []).map(m => ({
       marketId: m.market_id,

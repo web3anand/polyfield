@@ -7,6 +7,16 @@ const supabase = createClient(
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   try {
     // Get all oracles from database
     const { data: oracles, error } = await supabase
@@ -15,7 +25,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (error) {
       console.error('Supabase error:', error);
-      throw error;
+      // Don't throw, return default stats instead
+      return res.status(200).json({
+        marketsTracked: 0,
+        totalAlerts: 0,
+        consensusDetected: 0,
+        disputed: 0,
+        autoBets: 0,
+        winRate: 0,
+        edgeTime: '0s'
+      });
     }
 
     const total = oracles?.length || 0;

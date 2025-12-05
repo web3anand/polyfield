@@ -277,8 +277,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`📍 [VERCEL API ROUTE] Dashboard request for username: ${username}`);
 
     // Find user by username
-    const userInfo = await findUserByUsername(username);
-    console.log('User info found:', userInfo);
+    let userInfo;
+    try {
+      userInfo = await findUserByUsername(username);
+      console.log('User info found:', userInfo);
+    } catch (error: any) {
+      // Check if it's a "user not found" error
+      if (error.message?.includes('User not found') || error.message?.includes('No profiles found')) {
+        console.log(`User not found: ${username}`);
+        res.status(404).json({ 
+          error: `User not found: ${username}`,
+          message: 'The requested user could not be found in Polymarket'
+        });
+        return;
+      }
+      // Re-throw other errors to be handled by outer catch
+      throw error;
+    }
 
     // Fetch user data in parallel
     const [positions, trades, pnlData, leaderboardData] = await Promise.all([
