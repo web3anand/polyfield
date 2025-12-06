@@ -4,7 +4,8 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Shield, Loader2, Search, ChevronLeft, ChevronRight, Check, Wallet } from "lucide-react";
+import { Shield, Loader2, Search, ChevronLeft, ChevronRight, Check, Wallet, Filter, ArrowUpDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PixelChart } from "@/components/pixel-chart";
@@ -156,6 +157,10 @@ export default function Leaderboard() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string>("rank");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [pnlFilter, setPnlFilter] = useState<string>("all"); // all, positive, negative
+  const [volumeFilter, setVolumeFilter] = useState<string>("all"); // all, high, medium, low
   const { toast } = useToast();
   const itemsPerPage = 25;
   const isUsersPage = location === "/leaderboard/users";
@@ -194,26 +199,115 @@ export default function Leaderboard() {
     staleTime: 5 * 60 * 1000,
   });
   
-  // Filter data based on search query
+  // Filter and sort data
   const filteredBuilders = useMemo(() => {
     if (!builders) return [];
-    if (!searchQuery.trim()) return builders;
-    const query = searchQuery.toLowerCase();
-    return builders.filter(builder => 
-      builder.builder.toLowerCase().includes(query)
-    );
-  }, [builders, searchQuery]);
+    
+    let filtered = [...builders];
+    
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(builder => 
+        builder.builder.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply volume filter
+    if (volumeFilter !== "all") {
+      const volumes = filtered.map(b => b.volume).filter(v => v > 0);
+      if (volumes.length > 0) {
+        const maxVol = Math.max(...volumes);
+        const highThreshold = maxVol * 0.7;
+        const mediumThreshold = maxVol * 0.3;
+        
+        filtered = filtered.filter(builder => {
+          if (volumeFilter === "high") return builder.volume >= highThreshold;
+          if (volumeFilter === "medium") return builder.volume >= mediumThreshold && builder.volume < highThreshold;
+          if (volumeFilter === "low") return builder.volume < mediumThreshold;
+          return true;
+        });
+      }
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "rank") {
+        comparison = (parseInt(a.rank) || 0) - (parseInt(b.rank) || 0);
+      } else if (sortBy === "volume") {
+        comparison = (a.volume || 0) - (b.volume || 0);
+      } else if (sortBy === "builder") {
+        comparison = (a.builder || "").localeCompare(b.builder || "");
+      } else if (sortBy === "activeUsers") {
+        comparison = (a.activeUsers || 0) - (b.activeUsers || 0);
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [builders, searchQuery, sortBy, sortOrder, volumeFilter]);
   
   const filteredUsers = useMemo(() => {
     if (!users) return [];
-    if (!searchQuery.trim()) return users;
-    const query = searchQuery.toLowerCase();
-    return users.filter(user => 
-      user.userName.toLowerCase().includes(query) ||
-      user.xUsername?.toLowerCase().includes(query) ||
-      user.walletAddress?.toLowerCase().includes(query)
-    );
-  }, [users, searchQuery]);
+    
+    let filtered = [...users];
+    
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.userName.toLowerCase().includes(query) ||
+        user.xUsername?.toLowerCase().includes(query) ||
+        user.walletAddress?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Apply PnL filter
+    if (pnlFilter !== "all") {
+      filtered = filtered.filter(user => {
+        const pnl = user.pnl || 0;
+        if (pnlFilter === "positive") return pnl > 0;
+        if (pnlFilter === "negative") return pnl < 0;
+        return true;
+      });
+    }
+    
+    // Apply volume filter
+    if (volumeFilter !== "all") {
+      const volumes = filtered.map(u => u.vol || 0).filter(v => v > 0);
+      if (volumes.length > 0) {
+        const maxVol = Math.max(...volumes);
+        const highThreshold = maxVol * 0.7;
+        const mediumThreshold = maxVol * 0.3;
+        
+        filtered = filtered.filter(user => {
+          const vol = user.vol || 0;
+          if (volumeFilter === "high") return vol >= highThreshold;
+          if (volumeFilter === "medium") return vol >= mediumThreshold && vol < highThreshold;
+          if (volumeFilter === "low") return vol < mediumThreshold;
+          return true;
+        });
+      }
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "rank") {
+        comparison = (parseInt(a.rank) || 0) - (parseInt(b.rank) || 0);
+      } else if (sortBy === "volume") {
+        comparison = (a.vol || 0) - (b.vol || 0);
+      } else if (sortBy === "pnl") {
+        comparison = (a.pnl || 0) - (b.pnl || 0);
+      } else if (sortBy === "username") {
+        comparison = (a.userName || "").localeCompare(b.userName || "");
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [users, searchQuery, sortBy, sortOrder, pnlFilter, volumeFilter]);
   
   // Paginate filtered data
   const paginatedBuilders = useMemo(() => {
@@ -370,9 +464,29 @@ export default function Leaderboard() {
   const totalPagesUsers = Math.ceil(filteredUsers.length / itemsPerPage);
   const totalPages = isUsersPage ? totalPagesUsers : totalPagesBuilders;
   
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search, filter, or sort changes
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    setCurrentPage(1);
+  };
+  
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    setCurrentPage(1);
+  };
+  
+  const handleSortOrderChange = (value: string) => {
+    setSortOrder(value as "asc" | "desc");
+    setCurrentPage(1);
+  };
+  
+  const handlePnlFilterChange = (value: string) => {
+    setPnlFilter(value);
+    setCurrentPage(1);
+  };
+  
+  const handleVolumeFilterChange = (value: string) => {
+    setVolumeFilter(value);
     setCurrentPage(1);
   };
 
@@ -440,18 +554,120 @@ export default function Leaderboard() {
                 </p>
               </div>
               
-              {/* Elegant Search Bar - Only for Users */}
+              {/* Extended Search Bar with Filters and Sort - Only for Users */}
               {isUsersPage && (
-                <div className="relative w-full md:w-96">
-                  <div className="relative group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary z-10" />
-                    <Input
-                      type="text"
-                      placeholder="Search users by name, username, or wallet..."
-                      value={searchQuery}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      className="pl-11 pr-4 h-11 bg-background/50 backdrop-blur-sm border-border/50 focus:border-primary/50 focus:bg-background transition-all duration-200 rounded-lg shadow-sm hover:border-border"
-                    />
+                <div className="w-full flex flex-col sm:flex-row gap-3">
+                  {/* Extended Search Bar */}
+                  <div className="relative flex-1 min-w-0">
+                    <div className="relative group">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary z-10" />
+                      <Input
+                        type="text"
+                        placeholder="Search users by name, username, or wallet..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="pl-11 pr-4 h-11 bg-background/50 backdrop-blur-sm border-border/50 focus:border-primary/50 focus:bg-background transition-all duration-200 rounded-lg shadow-sm hover:border-border"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Filter Dropdowns */}
+                  <div className="flex gap-2">
+                    <Select value={pnlFilter} onValueChange={handlePnlFilterChange}>
+                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
+                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="PnL Filter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All PnL</SelectItem>
+                        <SelectItem value="positive">Positive Only</SelectItem>
+                        <SelectItem value="negative">Negative Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
+                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
+                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="Volume Filter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Volume</SelectItem>
+                        <SelectItem value="high">High Volume</SelectItem>
+                        <SelectItem value="medium">Medium Volume</SelectItem>
+                        <SelectItem value="low">Low Volume</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Sort Dropdowns */}
+                  <div className="flex gap-2">
+                    <Select value={sortBy} onValueChange={handleSortChange}>
+                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
+                        <ArrowUpDown className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="Sort By" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rank">Rank</SelectItem>
+                        <SelectItem value="volume">Volume</SelectItem>
+                        <SelectItem value="pnl">PnL</SelectItem>
+                        <SelectItem value="username">Username</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={sortOrder} onValueChange={handleSortOrderChange}>
+                      <SelectTrigger className="w-[120px] h-11 bg-background/50 backdrop-blur-sm border-border/50">
+                        <SelectValue placeholder="Order" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">Ascending</SelectItem>
+                        <SelectItem value="desc">Descending</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+              
+              {/* Filters and Sort for Builders */}
+              {!isUsersPage && (
+                <div className="w-full flex flex-col sm:flex-row gap-3">
+                  <div className="flex gap-2">
+                    <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
+                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
+                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="Volume Filter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Volume</SelectItem>
+                        <SelectItem value="high">High Volume</SelectItem>
+                        <SelectItem value="medium">Medium Volume</SelectItem>
+                        <SelectItem value="low">Low Volume</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Select value={sortBy} onValueChange={handleSortChange}>
+                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
+                        <ArrowUpDown className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                        <SelectValue placeholder="Sort By" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rank">Rank</SelectItem>
+                        <SelectItem value="volume">Volume</SelectItem>
+                        <SelectItem value="builder">Builder Name</SelectItem>
+                        <SelectItem value="activeUsers">Active Users</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={sortOrder} onValueChange={handleSortOrderChange}>
+                      <SelectTrigger className="w-[120px] h-11 bg-background/50 backdrop-blur-sm border-border/50">
+                        <SelectValue placeholder="Order" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">Ascending</SelectItem>
+                        <SelectItem value="desc">Descending</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}
