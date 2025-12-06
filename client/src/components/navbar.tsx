@@ -19,20 +19,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: "01", label: "TRACKER", href: "/", isActive: false },
+  { id: "02", label: "ORACLE", href: "/oracle", isActive: false },
   { 
-    id: "02", 
-    label: "SCANNER", 
-    href: "/scanner/whales", 
-    isActive: false,
-    hasDropdown: true,
-    subItems: [
-      { label: "Whales Hub", href: "/scanner/whales" },
-      { label: "Micro Edge Scanner", href: "/scanner/micro-edge" }
-    ]
-  },
-  { id: "03", label: "INSIDOOR", href: "/oracle", isActive: false },
-  { 
-    id: "04", 
+    id: "03", 
     label: "LEADERBOARD", 
     href: "/leaderboard/builders", 
     isActive: false, 
