@@ -1507,6 +1507,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📊 Fetching builder leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
 
+      // Try Supabase first (fast cache)
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
+        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const { data: cachedBuilders, error: supabaseError } = await supabase
+          .from('leaderboard_builders')
+          .select('*')
+          .eq('time_period', timePeriod.toLowerCase())
+          .order('rank', { ascending: true })
+          .range(offset, offset + limit - 1);
+
+        if (!supabaseError && cachedBuilders && cachedBuilders.length > 0) {
+          console.log(`✓ Fetched ${cachedBuilders.length} builders from Supabase cache`);
+          
+          const transformedBuilders = cachedBuilders.map((builder: any) => ({
+            rank: builder.rank.toString(),
+            builder: builder.builder_name,
+            volume: parseFloat(builder.volume || 0),
+            activeUsers: parseInt(builder.active_users || 0),
+            verified: builder.verified === true,
+            builderLogo: builder.builder_logo || undefined,
+            marketsCreated: parseInt(builder.markets_created || 0),
+          }));
+
+          return res.json(transformedBuilders);
+        }
+      } catch (supabaseErr: any) {
+        console.warn('⚠️ Supabase fetch failed, falling back to Polymarket API:', supabaseErr.message);
+      }
+
+      // Fallback to Polymarket API
+      console.log('📡 Fetching from Polymarket API (fallback)...');
       const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
         params: {
           timePeriod: timePeriod.toUpperCase(),
@@ -1517,9 +1552,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const builders = response.data || [];
-      console.log(`✓ Fetched ${builders.length} builders from leaderboard`);
+      console.log(`✓ Fetched ${builders.length} builders from Polymarket API`);
 
-      res.json(builders);
+      // Transform to match frontend expectations
+      const transformedBuilders = builders.map((builder: any) => ({
+        rank: builder.rank?.toString() || (builders.indexOf(builder) + offset + 1).toString(),
+        builder: builder.builderName || builder.name || builder.builder || 'Unknown',
+        volume: parseFloat(builder.vol || builder.volume || 0),
+        activeUsers: parseInt(builder.activeUsers || 0),
+        verified: builder.verified === true || builder.verified === 'true',
+        builderLogo: builder.builderLogo || builder.logo || builder.image || undefined,
+        marketsCreated: parseInt(builder.marketsCreated || builder.markets || 0),
+      }));
+
+      res.json(transformedBuilders);
     } catch (error: any) {
       console.error("Error fetching builder leaderboard:", error);
       res.status(error.response?.status || 500).json({
@@ -1537,11 +1583,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📊 Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
 
+      // Try Supabase first (fast cache)
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
+        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const { data: cachedUsers, error: supabaseError } = await supabase
+          .from('leaderboard_users')
+          .select('*')
+          .eq('time_period', timePeriod.toLowerCase())
+          .order('rank', { ascending: true })
+          .range(offset, offset + limit - 1);
+
+        if (!supabaseError && cachedUsers && cachedUsers.length > 0) {
+          console.log(`✓ Fetched ${cachedUsers.length} users from Supabase cache`);
+          
+          const transformedUsers = cachedUsers.map((user: any) => ({
+            rank: user.rank,
+            userName: user.username,
+            xUsername: user.x_username,
+            vol: parseFloat(user.volume || 0),
+            walletAddress: user.wallet_address || undefined,
+            profileImage: user.profile_image || undefined,
+            pnl: user.pnl !== null ? parseFloat(user.pnl) : undefined,
+          }));
+
+          return res.json(transformedUsers);
+        }
+      } catch (supabaseErr: any) {
+        console.warn('⚠️ Supabase fetch failed, falling back to Polymarket API:', supabaseErr.message);
+      }
+
+      // Fallback to Polymarket API
+      console.log('📡 Fetching from Polymarket API (fallback)...');
       const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
         params: {
           timePeriod: timePeriod.toLowerCase(),
           orderBy: 'VOL',
-          limit: Math.min(limit, 100), // API max is typically 100
+          limit: Math.min(limit, 50), // API max is 50 per request
           offset,
           category: 'overall',
         },
@@ -1549,23 +1630,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const users = response.data || [];
-      console.log(`✓ Fetched ${users.length} users from leaderboard`);
+      console.log(`✓ Fetched ${users.length} users from Polymarket API`);
 
       // Transform data to match frontend expectations
-      const transformedUsers = users.map((user: any, index: number) => ({
-        rank: user.rank || offset + index + 1,
-        userName: user.userName || user.name || 'Unknown',
-        xUsername: user.xUsername,
-        vol: parseFloat(user.vol || user.volume || 0),
-        walletAddress: user.user || user.walletAddress,
-        profileImage: user.profileImage || user.avatar,
-      }));
+      const transformedUsers = users.map((user: any, index: number) => {
+        // Polymarket API returns 'proxyWallet' as the wallet address field
+        const walletAddress = user.proxyWallet || user.user || user.walletAddress || user.wallet || user.address;
+        
+        return {
+          rank: user.rank || offset + index + 1,
+          userName: user.userName || user.name || 'Unknown',
+          xUsername: user.xUsername,
+          vol: parseFloat(user.vol || user.volume || 0),
+          walletAddress: walletAddress || undefined, // Use undefined instead of null
+          profileImage: user.profileImage || user.avatar,
+          pnl: user.pnl !== undefined ? parseFloat(user.pnl) : undefined, // Include PnL if available from API
+        };
+      });
 
       res.json(transformedUsers);
     } catch (error: any) {
       console.error("Error fetching user leaderboard:", error);
       res.status(error.response?.status || 500).json({
         error: error.response?.data?.error || "Failed to fetch user leaderboard",
+      });
+    }
+  });
+
+  // User Wallet endpoint (username -> wallet) - simpler version for leaderboard
+  app.get("/api/leaderboard/wallet", async (req, res) => {
+    try {
+      const { username } = req.query;
+
+      if (!username || typeof username !== 'string') {
+        res.status(400).json({ error: 'Username is required' });
+        return;
+      }
+
+      console.log(`📊 [EXPRESS] Fetching wallet for username: ${username}`);
+
+      try {
+        // Get wallet address from username (same as dashboard)
+        const userInfo = await findUserByUsername(username);
+        const walletAddress = userInfo.wallet;
+        
+        console.log(`✓ Found wallet for ${username}: ${walletAddress}`);
+
+        res.json({
+          username,
+          walletAddress,
+        });
+      } catch (error: any) {
+        console.error(`❌ Error processing ${username}:`, error.message);
+        
+        // Return error but don't break the leaderboard
+        res.json({
+          username,
+          walletAddress: null,
+          error: error.message,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error in wallet endpoint:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch wallet data',
+        message: error.message 
+      });
+    }
+  });
+
+  // PnL by wallet address endpoint
+  app.get("/api/leaderboard/pnl", async (req, res) => {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Content-Type', 'application/json');
+
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
+    try {
+      const { wallet } = req.query;
+
+      if (!wallet || typeof wallet !== 'string') {
+        res.status(400).json({ error: 'Wallet address is required' });
+        return;
+      }
+
+      console.log(`📊 [EXPRESS] Fetching PnL for wallet: ${wallet}`);
+
+      try {
+        const { fetchUserPnLData } = await import('../api/utils/polymarket-pnl.js');
+        const pnlData = await fetchUserPnLData(wallet, false);
+        
+        res.status(200).json({
+          wallet,
+          totalPnL: pnlData.totalPnL,
+          realizedPnL: pnlData.realizedPnl,
+          unrealizedPnL: pnlData.unrealizedPnl,
+        });
+      } catch (error: any) {
+        console.error(`❌ Error fetching PnL for ${wallet}:`, error);
+        // Return zero PnL instead of error to prevent breaking the leaderboard
+        res.status(200).json({
+          wallet,
+          totalPnL: 0,
+          realizedPnL: 0,
+          unrealizedPnL: 0,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error in PnL endpoint:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch PnL data',
+        message: error.message 
+      });
+    }
+  });
+
+  // User Wallet & PnL endpoint (username -> wallet -> PnL)
+  app.get("/api/leaderboard/user-pnl", async (req, res) => {
+    try {
+      const { username } = req.query;
+
+      if (!username || typeof username !== 'string') {
+        res.status(400).json({ error: 'Username is required' });
+        return;
+      }
+
+      console.log(`📊 [EXPRESS] Fetching wallet and PnL for username: ${username}`);
+
+      try {
+        // Step 1: Get wallet address from username
+        const userInfo = await findUserByUsername(username);
+        const walletAddress = userInfo.wallet;
+        
+        console.log(`✓ Found wallet for ${username}: ${walletAddress}`);
+
+        // Step 2: Get PnL data using wallet address
+        const { fetchUserPnLData } = await import('../api/utils/polymarket-pnl.js');
+        const pnlData = await fetchUserPnLData(walletAddress, false);
+        
+        res.json({
+          username,
+          walletAddress,
+          totalPnL: pnlData.totalPnL,
+          realizedPnL: pnlData.realizedPnL,
+          unrealizedPnL: pnlData.unrealizedPnL,
+        });
+      } catch (error: any) {
+        console.error(`❌ Error processing ${username}:`, error.message);
+        
+        // Return error but don't break the leaderboard
+        res.json({
+          username,
+          walletAddress: null,
+          totalPnL: 0,
+          realizedPnL: 0,
+          unrealizedPnL: 0,
+          error: error.message,
+        });
+      }
+    } catch (error: any) {
+      console.error('Error in user-pnl endpoint:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch user PnL data',
+        message: error.message 
       });
     }
   });

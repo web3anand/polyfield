@@ -141,48 +141,59 @@ function calculateTradesWithPnL(trades: any[]): any[] {
 
   const tradePnLMap = new Map<string, number>(); // Map trade ID to PnL
 
-  // Match buys with sells to calculate realized PnL
+  // Match buys with sells to calculate realized PnL using proper FIFO
   for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
     if (sells.length === 0) continue; // Skip if no sells
     
-    let remainingBuySize = 0;
-    let avgBuyPrice = 0;
-    let totalBuyCost = 0;
-
-    // Calculate FIFO cost basis from buys
-    for (const buy of buys.sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime())) {
-      const price = parseFloat(buy.outcomeTokenPrice || buy.price || 0);
-      const size = parseFloat(buy.outcomeTokenAmount || buy.size || 0);
-      totalBuyCost += price * size;
-      remainingBuySize += size;
-      avgBuyPrice = totalBuyCost / remainingBuySize;
-    }
+    // Sort buys chronologically (oldest first) for FIFO matching
+    const sortedBuys = buys
+      .map(buy => ({
+        ...buy,
+        price: parseFloat(buy.outcomeTokenPrice || buy.price || 0),
+        size: parseFloat(buy.outcomeTokenAmount || buy.size || 0),
+        remainingSize: parseFloat(buy.outcomeTokenAmount || buy.size || 0), // Track remaining size for FIFO
+      }))
+      .sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime());
 
     console.log(`   Market: ${key}`);
-    console.log(`     ${buys.length} BUYs (total size: ${remainingBuySize.toFixed(2)}, avg price: $${avgBuyPrice.toFixed(3)})`);
+    console.log(`     ${sortedBuys.length} BUYs (total size: ${sortedBuys.reduce((sum, b) => sum + b.size, 0).toFixed(2)})`);
     console.log(`     ${sells.length} SELLs`);
 
-    // Match with sells
+    // Match sells with buys using FIFO (First In, First Out)
     for (const sell of sells.sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime())) {
-      const price = parseFloat(sell.outcomeTokenPrice || sell.price || 0);
-      const size = parseFloat(sell.outcomeTokenAmount || sell.size || 0);
-      const sizeToMatch = Math.min(size, remainingBuySize);
-      
-      if (sizeToMatch > 0) {
-        const pnl = (price - avgBuyPrice) * sizeToMatch;
+      const sellPrice = parseFloat(sell.outcomeTokenPrice || sell.price || 0);
+      let sellSize = parseFloat(sell.outcomeTokenAmount || sell.size || 0);
+      let totalCostBasis = 0;
+      let totalMatchedSize = 0;
+
+      // Match this sell against buys in FIFO order
+      for (const buy of sortedBuys) {
+        if (sellSize <= 0) break; // All of this sell has been matched
         
-        // Store PnL for this sell trade (use the stable ID we assigned earlier)
+        if (buy.remainingSize > 0) {
+          const sizeToMatch = Math.min(sellSize, buy.remainingSize);
+          const costForThisMatch = buy.price * sizeToMatch;
+          
+          totalCostBasis += costForThisMatch;
+          totalMatchedSize += sizeToMatch;
+          buy.remainingSize -= sizeToMatch;
+          sellSize -= sizeToMatch;
+          
+          console.log(`       Matched ${sizeToMatch.toFixed(2)} from BUY @ $${buy.price.toFixed(3)} (remaining: ${buy.remainingSize.toFixed(2)})`);
+        }
+      }
+
+      // Calculate PnL for this sell trade
+      if (totalMatchedSize > 0) {
+        const totalProceeds = sellPrice * totalMatchedSize;
+        const pnl = totalProceeds - totalCostBasis;
+        
+        // Store PnL for this sell trade
         const tradeId = sell.id;
         tradePnLMap.set(tradeId, pnl);
-        console.log(`       SELL ${size.toFixed(2)} @ $${price.toFixed(3)} → PnL: $${pnl.toFixed(2)} (matched ${sizeToMatch.toFixed(2)})`);
-        
-        remainingBuySize -= sizeToMatch;
-        totalBuyCost -= avgBuyPrice * sizeToMatch;
-        if (remainingBuySize > 0) {
-          avgBuyPrice = totalBuyCost / remainingBuySize;
-        }
+        console.log(`       SELL ${totalMatchedSize.toFixed(2)} @ $${sellPrice.toFixed(3)} → Cost: $${totalCostBasis.toFixed(2)}, PnL: $${pnl.toFixed(2)}`);
       } else {
-        console.log(`       SELL ${size.toFixed(2)} @ $${price.toFixed(3)} → No matching BUYs!`);
+        console.log(`       SELL ${parseFloat(sell.outcomeTokenAmount || sell.size || 0).toFixed(2)} @ $${sellPrice.toFixed(3)} → No matching BUYs!`);
       }
     }
   }

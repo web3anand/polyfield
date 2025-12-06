@@ -261,30 +261,30 @@ export default function Dashboard() {
                       <code className="text-xs md:text-sm text-muted-foreground font-mono tracking-wider" data-testid="text-wallet-address">
                         {profile.walletAddress.slice(0, 6)}...{profile.walletAddress.slice(-4)}
                       </code>
-                    <button
-                      onClick={handleCopyAddress}
-                      className="p-0.5 md:p-1 transition-all"
-                      data-testid="button-copy-address"
-                      aria-label="Copy wallet address"
-                    >
-                      {copiedAddress ? (
-                        <Check className="w-3 h-3 md:w-3.5 md:h-3.5 text-chart-2" />
-                      ) : (
-                        <Copy className="w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground" />
-                      )}
-                    </button>
-                    <button
-                      onClick={handleRefresh}
-                      disabled={isRefetching}
-                      className="p-0.5 md:p-1 transition-all disabled:opacity-50"
-                      data-testid="button-refresh"
-                      aria-label="Refresh data"
-                      title="Refresh dashboard data"
-                    >
-                      <RefreshCw className={`w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground ${isRefetching ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
+                      <button
+                        onClick={handleCopyAddress}
+                        className="p-0.5 md:p-1 transition-all"
+                        data-testid="button-copy-address"
+                        aria-label="Copy wallet address"
+                      >
+                        {copiedAddress ? (
+                          <Check className="w-3 h-3 md:w-3.5 md:h-3.5 text-chart-2" />
+                        ) : (
+                          <Copy className="w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
                   )}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefetching}
+                    className="p-0.5 md:p-1 transition-all disabled:opacity-50"
+                    data-testid="button-refresh"
+                    aria-label="Refresh data"
+                    title="Refresh dashboard data"
+                  >
+                    <RefreshCw className={`w-3 h-3 md:w-3.5 md:h-3.5 text-muted-foreground ${isRefetching ? 'animate-spin' : ''}`} />
+                  </button>
                 </div>
               </div>
             </div>

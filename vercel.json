@@ -12,5 +12,16 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "crons": [
+    {
+      "path": "/api/leaderboard/sync",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "functions": {
+    "api/leaderboard/sync.ts": {
+      "maxDuration": 300
+    }
+  }
 }
