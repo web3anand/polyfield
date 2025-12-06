@@ -22,12 +22,6 @@
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 300
-    },
-    "api/leaderboard/sync.ts": {
-      "maxDuration": 300
-    },
-    "api/dashboard/*.ts": {
-      "maxDuration": 60
     }
   }
 }
