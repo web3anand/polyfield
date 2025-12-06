@@ -33,9 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       res.status(200).json({
         wallet,
-        totalPnL: pnlData.totalPnL,
-        realizedPnL: pnlData.realizedPnL,
-        unrealizedPnL: pnlData.unrealizedPnL,
+        totalPnL: pnlData.totalPnl,
+        realizedPnL: pnlData.realizedPnl,
+        unrealizedPnL: pnlData.unrealizedPnl,
       });
     } catch (error: any) {
       console.error(`❌ Error fetching PnL for ${wallet}:`, error);
