@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "cd client && npm install && npm run build",
   "outputDirectory": "public",
-  "installCommand": "npm install",
+  "installCommand": "npm install && cd api && npm install",
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -20,8 +20,15 @@
     }
   ],
   "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 300
+    },
     "api/leaderboard/sync.ts": {
       "maxDuration": 300
+    },
+    "api/dashboard/*.ts": {
+      "maxDuration": 60
     }
   }
 }
