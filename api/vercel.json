@@ -9,6 +9,10 @@
       "runtime": "nodejs18.x",
       "memory": 2048,
       "maxDuration": 60
+    },
+    "leaderboard/sync.ts": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 300
     }
   }
 }

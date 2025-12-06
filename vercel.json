@@ -2,7 +2,7 @@
   "version": 2,
   "buildCommand": "cd client && npm install && npm run build",
   "outputDirectory": "public",
-  "installCommand": "npm install && cd api && npm install",
+  "installCommand": "npm install",
   "rewrites": [
     {
       "source": "/api/(.*)",
