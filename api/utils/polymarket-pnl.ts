@@ -28,7 +28,7 @@ async function fetchWithRetry<T>(
 interface RealizedPnLResult {
   realizedPnl: number;
   closedPositions: number;
-  allClosedPositions: Array<{ realizedPnl: number; tokenId: string }>;
+  allClosedPositions: Array<{ realizedPnl: number; tokenId: string }>
 }
 
 interface UnrealizedPnLResult {
@@ -55,15 +55,16 @@ interface ClosedPosition {
 /**
  * Fetches closed positions with timestamps for PnL history chart
  * Uses the /closed-positions endpoint which has endDate timestamps
+ * Note: API has pagination limits, so we fetch multiple pages
  */
-export async function fetchClosedPositionsHistory(userAddress: string, limit: number = 1000): Promise<ClosedPosition[]> {
+export async function fetchClosedPositionsHistory(userAddress: string, limit: number = 5000): Promise<ClosedPosition[]> {
   console.log(`📊 Fetching up to ${limit} closed positions with timestamps...`);
   
   try {
     // Fetch multiple pages to get complete history
     const allPositions: any[] = [];
     let offset = 0;
-    const pageSize = 500;
+    const pageSize = 100; // API seems to limit to ~100 per page
     const maxPages = Math.ceil(limit / pageSize);
     
     for (let page = 0; page < maxPages; page++) {
@@ -73,9 +74,8 @@ export async function fetchClosedPositionsHistory(userAddress: string, limit: nu
             user: userAddress,
             limit: pageSize,
             offset
-            // Note: API doesn't support sortBy=ENDDATE, we'll sort client-side
           },
-          timeout: 5000
+          timeout: 8000
         });
         
         const batch = response.data || [];
@@ -88,7 +88,7 @@ export async function fetchClosedPositionsHistory(userAddress: string, limit: nu
         offset += pageSize;
         
         // Small delay to avoid rate limiting
-        await delay(100);
+        await delay(50);
       } catch (error) {
         console.error(`Error fetching page ${page + 1}:`, error);
         break;
@@ -267,7 +267,7 @@ export async function fetchUserPnLData(userAddress: string, includeFullHistory?:
     const [unrealizedData, realizedData, closedPositionsHistory] = await Promise.all([
       fetchUnrealizedPnl(userAddress),
       fetchRealizedPnl(userAddress),
-      fetchClosedPositionsHistory(userAddress, 2000) // Fetch up to 2000 for complete history
+      fetchClosedPositionsHistory(userAddress, 6000) // Fetch up to 6000 for complete history
     ]);
     
     // Use subgraph's accurate realized PnL
@@ -304,9 +304,9 @@ export async function fetchUserPnLData(userAddress: string, includeFullHistory?:
 }
 
 /**
- * Generates full historical PnL timeline from actual trades
- * Calculates PnL by matching BUY/SELL pairs (FIFO) to show real trade-by-trade performance
- * Shows ALL trades to reflect volatility clearly
+ * Generates full historical PnL timeline from closed positions
+ * Uses closedPositionsHistory which has accurate realized PnL from API
+ * Falls back to trades FIFO calculation only if no closed positions available
  */
 export function generateFullPnLHistory(
   activityEvents: any[],
@@ -315,9 +315,89 @@ export function generateFullPnLHistory(
   trades?: Array<{ timestamp: string; type: 'BUY' | 'SELL'; price: number; size: number; marketName?: string }>
 ): Array<{ timestamp: string; value: number }> {
   
-  // PRIORITY: Use trades data to calculate realized PnL with actual timestamps
-  // Trades have: side="BUY"/"SELL", timestamp, size, price, asset
-  // If activityEvents is empty but trades array is provided, convert trades to activityEvents format
+  // PRIORITY 1: Use closed positions data (most accurate - has real PnL from API)
+  if (closedPositions && closedPositions.length > 0) {
+    console.log(`📊 Generating PnL history from ${closedPositions.length} closed positions (API data)...`);
+    
+    const sortedPositions = closedPositions
+      .filter(p => p.endDate)
+      .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime());
+    
+    if (sortedPositions.length > 0) {
+      let cumulativePnL = 0;
+      const timeline: Array<{ timestamp: string; value: number }> = [];
+      
+      // Add starting point (7 days before first closed position)
+      const firstTime = new Date(sortedPositions[0].endDate!).getTime();
+      const startTime = firstTime - (7 * 24 * 60 * 60 * 1000);
+      timeline.push({
+        timestamp: new Date(startTime).toISOString(),
+        value: 0
+      });
+      
+      // Sample positions if there are too many (for performance)
+      const shouldSample = sortedPositions.length > 1000;
+      const sampleInterval = shouldSample ? Math.ceil(sortedPositions.length / 500) : 1;
+      
+      if (shouldSample) {
+        console.log(`   📊 Sampling every ${sampleInterval} positions (${sortedPositions.length} total) for performance`);
+      }
+      
+      // Add each position closure with cumulative PnL
+      sortedPositions.forEach((pos, idx) => {
+        cumulativePnL += pos.realizedPnl || 0;
+        
+        // Include all points or sample for large datasets
+        if (idx % sampleInterval === 0 || idx === sortedPositions.length - 1) {
+          timeline.push({
+            timestamp: new Date(pos.endDate!).toISOString(),
+            value: parseFloat(cumulativePnL.toFixed(2))
+          });
+        }
+      });
+      
+      console.log(`   📈 Cumulative realized PnL from closed positions: $${cumulativePnL.toFixed(2)}`);
+      console.log(`   📈 Final total PnL (includes unrealized): $${finalTotalPnL.toFixed(2)}`);
+      console.log(`   📈 Unrealized PnL: $${(finalTotalPnL - cumulativePnL).toFixed(2)}`);
+      
+      // Handle the gap between last closed position and current total PnL
+      const unrealizedPnL = finalTotalPnL - cumulativePnL;
+      const now = Date.now();
+      const lastClosedTime = new Date(sortedPositions[sortedPositions.length - 1].endDate!).getTime();
+      const daysSinceLastClosed = (now - lastClosedTime) / (24 * 60 * 60 * 1000);
+      
+      // If there's significant unrealized PnL or time gap, add intermediate points
+      if (Math.abs(unrealizedPnL) > 100 && daysSinceLastClosed > 0.5) {
+        console.log(`   📊 Adding intermediate points for unrealized PnL transition...`);
+        
+        // Add points showing gradual growth from last closed to now
+        const numPoints = Math.min(10, Math.max(3, Math.floor(daysSinceLastClosed)));
+        const timeStep = (now - lastClosedTime) / numPoints;
+        const pnlStep = unrealizedPnL / numPoints;
+        
+        for (let i = 1; i <= numPoints; i++) {
+          const timestamp = lastClosedTime + (timeStep * i);
+          const value = cumulativePnL + (pnlStep * i);
+          timeline.push({
+            timestamp: new Date(timestamp).toISOString(),
+            value: parseFloat(value.toFixed(2))
+          });
+        }
+      } else {
+        // Just add the final point with total PnL
+        timeline.push({
+          timestamp: new Date().toISOString(),
+          value: parseFloat(finalTotalPnL.toFixed(2))
+        });
+      }
+      
+      console.log(`   ✓ Generated ${timeline.length} data points from closed positions`);
+      return timeline;
+    }
+  }
+  
+  // PRIORITY 2: Fall back to trades FIFO calculation if no closed positions
+  // This is less accurate as we only get limited trades from API
   let tradeEvents = activityEvents && activityEvents.length > 0 
     ? activityEvents.filter(e => e.side && (e.side === 'BUY' || e.side === 'SELL'))
     : [];
@@ -325,7 +405,6 @@ export function generateFullPnLHistory(
   // Fallback: Use trades parameter if activityEvents is empty
   if (tradeEvents.length === 0 && trades && trades.length > 0) {
     tradeEvents = trades.map(t => {
-      // Convert timestamp string to seconds (Unix timestamp)
       const timestamp = typeof t.timestamp === 'string' 
         ? new Date(t.timestamp).getTime() / 1000 
         : (typeof t.timestamp === 'number' ? (t.timestamp > 1e12 ? t.timestamp / 1000 : t.timestamp) : Date.now() / 1000);
@@ -335,13 +414,14 @@ export function generateFullPnLHistory(
         timestamp: timestamp,
         price: t.price,
         size: t.size,
-        asset: t.marketName // Use marketName as asset identifier
+        asset: t.marketName
       };
     });
   }
   
   if (tradeEvents.length > 0) {
-    console.log(`📊 Generating PnL history from ${tradeEvents.length} trades (calculating cumulative PnL with volatility)...`);
+    console.log(`📊 Generating PnL history from ${tradeEvents.length} trades (FIFO fallback - less accurate)...`);
+    console.log(`   ⚠ Note: Using trades FIFO as fallback. Limited trades data may not reflect full history.`);
     
     // Calculate realized PnL from BUY/SELL matching (FIFO)
     const tradesByAsset = new Map<string, Array<any>>();
@@ -357,36 +437,30 @@ export function generateFullPnLHistory(
       tradesByAsset.get(asset)!.push(trade);
     });
     
-    // Calculate realized PnL events
     const realizedPnLEvents: Array<{ timestamp: number; pnl: number }> = [];
     
     tradesByAsset.forEach((assetTrades) => {
-      // Sort by timestamp (note: timestamp is in seconds, not ms)
       assetTrades.sort((a, b) => {
         const tsA = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime() / 1000;
         const tsB = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime() / 1000;
         return tsA - tsB;
       });
       
-      // FIFO queue for BUY trades
       const buyQueue: Array<{ size: number; costBasis: number }> = [];
       
       assetTrades.forEach(trade => {
         const side = (trade.side || '').toUpperCase();
         const size = parseFloat(trade.size || 0);
-        // Calculate USDC size from price * size
         const price = parseFloat(trade.price || 0);
         const usdcSize = price * size;
         const timestamp = typeof trade.timestamp === 'number' ? trade.timestamp : new Date(trade.timestamp).getTime() / 1000;
         
         if (side === 'BUY') {
-          // Add to buy queue
           buyQueue.push({
             size: size,
-            costBasis: usdcSize // Total cost in USDC
+            costBasis: usdcSize
           });
         } else if (side === 'SELL') {
-          // Match with oldest BUYs (FIFO)
           let remainingSize = size;
           let totalCost = 0;
           
@@ -402,14 +476,13 @@ export function generateFullPnLHistory(
             remainingSize -= matchSize;
             
             if (oldestBuy.size <= 0.000001) {
-              buyQueue.shift(); // Remove fully matched buy
+              buyQueue.shift();
             }
           }
           
-          // Calculate realized PnL: sell proceeds - cost basis
           const realizedPnL = usdcSize - totalCost;
           
-          if (Math.abs(realizedPnL) > 0.01) { // Ignore dust
+          if (Math.abs(realizedPnL) > 0.01) {
             realizedPnLEvents.push({
               timestamp: timestamp,
               pnl: realizedPnL
@@ -419,35 +492,26 @@ export function generateFullPnLHistory(
       });
     });
     
-    // Sort by timestamp and create cumulative timeline
     realizedPnLEvents.sort((a, b) => a.timestamp - b.timestamp);
     
     let cumulativePnL = 0;
     const timeline: Array<{ timestamp: string; value: number }> = [];
     
-    // Add starting point (90 days before first trade)
     if (realizedPnLEvents.length > 0) {
       const firstTime = realizedPnLEvents[0].timestamp * 1000;
-      const startTime = firstTime - (90 * 24 * 60 * 60 * 1000);
+      const startTime = firstTime - (7 * 24 * 60 * 60 * 1000);
       timeline.push({
         timestamp: new Date(startTime).toISOString(),
         value: 0
       });
     }
     
-    // Add ALL cumulative points to show volatility - each trade's impact should be visible
-    // For very large datasets (>50k events), we can sample to avoid performance issues
-    const shouldSample = realizedPnLEvents.length > 50000;
-    const sampleInterval = shouldSample ? Math.ceil(realizedPnLEvents.length / 5000) : 1; // Max 5000 points for performance
-    
-    if (shouldSample) {
-      console.log(`   📊 Sampling every ${sampleInterval} events (${realizedPnLEvents.length} total events) to show volatility while maintaining performance`);
-    }
+    const shouldSample = realizedPnLEvents.length > 500;
+    const sampleInterval = shouldSample ? Math.ceil(realizedPnLEvents.length / 200) : 1;
     
     realizedPnLEvents.forEach((event, idx) => {
       cumulativePnL += event.pnl;
       
-      // Include ALL events to show volatility (or sample if too many)
       if (idx % sampleInterval === 0 || idx === realizedPnLEvents.length - 1) {
         timeline.push({
           timestamp: new Date(event.timestamp * 1000).toISOString(),
@@ -456,101 +520,22 @@ export function generateFullPnLHistory(
       }
     });
     
-    // Add final point with total PnL (to show current status)
-    // IMPORTANT: Use the actual total PnL from subgraph, not just realized
+    // Add final point with accurate total PnL
     timeline.push({
       timestamp: new Date().toISOString(),
       value: parseFloat(finalTotalPnL.toFixed(2))
     });
     
-    console.log(`   ✓ Calculated PnL from ${realizedPnLEvents.length} position closures (SELL events)`);
-    console.log(`   ✓ Cumulative realized PnL from trades: $${cumulativePnL.toFixed(2)}`);
-    console.log(`   ✓ Final total PnL (realized + unrealized): $${finalTotalPnL.toFixed(2)}`);
+    console.log(`   ✓ Calculated PnL from ${realizedPnLEvents.length} SELL events`);
+    console.log(`   ✓ Cumulative from trades: $${cumulativePnL.toFixed(2)}`);
+    console.log(`   ✓ Final total PnL (using accurate API value): $${finalTotalPnL.toFixed(2)}`);
     console.log(`   ✓ Generated ${timeline.length} data points`);
-    
-    // Ensure final point matches the actual total PnL (from subgraph)
-    if (timeline.length > 0) {
-      timeline[timeline.length - 1].value = parseFloat(finalTotalPnL.toFixed(2));
-    }
     
     return timeline;
   }
   
-  // If no trades, log and fall through to closed positions
-  if (activityEvents && activityEvents.length > 0) {
-    console.log(`   ⚠ No valid trades found in ${activityEvents.length} events, falling back to closed positions`);
-  }
-  
-  // Fallback: Use closed positions if available
-  if (closedPositions && closedPositions.length > 0) {
-    console.log(`📊 Generating PnL history from ${closedPositions.length} closed positions...`);
-    
-    const sortedPositions = closedPositions
-      .filter(p => p.endDate)
-      .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime());
-    
-    if (sortedPositions.length > 0) {
-      let cumulativePnL = 0;
-      const timeline: Array<{ timestamp: string; value: number }> = [];
-      
-      // Add starting point
-      const firstTime = new Date(sortedPositions[0].endDate!).getTime();
-      const startTime = firstTime - (7 * 24 * 60 * 60 * 1000); // 7 days before
-      timeline.push({
-        timestamp: new Date(startTime).toISOString(),
-        value: 0
-      });
-      
-      // Add each position closure to show progressive growth
-      sortedPositions.forEach(pos => {
-        cumulativePnL += pos.realizedPnl || 0;
-        timeline.push({
-          timestamp: new Date(pos.endDate!).toISOString(),
-          value: parseFloat(cumulativePnL.toFixed(2))
-        });
-      });
-      
-      console.log(`   📈 Cumulative realized PnL: $${cumulativePnL.toFixed(2)}`);
-      console.log(`   📈 Final total PnL (includes unrealized): $${finalTotalPnL.toFixed(2)}`);
-      console.log(`   📈 Unrealized PnL: $${(finalTotalPnL - cumulativePnL).toFixed(2)}`);
-      
-      // Handle the gap between last closed position and current total PnL
-      const unrealizedPnL = finalTotalPnL - cumulativePnL;
-      const now = Date.now();
-      const lastClosedTime = new Date(sortedPositions[sortedPositions.length - 1].endDate!).getTime();
-      const daysSinceLastClosed = (now - lastClosedTime) / (24 * 60 * 60 * 1000);
-      
-      // If there's significant unrealized PnL or time gap, add intermediate points
-      if (Math.abs(unrealizedPnL) > 1000 && daysSinceLastClosed > 1) {
-        console.log(`   📊 Adding ${Math.min(20, Math.floor(daysSinceLastClosed))} intermediate points for unrealized PnL growth...`);
-        
-        // Add points showing gradual growth from last closed to now
-        const numPoints = Math.min(20, Math.max(5, Math.floor(daysSinceLastClosed)));
-        const timeStep = (now - lastClosedTime) / numPoints;
-        const pnlStep = unrealizedPnL / numPoints;
-        
-        for (let i = 1; i <= numPoints; i++) {
-          const timestamp = lastClosedTime + (timeStep * i);
-          const value = cumulativePnL + (pnlStep * i);
-          timeline.push({
-            timestamp: new Date(timestamp).toISOString(),
-            value: parseFloat(value.toFixed(2))
-          });
-        }
-      } else {
-        // Just add the final point
-        timeline.push({
-          timestamp: new Date().toISOString(),
-          value: parseFloat(finalTotalPnL.toFixed(2))
-        });
-      }
-      
-      console.log(`   ✓ Generated ${timeline.length} data points from closed positions`);
-      return timeline;
-    }
-  }
-  
   // Final fallback: Just show current PnL
+  console.log(`   ⚠ No historical data available, showing only current PnL`);
   const now = new Date();
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   

@@ -16,7 +16,7 @@
   "crons": [
     {
       "path": "/api/leaderboard/sync",
-      "schedule": "0 2 * * *"
+      "schedule": "*/30 * * * *"
     }
   ],
   "functions": {

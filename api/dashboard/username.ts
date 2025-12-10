@@ -385,19 +385,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sortedPositions = (pnlData.closedPositionsHistory || [])
       .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
     
-    for (const pos of sortedPositions) {
-      cumulativePnl += pos.realizedPnl;
+    // Add starting point (7 days before first closed position or 1 day ago if no history)
+    if (sortedPositions.length > 0) {
+      const firstTime = new Date(sortedPositions[0].endDate).getTime();
+      const startTime = firstTime - (7 * 24 * 60 * 60 * 1000);
       pnlHistory.push({
-        timestamp: pos.endDate,
-        value: cumulativePnl
+        timestamp: new Date(startTime).toISOString(),
+        value: 0
       });
     }
     
-    // Always add a current point with total PnL (or starting point if no history)
-    pnlHistory.push({
-      timestamp: new Date().toISOString(),
-      value: pnlData.totalPnl
-    });
+    // Sample if too many positions for performance
+    const shouldSample = sortedPositions.length > 1000;
+    const sampleInterval = shouldSample ? Math.ceil(sortedPositions.length / 500) : 1;
+    
+    for (let i = 0; i < sortedPositions.length; i++) {
+      const pos = sortedPositions[i];
+      cumulativePnl += pos.realizedPnl;
+      
+      // Include all points or sample for large datasets
+      if (i % sampleInterval === 0 || i === sortedPositions.length - 1) {
+        pnlHistory.push({
+          timestamp: pos.endDate,
+          value: parseFloat(cumulativePnl.toFixed(2))
+        });
+      }
+    }
+    
+    // Handle gap between last closed position and current total PnL (includes unrealized)
+    const unrealizedPnL = pnlData.totalPnl - cumulativePnl;
+    if (sortedPositions.length > 0 && Math.abs(unrealizedPnL) > 100) {
+      const now = Date.now();
+      const lastClosedTime = new Date(sortedPositions[sortedPositions.length - 1].endDate).getTime();
+      const daysSinceLastClosed = (now - lastClosedTime) / (24 * 60 * 60 * 1000);
+      
+      if (daysSinceLastClosed > 0.5) {
+        // Add intermediate points for smooth transition to current value
+        const numPoints = Math.min(5, Math.max(2, Math.floor(daysSinceLastClosed)));
+        const timeStep = (now - lastClosedTime) / numPoints;
+        const pnlStep = unrealizedPnL / numPoints;
+        
+        for (let i = 1; i <= numPoints; i++) {
+          const timestamp = lastClosedTime + (timeStep * i);
+          const value = cumulativePnl + (pnlStep * i);
+          pnlHistory.push({
+            timestamp: new Date(timestamp).toISOString(),
+            value: parseFloat(value.toFixed(2))
+          });
+        }
+      } else {
+        // Just add current point with total PnL
+        pnlHistory.push({
+          timestamp: new Date().toISOString(),
+          value: pnlData.totalPnl
+        });
+      }
+    } else {
+      // Add current point with total PnL
+      pnlHistory.push({
+        timestamp: new Date().toISOString(),
+        value: pnlData.totalPnl
+      });
+    }
 
     const dashboardData = {
       profile: {

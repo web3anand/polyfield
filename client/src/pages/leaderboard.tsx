@@ -30,109 +30,6 @@ interface UserLeaderboardEntry {
   pnl?: number; // Total PnL if available
 }
 
-// Fetch multiple pages of leaderboard data using pagination
-async function fetchBuilderLeaderboardPages(pages: number = 1): Promise<BuilderLeaderboardEntry[]> {
-  const limit = 50; // API max per request
-  
-  // Fetch all pages in parallel for better performance
-  const fetchPromises = Array.from({ length: pages }, async (_, page) => {
-    const offset = page * limit;
-    
-    try {
-      const response = await fetch(`/api/leaderboard/builders?timePeriod=ALL&limit=${limit}&offset=${offset}`);
-      
-      if (!response.ok) {
-        if (page === 0) {
-          throw new Error("Failed to fetch builder leaderboard");
-        }
-        return null;
-      }
-      
-      const data = await response.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error(`Error fetching builder page ${page + 1}:`, error);
-      return null;
-    }
-  });
-  
-  // Wait for all pages to fetch in parallel
-  const results = await Promise.all(fetchPromises);
-  
-  // Combine all results and filter out nulls
-  const allBuilders: BuilderLeaderboardEntry[] = [];
-  for (const result of results) {
-    if (result && Array.isArray(result)) {
-      allBuilders.push(...result);
-    }
-  }
-  
-  return allBuilders;
-}
-
-async function fetchUserLeaderboardPages(pages: number = 1): Promise<UserLeaderboardEntry[]> {
-  const limit = 50; // API max per request (Polymarket only returns 50)
-  
-  console.log(`📊 [FRONTEND] Fetching ${pages} page(s) of users leaderboard (up to ${pages * limit} users)...`);
-  
-  // Fetch all pages in parallel for better performance
-  const fetchPromises = Array.from({ length: pages }, async (_, page) => {
-    const offset = page * limit;
-    const url = `/api/leaderboard/users?timePeriod=ALL&limit=${limit}&offset=${offset}`;
-    
-    try {
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`  ❌ Page ${page + 1} failed: ${response.status} - ${errorText.substring(0, 100)}`);
-        return null;
-      }
-      
-      const data = await response.json();
-      if (!Array.isArray(data)) {
-        console.error(`  ❌ Page ${page + 1} returned non-array:`, typeof data);
-        return null;
-      }
-      
-      if (data.length === 0) {
-        console.log(`  ⚠️ Page ${page + 1} returned no data`);
-        return null;
-      }
-      
-      console.log(`  ✓ Page ${page + 1}: Got ${data.length} users`);
-      return data;
-    } catch (error) {
-      console.error(`  ❌ Page ${page + 1} error:`, error);
-      return null;
-    }
-  });
-  
-  // Wait for all pages to fetch in parallel
-  const results = await Promise.all(fetchPromises);
-  
-  // Combine all results and filter out nulls
-  const allUsers: UserLeaderboardEntry[] = [];
-  for (const result of results) {
-    if (result && Array.isArray(result)) {
-      allUsers.push(...result);
-    }
-  }
-  
-  // Sort by rank to ensure correct order (in case parallel fetching returns out of order)
-  allUsers.sort((a, b) => {
-    const rankA = parseInt(a.rank) || 0;
-    const rankB = parseInt(b.rank) || 0;
-    return rankA - rankB;
-  });
-  
-  console.log(`✓ [FRONTEND] Total users fetched: ${allUsers.length}`);
-  return allUsers;
-}
 
 
 function formatVolume(volume: number): string {
@@ -159,17 +56,14 @@ export default function Leaderboard() {
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<string>("rank");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [pnlFilter, setPnlFilter] = useState<string>("all"); // all, positive, negative
-  const [volumeFilter, setVolumeFilter] = useState<string>("all"); // all, high, medium, low
+  const [pnlFilter, setPnlFilter] = useState<string>("all");
+  const [volumeFilter, setVolumeFilter] = useState<string>("all");
   const { toast } = useToast();
   const itemsPerPage = 25;
   const isUsersPage = location === "/leaderboard/users";
   
-  // Fetch more profiles upfront for better UX
-  // Fetch 30 pages = 1500 users (API limit is 50 per request, so 30 pages = 1500 users)
-  // This allows users to navigate through 60 pages (1500 / 25 = 60 pages) without additional fetches
-  // No hard limit from Polymarket API - can fetch as many pages as needed via offset
-  const pagesToFetch = 30; // Fetch 1500 users initially (30 pages × 50 users per page)
+  // Fetch all profiles until zero data is returned
+  // No page limit - will fetch until API returns empty data
   
   const handleCopyWallet = async (walletAddress: string) => {
     try {
@@ -185,18 +79,80 @@ export default function Leaderboard() {
     }
   };
 
-  const { data: builders, isLoading: isLoadingBuilders, error: buildersError } = useQuery({
-    queryKey: ["builder-leaderboard", pagesToFetch],
-    queryFn: () => fetchBuilderLeaderboardPages(pagesToFetch),
+  // Fetch data from DB cache using React Query - only fetch once, cache forever
+  const { data: builders = [], isLoading: isLoadingBuilders, error: buildersError } = useQuery({
+    queryKey: ["leaderboard-builders"],
+    queryFn: async () => {
+      const allBuilders: BuilderLeaderboardEntry[] = [];
+      let page = 0;
+      const limit = 1000; // Fetch in chunks from Supabase
+      
+      while (true) {
+        const offset = page * limit;
+        const response = await fetch(`/api/leaderboard/builders?timePeriod=ALL&limit=${limit}&offset=${offset}&fetchAll=true`);
+        
+        if (!response.ok) {
+          if (page === 0) throw new Error("Failed to fetch builders");
+          break;
+        }
+        
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) break;
+        
+        allBuilders.push(...data);
+        if (data.length < limit) break; // No more data
+        page++;
+      }
+      
+      return allBuilders;
+    },
     enabled: !isUsersPage,
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity, // Never refetch - data is updated by cron job
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  const { data: users, isLoading: isLoadingUsers, error: usersError } = useQuery({
-    queryKey: ["user-leaderboard", pagesToFetch],
-    queryFn: () => fetchUserLeaderboardPages(pagesToFetch),
+  const { data: users = [], isLoading: isLoadingUsers, error: usersError } = useQuery({
+    queryKey: ["leaderboard-users"],
+    queryFn: async () => {
+      const allUsers: UserLeaderboardEntry[] = [];
+      let page = 0;
+      const limit = 1000; // Fetch in chunks from Supabase
+      
+      while (true) {
+        const offset = page * limit;
+        const response = await fetch(`/api/leaderboard/users?timePeriod=ALL&limit=${limit}&offset=${offset}&fetchAll=true`);
+        
+        if (!response.ok) {
+          if (page === 0) throw new Error("Failed to fetch users");
+          break;
+        }
+        
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) break;
+        
+        allUsers.push(...data);
+        if (data.length < limit) break; // No more data
+        page++;
+      }
+      
+      // Sort by rank
+      allUsers.sort((a, b) => {
+        const rankA = parseInt(a.rank) || 0;
+        const rankB = parseInt(b.rank) || 0;
+        return rankA - rankB;
+      });
+      
+      return allUsers;
+    },
     enabled: isUsersPage,
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity, // Never refetch - data is updated by cron job
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   
   // Filter and sort data
@@ -328,42 +284,32 @@ export default function Leaderboard() {
   // 3. For each wallet: call PnL API -> get real PnL
   
   // Step 1: Fetch wallets for all users via search API (username -> search API -> proxyWallet)
-  const { data: walletData, isLoading: isLoadingWallets } = useQuery({
-    queryKey: ["users-wallets", paginatedUsers.map(u => u.userName).filter(Boolean)],
+  // Only fetch if wallet is not already in user data
+  const { data: walletData = {}, isLoading: isLoadingWallets } = useQuery<Record<string, string>>({
+    queryKey: ["users-wallets", paginatedUsers.map(u => u.userName).filter(Boolean).join(',')],
     queryFn: async () => {
-      const usernames = paginatedUsers.map(u => u.userName).filter(Boolean);
+      const usernames = paginatedUsers
+        .filter(u => !u.walletAddress) // Only fetch if wallet not already available
+        .map(u => u.userName)
+        .filter(Boolean);
+      
       if (usernames.length === 0) return {};
       
-      console.log('📊 Step 1: Fetching wallets via search API for usernames:', usernames);
-      
       // Process each username individually: username -> search API -> wallet
-      // Use our API endpoint (same pattern as tracker page uses /api/dashboard/username)
       const walletPromises = usernames.map(async (username) => {
         try {
-          // Call our API endpoint which handles the search API call server-side (avoids CORS)
-          // Use simpler wallet-only endpoint (faster, same pattern as dashboard)
           const response = await fetch(`/api/leaderboard/wallet?username=${encodeURIComponent(username)}`);
+          if (!response.ok) return { username, wallet: null };
           
-          if (!response.ok) {
-            console.warn(`⚠️ API failed for ${username}: ${response.status}`);
-            return { username, wallet: null };
-          }
-          
-          // Check if response is JSON (not HTML error page)
           const contentType = response.headers.get('content-type');
           if (!contentType || !contentType.includes('application/json')) {
-            console.warn(`⚠️ Non-JSON response for ${username}: ${contentType}`);
             return { username, wallet: null };
           }
           
           const data = await response.json();
-          
-          // Extract walletAddress from response (same structure as tracker)
           const wallet = data.walletAddress || null;
-          console.log(`✓ ${username}: wallet=${wallet ? wallet.slice(0, 10) + '...' : 'NOT FOUND'}`);
           return { username, wallet };
         } catch (error) {
-          console.error(`❌ Error fetching wallet for ${username}:`, error);
           return { username, wallet: null };
         }
       });
@@ -376,11 +322,11 @@ export default function Leaderboard() {
         }
       });
       
-      console.log(`✓ Step 1 Complete: Found ${Object.keys(walletMap).length} wallets`);
       return walletMap;
     },
     enabled: isUsersPage && paginatedUsers.length > 0,
-    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    staleTime: 24 * 60 * 60 * 1000, // Cache for 24 hours
+    gcTime: 24 * 60 * 60 * 1000,
   });
 
   // Step 2: Fetch PnL for all wallets (wallet -> PnL API -> real PnL)
@@ -400,46 +346,34 @@ export default function Leaderboard() {
     return [...new Set(wallets)]; // Remove duplicates
   }, [paginatedUsers, walletData]);
 
-  const { data: pnlData, isLoading: isLoadingPnL } = useQuery({
-    queryKey: ["users-pnl", walletsToFetch],
+  const { data: pnlData = {}, isLoading: isLoadingPnL } = useQuery<Record<string, number>>({
+    queryKey: ["users-pnl", walletsToFetch.join(',')],
     queryFn: async () => {
       if (walletsToFetch.length === 0) return {};
       
-      console.log('📊 Step 2: Fetching PnL for wallets:', walletsToFetch);
-      
       // Process each wallet individually: wallet -> PnL API -> real PnL
-      // Add timeout to prevent hanging
       const pnlPromises = walletsToFetch.map(async (wallet) => {
         try {
-          // Create a timeout promise
           const timeoutPromise = new Promise<{ wallet: string; pnl: number }>((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout')), 15000); // 15 second timeout per wallet
+            setTimeout(() => reject(new Error('Timeout')), 10000); // 10 second timeout
           });
           
           const fetchPromise = (async () => {
             const response = await fetch(`/api/leaderboard/pnl?wallet=${encodeURIComponent(wallet)}`);
-            if (!response.ok) {
-              console.warn(`⚠️ PnL API failed for ${wallet}: ${response.status}`);
-              return { wallet, pnl: 0 };
-            }
+            if (!response.ok) return { wallet, pnl: 0 };
             
-            // Check if response is JSON
             const contentType = response.headers.get('content-type');
             if (!contentType || !contentType.includes('application/json')) {
-              const text = await response.text();
-              console.warn(`⚠️ PnL API returned non-JSON for ${wallet}: ${text.substring(0, 100)}`);
               return { wallet, pnl: 0 };
             }
             
             const data = await response.json();
             const pnl = data.totalPnL || 0;
-            console.log(`✓ ${wallet.slice(0, 10)}...: PnL=$${pnl.toLocaleString()}`);
             return { wallet: wallet.toLowerCase(), pnl };
           })();
           
           return await Promise.race([fetchPromise, timeoutPromise]);
         } catch (error) {
-          console.error(`❌ Error fetching PnL for ${wallet}:`, error);
           return { wallet: wallet.toLowerCase(), pnl: 0 };
         }
       });
@@ -450,12 +384,12 @@ export default function Leaderboard() {
         pnlMap[wallet] = pnl;
       });
       
-      console.log(`✓ Step 2 Complete: Found PnL for ${Object.keys(pnlMap).length} wallets`);
       return pnlMap;
     },
-    enabled: isUsersPage && walletsToFetch.length > 0 && !isLoadingWallets, // Wait for wallets to load first
-    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
-    retry: 1, // Only retry once
+    enabled: isUsersPage && walletsToFetch.length > 0 && !isLoadingWallets,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000,
+    retry: 1,
     retryDelay: 1000,
   });
   
@@ -465,18 +399,19 @@ export default function Leaderboard() {
   const totalPages = isUsersPage ? totalPagesUsers : totalPagesBuilders;
   
   // Reset to page 1 when search, filter, or sort changes
+  // Handlers - simple and clean, no scroll manipulation
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setCurrentPage(1);
   };
-  
+
   const handleSortChange = (value: string) => {
     setSortBy(value);
     setCurrentPage(1);
   };
   
-  const handleSortOrderChange = (value: string) => {
-    setSortOrder(value as "asc" | "desc");
+  const handleSortOrderChange = (value: "asc" | "desc") => {
+    setSortOrder(value);
     setCurrentPage(1);
   };
   
@@ -537,8 +472,8 @@ export default function Leaderboard() {
   });
 
   return (
-    <div className="min-h-screen bg-background pt-12 md:pt-16">
-      <div className="container mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
+    <div className="min-h-screen bg-background pt-12 md:pt-16" style={{ contain: 'layout style paint', overflowAnchor: 'none' }}>
+      <div className="container mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl" style={{ contain: 'layout', overflowAnchor: 'none' }}>
           {/* Sleek & Elegant Header */}
           <div className="mb-8 md:mb-10">
             <div className="flex flex-col gap-6">
@@ -554,31 +489,29 @@ export default function Leaderboard() {
                 </p>
               </div>
               
-              {/* Extended Search Bar with Filters and Sort - Only for Users */}
-              {isUsersPage && (
-                <div className="w-full flex flex-col sm:flex-row gap-3">
-                  {/* Extended Search Bar */}
-                  <div className="relative flex-1 min-w-0">
-                    <div className="relative group">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary z-10" />
-                      <Input
-                        type="text"
-                        placeholder="Search users by name, username, or wallet..."
-                        value={searchQuery}
-                        onChange={(e) => handleSearchChange(e.target.value)}
-                        className="pl-11 pr-4 h-11 bg-background/50 backdrop-blur-sm border-border/50 focus:border-primary/50 focus:bg-background transition-all duration-200 rounded-lg shadow-sm hover:border-border"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Filter Dropdowns */}
-                  <div className="flex gap-2">
+              {/* Search, Filters, and Sort Controls */}
+              <div className="w-full space-y-3" style={{ contain: 'layout' }}>
+                {/* Search Bar */}
+                <div className="relative" style={{ contain: 'layout' }}>
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                  <Input
+                    type="text"
+                    placeholder={isUsersPage ? "Search users by name, username, or wallet..." : "Search builders..."}
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-11 pr-4 h-11 bg-background/50 backdrop-blur-sm border-border/50"
+                  />
+                </div>
+                
+                {/* Filters and Sort - Users */}
+                {isUsersPage && (
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '44px', height: '44px', position: 'relative' }}>
                     <Select value={pnlFilter} onValueChange={handlePnlFilterChange}>
-                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
-                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                      <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
+                        <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="PnL Filter" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="all">All PnL</SelectItem>
                         <SelectItem value="positive">Positive Only</SelectItem>
                         <SelectItem value="negative">Negative Only</SelectItem>
@@ -586,27 +519,24 @@ export default function Leaderboard() {
                     </Select>
                     
                     <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
-                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
-                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                      <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
+                        <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Volume Filter" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="all">All Volume</SelectItem>
                         <SelectItem value="high">High Volume</SelectItem>
                         <SelectItem value="medium">Medium Volume</SelectItem>
                         <SelectItem value="low">Low Volume</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  
-                  {/* Sort Dropdowns */}
-                  <div className="flex gap-2">
+                    
                     <Select value={sortBy} onValueChange={handleSortChange}>
-                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
-                        <ArrowUpDown className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                      <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
+                        <ArrowUpDown className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Sort By" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="rank">Rank</SelectItem>
                         <SelectItem value="volume">Volume</SelectItem>
                         <SelectItem value="pnl">PnL</SelectItem>
@@ -615,43 +545,39 @@ export default function Leaderboard() {
                     </Select>
                     
                     <Select value={sortOrder} onValueChange={handleSortOrderChange}>
-                      <SelectTrigger className="w-[120px] h-11 bg-background/50 backdrop-blur-sm border-border/50">
+                      <SelectTrigger className="w-[120px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <SelectValue placeholder="Order" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="asc">Ascending</SelectItem>
                         <SelectItem value="desc">Descending</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-              )}
-              
-              {/* Filters and Sort for Builders */}
-              {!isUsersPage && (
-                <div className="w-full flex flex-col sm:flex-row gap-3">
-                  <div className="flex gap-2">
+                )}
+                
+                {/* Filters and Sort - Builders */}
+                {!isUsersPage && (
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '44px', height: '44px', position: 'relative' }}>
                     <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
-                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
-                        <Filter className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                      <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
+                        <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Volume Filter" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="all">All Volume</SelectItem>
                         <SelectItem value="high">High Volume</SelectItem>
                         <SelectItem value="medium">Medium Volume</SelectItem>
                         <SelectItem value="low">Low Volume</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  
-                  <div className="flex gap-2">
+                    
                     <Select value={sortBy} onValueChange={handleSortChange}>
-                      <SelectTrigger className="w-[140px] h-11 bg-background/50 backdrop-blur-sm border-border/50 pl-9">
-                        <ArrowUpDown className="absolute left-3 w-4 h-4 text-muted-foreground" />
+                      <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
+                        <ArrowUpDown className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Sort By" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="rank">Rank</SelectItem>
                         <SelectItem value="volume">Volume</SelectItem>
                         <SelectItem value="builder">Builder Name</SelectItem>
@@ -660,17 +586,17 @@ export default function Leaderboard() {
                     </Select>
                     
                     <Select value={sortOrder} onValueChange={handleSortOrderChange}>
-                      <SelectTrigger className="w-[120px] h-11 bg-background/50 backdrop-blur-sm border-border/50">
+                      <SelectTrigger className="w-[120px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <SelectValue placeholder="Order" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" sideOffset={4}>
                         <SelectItem value="asc">Ascending</SelectItem>
                         <SelectItem value="desc">Descending</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
@@ -695,9 +621,9 @@ export default function Leaderboard() {
               )}
 
               {/* Rankings Table */}
-              <Card className="bg-card border-border shadow-xl" style={{ imageRendering: "pixelated" }}>
+              <Card className="bg-card border-border shadow-xl" style={{ imageRendering: "pixelated", contain: 'layout style', willChange: 'auto', position: 'relative' }}>
                 {!isUsersPage && (
-                  <CardHeader className="pb-4">
+                  <CardHeader className="pb-4" style={{ contain: 'layout', position: 'relative' }}>
                     <CardTitle className="text-2xl md:text-3xl font-black text-foreground tracking-tight" style={{ imageRendering: "pixelated" }}>
                       <ShinyText>Builder Rankings</ShinyText>
                     </CardTitle>
@@ -706,7 +632,7 @@ export default function Leaderboard() {
                     </CardDescription>
                   </CardHeader>
                 )}
-                <CardContent>
+                <CardContent style={{ contain: 'layout', position: 'relative' }}>
                   {isUsersPage ? (
                     <>
                       {/* Users Table */}
@@ -724,16 +650,23 @@ export default function Leaderboard() {
                             {usersError instanceof Error ? usersError.message : "Unknown error"}
                           </p>
                         </div>
-                      ) : filteredUsers.length > 0 ? (
-                        <div className="mb-4 px-3 py-2 flex items-center justify-end text-xs text-muted-foreground border-b border-border/30">
-                          <span className="font-medium">
-                            Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} {searchQuery ? 'filtered ' : ''}users
-                          </span>
-                        </div>
                       ) : null}
-                      {filteredUsers.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-separate border-spacing-0" style={{ imageRendering: "pixelated" }}>
+                      <div className="min-h-[600px]" style={{ contain: 'layout', isolation: 'isolate', position: 'relative', willChange: 'auto' }}>
+                        {filteredUsers.length > 0 ? (
+                          <>
+                            <div className="mb-4 px-3 py-2 h-10 flex items-center justify-end text-xs text-muted-foreground border-b border-border/30" style={{ contain: 'layout', position: 'relative', minHeight: '40px', height: '40px', flexShrink: 0 }}>
+                              <span className="font-medium whitespace-nowrap">
+                                Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} {searchQuery ? 'filtered ' : ''}users
+                              </span>
+                            </div>
+                            <div className="overflow-x-auto" style={{ contain: 'layout', position: 'relative', willChange: 'auto', minHeight: '500px' }}>
+                              <table className="w-full border-separate border-spacing-0 table-fixed" style={{ imageRendering: "pixelated", tableLayout: 'fixed', width: '100%', borderCollapse: 'separate' }}>
+                            <colgroup>
+                              <col style={{ width: '64px' }} />
+                              <col style={{ width: 'auto' }} />
+                              <col style={{ width: '128px' }} />
+                              <col style={{ width: '128px' }} />
+                            </colgroup>
                             <thead>
                               <tr className="border-b border-border">
                                 <th className="text-left py-2 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider" style={{ imageRendering: "pixelated" }}>
@@ -758,7 +691,7 @@ export default function Leaderboard() {
                                 return (
                                   <tr
                                     key={user.walletAddress || user.userName}
-                                    className={`border-b border-border/30 hover:bg-accent/30 transition-all duration-200 ${
+                                    className={`border-b border-border/30 hover:bg-accent/30 ${
                                       isTopThree ? "bg-gradient-to-r from-primary/5 to-transparent" : ""
                                     }`}
                                     style={{ imageRendering: "pixelated" }}
@@ -775,7 +708,7 @@ export default function Leaderboard() {
                                     </td>
                                     <td className="py-2 px-3">
                                       <div className="flex items-center gap-2">
-                                        <Avatar className="w-8 h-8 border border-border" style={{ imageRendering: "pixelated" }}>
+                                        <Avatar className="w-8 h-8 border border-border flex-shrink-0" style={{ imageRendering: "pixelated" }}>
                                           <AvatarImage
                                             src={user.profileImage}
                                             alt={user.userName}
@@ -785,9 +718,9 @@ export default function Leaderboard() {
                                             {user.userName.charAt(0).toUpperCase()}
                                           </AvatarFallback>
                                         </Avatar>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="font-bold text-foreground text-sm" style={{ imageRendering: "pixelated" }}>
+                                        <div className="flex-1 min-w-0 overflow-hidden">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-foreground text-sm truncate" style={{ imageRendering: "pixelated" }}>
                                               {user.userName}
                                             </span>
                                             {user.xUsername && (
@@ -795,10 +728,10 @@ export default function Leaderboard() {
                                                 href={`https://x.com/${user.xUsername}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                                                className="text-muted-foreground hover:text-foreground flex-shrink-0"
                                                 onClick={(e) => e.stopPropagation()}
                                               >
-                                                <svg className="w-3 h-3 text-[#1DA1F2]" fill="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-3 h-3 text-[#1DA1F2] flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                                                 </svg>
                                               </a>
@@ -814,18 +747,18 @@ export default function Leaderboard() {
                                                       e.stopPropagation();
                                                       handleCopyWallet(walletAddress);
                                                     }}
-                                                    className="ml-1.5 p-1 hover:bg-accent rounded transition-colors flex-shrink-0 group"
+                                                    className="ml-1.5 w-5 h-5 flex items-center justify-center hover:bg-accent rounded flex-shrink-0 group"
                                                     title="Copy wallet address"
                                                   >
                                                     {copiedWallet === walletAddress ? (
                                                       <Check className="w-3.5 h-3.5 text-green-500" />
                                                     ) : (
-                                                      <Wallet className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                                                      <Wallet className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground" />
                                                     )}
                                                   </button>
                                                 );
                                               }
-                                              return null;
+                                              return <span className="w-5 h-5 flex-shrink-0" />;
                                             })()}
                                           </div>
                                         </div>
@@ -837,56 +770,60 @@ export default function Leaderboard() {
                                       </span>
                                     </td>
                                     <td className="py-2 px-3 text-right">
-                                      {(() => {
-                                        // Get wallet: priority = search API wallet > leaderboard API wallet
-                                        const wallet = walletData?.[user.userName.toLowerCase()] || user.walletAddress;
-                                        
-                                        // Get PnL: priority = leaderboard API PnL > fetched PnL (positions + subgraph)
-                                        // Both use the same calculation method (positions + subgraph)
-                                        let pnl: number | undefined = undefined;
-                                        
-                                        // First, check if PnL is available from leaderboard API (fast, already fetched)
-                                        if (user.pnl !== undefined && user.pnl !== null) {
-                                          pnl = user.pnl;
-                                        }
-                                        // Fall back to fetched PnL (from /api/leaderboard/pnl which uses positions + subgraph)
-                                        else if (wallet && pnlData) {
-                                          const walletKey = wallet.toLowerCase();
-                                          pnl = pnlData[walletKey];
-                                        }
-                                        
-                                        if (pnl !== undefined) {
-                                          return (
-                                            <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`} style={{ imageRendering: "pixelated" }}>
-                                              {formatVolume(pnl)}
-                                            </span>
-                                          );
-                                        } else if (isLoadingPnL && wallet && user.pnl === undefined) {
-                                          return (
-                                            <span className="text-muted-foreground text-xs animate-pulse" style={{ imageRendering: "pixelated" }}>
-                                              Loading...
-                                            </span>
-                                          );
-                                        } else {
-                                          return (
-                                            <span className="text-muted-foreground text-xs" style={{ imageRendering: "pixelated" }}>
-                                              $0.00
-                                            </span>
-                                          );
-                                        }
-                                      })()}
+                                      <div className="min-h-[20px] flex items-center justify-end">
+                                        {(() => {
+                                          // Get wallet: priority = search API wallet > leaderboard API wallet
+                                          const wallet = walletData?.[user.userName.toLowerCase()] || user.walletAddress;
+                                          
+                                          // Get PnL: priority = leaderboard API PnL > fetched PnL (positions + subgraph)
+                                          // Both use the same calculation method (positions + subgraph)
+                                          let pnl: number | undefined = undefined;
+                                          
+                                          // First, check if PnL is available from leaderboard API (fast, already fetched)
+                                          if (user.pnl !== undefined && user.pnl !== null) {
+                                            pnl = user.pnl;
+                                          }
+                                          // Fall back to fetched PnL (from /api/leaderboard/pnl which uses positions + subgraph)
+                                          else if (wallet && pnlData) {
+                                            const walletKey = wallet.toLowerCase();
+                                            pnl = pnlData[walletKey];
+                                          }
+                                          
+                                          if (pnl !== undefined) {
+                                            return (
+                                              <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`} style={{ imageRendering: "pixelated" }}>
+                                                {formatVolume(pnl)}
+                                              </span>
+                                            );
+                                          } else if (isLoadingPnL && wallet && user.pnl === undefined) {
+                                            return (
+                                              <span className="text-muted-foreground text-xs animate-pulse" style={{ imageRendering: "pixelated" }}>
+                                                Loading...
+                                              </span>
+                                            );
+                                          } else {
+                                            return (
+                                              <span className="text-muted-foreground text-xs" style={{ imageRendering: "pixelated" }}>
+                                                —
+                                              </span>
+                                            );
+                                          }
+                                        })()}
+                                      </div>
                                     </td>
                                   </tr>
                                 );
                               })}
                             </tbody>
                           </table>
-                        </div>
-                      ) : searchQuery ? (
-                        <div className="text-center py-12">
-                          <p className="text-muted-foreground">No users found matching "{searchQuery}"</p>
-                        </div>
-                      ) : null}
+                            </div>
+                          </>
+                        ) : searchQuery ? (
+                          <div className="text-center py-12">
+                            <p className="text-muted-foreground">No users found matching "{searchQuery}"</p>
+                          </div>
+                        ) : null}
+                      </div>
                       {/* Pagination Controls */}
                       {totalPages > 1 && filteredUsers.length > 0 && (
                         <div className="mt-6 flex items-center justify-center gap-2">
@@ -945,7 +882,7 @@ export default function Leaderboard() {
                   ) : (
                     <>
                       {/* Builders Table */}
-                      {isLoadingBuilders ? (
+                      {isLoadingBuilders && builders.length === 0 ? (
                       <div className="flex items-center justify-center py-16">
                         <div className="flex flex-col items-center gap-3">
                           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" strokeWidth={2.5} />
@@ -959,16 +896,24 @@ export default function Leaderboard() {
                           {buildersError instanceof Error ? buildersError.message : "Unknown error"}
                         </p>
                       </div>
-                      ) : filteredBuilders.length > 0 ? (
-                        <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground">
-                          <span>
-                            Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredBuilders.length)} of {filteredBuilders.length} {searchQuery ? 'filtered ' : ''}builders
-                          </span>
-                        </div>
                       ) : null}
-                      {filteredBuilders.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-separate border-spacing-0" style={{ imageRendering: "pixelated" }}>
+                      <div className="min-h-[600px]" style={{ contain: 'layout', isolation: 'isolate', position: 'relative', willChange: 'auto' }}>
+                        {filteredBuilders.length > 0 ? (
+                          <>
+                            <div className="mb-4 h-10 flex items-center justify-between text-sm text-muted-foreground" style={{ contain: 'layout', minHeight: '40px', height: '40px', flexShrink: 0 }}>
+                              <span className="whitespace-nowrap">
+                                Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredBuilders.length)} of {filteredBuilders.length} {searchQuery ? 'filtered ' : ''}builders
+                              </span>
+                            </div>
+                            <div className="overflow-x-auto" style={{ contain: 'layout', position: 'relative', willChange: 'auto', minHeight: '500px' }}>
+                              <table className="w-full border-separate border-spacing-0 table-fixed" style={{ imageRendering: "pixelated", tableLayout: 'fixed', width: '100%', borderCollapse: 'separate' }}>
+                            <colgroup>
+                              <col style={{ width: '64px' }} />
+                              <col style={{ width: 'auto' }} />
+                              <col style={{ width: '128px' }} />
+                              <col style={{ width: '128px' }} />
+                              <col style={{ width: '100px' }} />
+                            </colgroup>
                             <thead>
                               <tr className="border-b border-border">
                                 <th className="text-left py-2 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider" style={{ imageRendering: "pixelated" }}>
@@ -996,7 +941,7 @@ export default function Leaderboard() {
                                 return (
                                   <tr
                                     key={builder.builder}
-                                    className={`border-b border-border/30 hover:bg-accent/30 transition-all duration-200 ${
+                                    className={`border-b border-border/30 hover:bg-accent/30 ${
                                       isTopThree ? "bg-gradient-to-r from-primary/5 to-transparent" : ""
                                     }`}
                                     style={{ imageRendering: "pixelated" }}
@@ -1059,12 +1004,14 @@ export default function Leaderboard() {
                               })}
                             </tbody>
                           </table>
-                        </div>
-                      ) : searchQuery ? (
-                        <div className="text-center py-12">
-                          <p className="text-muted-foreground">No builders found matching "{searchQuery}"</p>
-                        </div>
-                      ) : null}
+                            </div>
+                          </>
+                        ) : searchQuery ? (
+                          <div className="text-center py-12">
+                            <p className="text-muted-foreground">No builders found matching "{searchQuery}"</p>
+                          </div>
+                        ) : null}
+                      </div>
                       {/* Pagination Controls */}
                       {totalPages > 1 && filteredBuilders.length > 0 && (
                         <div className="mt-6 flex items-center justify-center gap-2">
