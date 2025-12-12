@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Cell } from "recharts";
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Cell, Tooltip } from "recharts";
 import type { PnLDataPoint } from "@shared/schema";
 
 interface PnLChartProps {
@@ -207,6 +207,39 @@ export function PnLChart({ data }: PnLChartProps) {
                 />
               ))}
             </Bar>
+            
+            <Tooltip
+              cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+              contentStyle={{
+                backgroundColor: "rgba(0, 0, 0, 0.95)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: "0.5rem",
+                padding: "8px 12px",
+                backdropFilter: "blur(12px)",
+              }}
+              labelStyle={{
+                color: "rgba(255, 255, 255, 0.6)",
+                fontSize: "12px",
+                fontWeight: 500,
+                marginBottom: "4px",
+              }}
+              itemStyle={{
+                color: "white",
+                fontSize: "14px",
+                fontWeight: 600,
+              }}
+              formatter={(value: number) => [
+                `${value >= 0 ? '+' : ''}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`,
+                'P&L'
+              ]}
+              labelFormatter={(label, payload) => {
+                if (payload && payload[0]) {
+                  const data = payload[0].payload;
+                  return `${data.fullDate} ${data.time}`;
+                }
+                return label;
+              }}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
