@@ -423,12 +423,24 @@ body > #navbar-root {
 /* Ensure body and html don't interfere */
 html {
   overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  display: none;
 }
 
 /* Shiny text animation - inspired by reactbits.dev */
