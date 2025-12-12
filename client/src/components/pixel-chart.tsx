@@ -231,27 +231,27 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-3 md:mb-4">
+      <div className="flex items-center justify-between mb-2 md:mb-4 px-2 md:px-0">
         <div>
-          <h2 className="text-base md:text-xl font-bold text-white">Volume Trend</h2>
-          <p className="text-gray-400 text-xs md:text-sm">Daily builder volume over time</p>
+          <h2 className="text-sm sm:text-base md:text-xl font-bold text-white">Volume Trend</h2>
+          <p className="text-gray-400 text-[10px] sm:text-xs md:text-sm">Daily builder volume over time</p>
         </div>
       </div>
 
       {processedData.aggregatedByDate.length === 0 ? (
-        <div className="text-center py-8 md:py-12">
-          <p className="text-gray-400 text-sm">No volume data available</p>
+        <div className="text-center py-6 md:py-12">
+          <p className="text-gray-400 text-xs md:text-sm">No volume data available</p>
         </div>
       ) : (
         <div 
           ref={containerRef}
-          className="w-full relative select-none"
+          className="w-full relative select-none overflow-x-auto"
           style={{ minHeight: CHART_HEIGHT }}
         >
           <svg
             ref={svgRef}
             viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-            className="w-full h-auto"
+            className="w-full h-auto min-w-[600px]"
             style={{ touchAction: 'none' }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
