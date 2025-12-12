@@ -9,13 +9,18 @@ interface UsernameInputProps {
   compact?: boolean;
 }
 
+interface UserSuggestion {
+  username: string;
+  profileImage?: string;
+}
+
 export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps) {
   const [username, setUsername] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const { data: suggestions = [], isLoading: loadingSuggestions } = useQuery<string[]>({
+  const { data: suggestions = [], isLoading: loadingSuggestions } = useQuery<UserSuggestion[]>({
     queryKey: ["/api/users/search", username],
     enabled: username.length >= 2 && showSuggestions,
     staleTime: 30000,
@@ -46,8 +51,8 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
     setShowSuggestions(value.length >= 2);
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setUsername(suggestion);
+  const handleSuggestionClick = (suggestion: UserSuggestion) => {
+    setUsername(suggestion.username);
     setShowSuggestions(false);
     inputRef.current?.focus();
   };
@@ -113,14 +118,14 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                         className="w-full text-left px-2 sm:px-2.5 py-1 sm:py-1.5 hover-elevate transition-all duration-150 text-fluid-xs sm:text-fluid-sm text-foreground flex items-center gap-1.5 sm:gap-2"
                       >
                         <img 
-                          src={`https://unavatar.io/polymarket/${suggestion}`}
-                          alt={suggestion}
+                          src={suggestion.profileImage || `https://unavatar.io/polymarket/${suggestion.username}`}
+                          alt={suggestion.username}
                           className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 bg-background/20"
                           onError={(e) => {
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion}`;
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion.username}`;
                           }}
                         />
-                        {suggestion}
+                        {suggestion.username}
                       </button>
                     ))}
                   </div>
@@ -204,14 +209,14 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                         className="w-full text-left px-2.5 sm:px-3 py-1.5 sm:py-2 hover-elevate transition-all duration-150 text-fluid-sm text-foreground flex items-center gap-2"
                       >
                         <img 
-                          src={`https://unavatar.io/polymarket/${suggestion}`}
-                          alt={suggestion}
+                          src={suggestion.profileImage || `https://unavatar.io/polymarket/${suggestion.username}`}
+                          alt={suggestion.username}
                           className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex-shrink-0 bg-background/20"
                           onError={(e) => {
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion}`;
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion.username}`;
                           }}
                         />
-                        {suggestion}
+                        {suggestion.username}
                       </button>
                     ))}
                   </div>
