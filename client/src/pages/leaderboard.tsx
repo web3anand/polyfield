@@ -505,13 +505,13 @@ export default function Leaderboard() {
                 
                 {/* Filters and Sort - Users */}
                 {isUsersPage && (
-                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '44px', height: '44px', position: 'relative' }}>
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'strict', minHeight: '40px', height: 'auto' }}>
                     <Select value={pnlFilter} onValueChange={handlePnlFilterChange}>
                       <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="PnL Filter" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="all">All PnL</SelectItem>
                         <SelectItem value="positive">Positive Only</SelectItem>
                         <SelectItem value="negative">Negative Only</SelectItem>
@@ -523,7 +523,7 @@ export default function Leaderboard() {
                         <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Volume Filter" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="all">All Volume</SelectItem>
                         <SelectItem value="high">High Volume</SelectItem>
                         <SelectItem value="medium">Medium Volume</SelectItem>
@@ -536,7 +536,7 @@ export default function Leaderboard() {
                         <ArrowUpDown className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Sort By" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="rank">Rank</SelectItem>
                         <SelectItem value="volume">Volume</SelectItem>
                         <SelectItem value="pnl">PnL</SelectItem>
@@ -548,7 +548,7 @@ export default function Leaderboard() {
                       <SelectTrigger className="w-[120px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <SelectValue placeholder="Order" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="asc">Ascending</SelectItem>
                         <SelectItem value="desc">Descending</SelectItem>
                       </SelectContent>
@@ -558,13 +558,13 @@ export default function Leaderboard() {
                 
                 {/* Filters and Sort - Builders */}
                 {!isUsersPage && (
-                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '44px', height: '44px', position: 'relative' }}>
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'strict', minHeight: '40px', height: 'auto' }}>
                     <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
                       <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Volume Filter" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="all">All Volume</SelectItem>
                         <SelectItem value="high">High Volume</SelectItem>
                         <SelectItem value="medium">Medium Volume</SelectItem>
@@ -577,7 +577,7 @@ export default function Leaderboard() {
                         <ArrowUpDown className="w-4 h-4 mr-2 flex-shrink-0" />
                         <SelectValue placeholder="Sort By" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="rank">Rank</SelectItem>
                         <SelectItem value="volume">Volume</SelectItem>
                         <SelectItem value="builder">Builder Name</SelectItem>
@@ -589,7 +589,7 @@ export default function Leaderboard() {
                       <SelectTrigger className="w-[120px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <SelectValue placeholder="Order" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} align="start">
                         <SelectItem value="asc">Ascending</SelectItem>
                         <SelectItem value="desc">Descending</SelectItem>
                       </SelectContent>
