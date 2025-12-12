@@ -1178,7 +1178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check cache first
-      const cacheKey = `search_${query}`;
+      const cacheKey = `search_v2_${query}`; // Changed cache key to v2 to invalidate old cache
       const cached = getCached<any[]>(cacheKey, 30000); // 30 second cache
       if (cached) {
         return res.json(cached);
