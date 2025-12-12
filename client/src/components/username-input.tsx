@@ -110,8 +110,16 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                         key={index}
                         data-testid={`suggestion-${index}`}
                         onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full text-left px-2 sm:px-2.5 py-1 sm:py-1.5 hover-elevate transition-all duration-150 text-fluid-xs sm:text-fluid-sm text-foreground"
+                        className="w-full text-left px-2 sm:px-2.5 py-1 sm:py-1.5 hover-elevate transition-all duration-150 text-fluid-xs sm:text-fluid-sm text-foreground flex items-center gap-1.5 sm:gap-2"
                       >
+                        <img 
+                          src={`https://unavatar.io/polymarket/${suggestion}`}
+                          alt={suggestion}
+                          className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 bg-background/20"
+                          onError={(e) => {
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion}`;
+                          }}
+                        />
                         {suggestion}
                       </button>
                     ))}
@@ -193,8 +201,16 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                         key={index}
                         data-testid={`suggestion-${index}`}
                         onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full text-left px-2.5 sm:px-3 py-1.5 sm:py-2 hover-elevate transition-all duration-150 text-fluid-sm text-foreground"
+                        className="w-full text-left px-2.5 sm:px-3 py-1.5 sm:py-2 hover-elevate transition-all duration-150 text-fluid-sm text-foreground flex items-center gap-2"
                       >
+                        <img 
+                          src={`https://unavatar.io/polymarket/${suggestion}`}
+                          alt={suggestion}
+                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex-shrink-0 bg-background/20"
+                          onError={(e) => {
+                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion}`;
+                          }}
+                        />
                         {suggestion}
                       </button>
                     ))}
