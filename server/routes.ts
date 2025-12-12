@@ -1179,7 +1179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check cache first
       const cacheKey = `search_${query}`;
-      const cached = getCached<string[]>(cacheKey, 30000); // 30 second cache
+      const cached = getCached<any[]>(cacheKey, 30000); // 30 second cache
       if (cached) {
         return res.json(cached);
       }
@@ -1187,7 +1187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check rate limit (300 requests per 10s for GAMMA Search)
       if (!checkRateLimit('gamma_search', 20, 10000)) { // Conservative: 20 requests per 10s
         console.log('Rate limit exceeded for search, using cached data');
-        const cached = getCached<string[]>(cacheKey, 300000);
+        const cached = getCached<any[]>(cacheKey, 300000);
         return res.json(cached || []);
       }
 
@@ -1261,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error searching users:", error);
       // Return cached data if available
       const cacheKey = `search_${req.query.q}`;
-      const cached = getCached<string[]>(cacheKey, 300000);
+      const cached = getCached<any[]>(cacheKey, 300000);
       res.json(cached || []);
     }
   });
