@@ -1168,6 +1168,15 @@ async function generateDemoData(): Promise<DashboardData> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Clear all old search caches on startup
+  const cacheKeys = Array.from(cache.keys());
+  cacheKeys.forEach(key => {
+    if (key.startsWith('search_')) {
+      cache.delete(key);
+    }
+  });
+  console.log(`Cleared ${cacheKeys.filter(k => k.startsWith('search_')).length} search cache entries`);
+
   // GET /api/users/search?q=... - Search for usernames
   app.get("/api/users/search", async (req, res) => {
     try {
@@ -1178,14 +1187,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check cache first
-      const cacheKey = `search_v2_${query}`; // Changed cache key to v2 to invalidate old cache
+      const cacheKey = `search_v4_${query}`;
       const cached = getCached<any[]>(cacheKey, 30000); // 30 second cache
       if (cached) {
         return res.json(cached);
       }
 
       // Check rate limit (300 requests per 10s for GAMMA Search)
-      if (!checkRateLimit('gamma_search', 20, 10000)) { // Conservative: 20 requests per 10s
+      if (!checkRateLimit('gamma_search', 20, 10000)) {
         console.log('Rate limit exceeded for search, using cached data');
         const cached = getCached<any[]>(cacheKey, 300000);
         return res.json(cached || []);
@@ -1260,7 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching users:", error);
       // Return cached data if available
-      const cacheKey = `search_${req.query.q}`;
+      const cacheKey = `search_v4_${req.query.q}`;
       const cached = getCached<any[]>(cacheKey, 300000);
       res.json(cached || []);
     }
