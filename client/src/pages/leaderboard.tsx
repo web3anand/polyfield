@@ -490,7 +490,7 @@ export default function Leaderboard() {
               </div>
               
               {/* Search, Filters, and Sort Controls */}
-              <div className="w-full space-y-3" style={{ contain: 'layout' }}>
+              <div className="w-full space-y-3" style={{ contain: 'layout', overflow: 'hidden' }}>
                 {/* Search Bar */}
                 <div className="relative" style={{ contain: 'layout' }}>
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
@@ -505,7 +505,7 @@ export default function Leaderboard() {
                 
                 {/* Filters and Sort - Users */}
                 {isUsersPage && (
-                  <div className="flex flex-wrap gap-2" style={{ contain: 'strict', minHeight: '40px', height: 'auto' }}>
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '40px', height: 'auto', overflow: 'visible' }}>
                     <Select value={pnlFilter} onValueChange={handlePnlFilterChange}>
                       <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -558,7 +558,7 @@ export default function Leaderboard() {
                 
                 {/* Filters and Sort - Builders */}
                 {!isUsersPage && (
-                  <div className="flex flex-wrap gap-2" style={{ contain: 'strict', minHeight: '40px', height: 'auto' }}>
+                  <div className="flex flex-wrap gap-2" style={{ contain: 'layout', minHeight: '40px', height: 'auto', overflow: 'visible' }}>
                     <Select value={volumeFilter} onValueChange={handleVolumeFilterChange}>
                       <SelectTrigger className="w-[140px] h-10 bg-background/50 backdrop-blur-sm border-border/50" style={{ contain: 'layout', flexShrink: 0 }}>
                         <Filter className="w-4 h-4 mr-2 flex-shrink-0" />
