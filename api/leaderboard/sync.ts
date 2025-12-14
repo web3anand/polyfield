@@ -16,6 +16,16 @@ if (!SUPABASE_SERVICE_KEY) {
 }
 
 console.log(`🔗 Using Supabase URL: ${SUPABASE_URL}`);
+console.log(`🔑 Service Key: ${SUPABASE_SERVICE_KEY ? `${SUPABASE_SERVICE_KEY.substring(0, 20)}...` : 'NOT SET'}`);
+
+// Validate Supabase URL
+if (!SUPABASE_URL.includes('bzlxrggciehkcslchooe')) {
+  console.warn(`⚠️ WARNING: Supabase URL does not match expected project!`);
+  console.warn(`   Expected: bzlxrggciehkcslchooe.supabase.co`);
+  console.warn(`   Got: ${SUPABASE_URL}`);
+  console.warn(`   This may cause connection errors. Please check Vercel environment variables.`);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Sync users leaderboard - fetches until zero data, uses upsert (update existing, insert new)
