@@ -21,8 +21,12 @@ According to [Vercel Cron Jobs Documentation](https://vercel.com/docs/cron-jobs/
 
 ## Current Configuration
 
-Our cron job is configured to run **every 15 minutes** (`*/15 * * * *`), which requires:
-- **Pro Plan or higher**
+Our cron job is configured to run **once per day at midnight UTC** (`0 0 * * *`), which works on:
+- **Hobby Plan** ✅
+- **Pro Plan** ✅
+- **Enterprise Plan** ✅
+
+**Note:** If you upgrade to Pro Plan, you can change the schedule back to every 15 minutes (`*/15 * * * *`) for more frequent updates.
 
 If you're on the **Hobby Plan**, you have two options:
 
