@@ -14,14 +14,63 @@ interface PixelChartProps {
   data: VolumeDataPoint[];
   isLoading?: boolean;
   onTimeFrameChange?: (timeFrame: string) => void;
+  currentTimeFrame?: string;
 }
 
-export function PixelChart({ data, isLoading }: PixelChartProps) {
+export function PixelChart({ data, isLoading, onTimeFrameChange, currentTimeFrame = "ALL" }: PixelChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Filter data based on selected timeframe - shows all individual day candles within the period
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0 || currentTimeFrame === "ALL") {
+      return data;
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(today);
+    endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(today);
+
+    switch (currentTimeFrame) {
+      case "DAY":
+        // Show only today's data (single day candle)
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay.getTime() === today.getTime();
+        });
+      
+      case "WEEK":
+        // Show last 7 days - all individual day candles
+        startDate.setDate(today.getDate() - 6); // 7 days including today
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay >= startDate && pointDay <= today;
+        });
+      
+      case "MONTH":
+        // Show last 30 days - all individual day candles for the month
+        startDate.setDate(today.getDate() - 29); // 30 days including today
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay >= startDate && pointDay <= today;
+        });
+      
+      default:
+        return data;
+    }
+  }, [data, currentTimeFrame]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -33,7 +82,7 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
   }, []);
 
   const processedData = useMemo(() => {
-    if (!data || data.length === 0) {
+    if (!filteredData || filteredData.length === 0) {
       return { 
         aggregatedByDate: [] as Array<{ 
           date: string; 
@@ -54,7 +103,7 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
       "#84cc16", "#a855f7", "#22c55e", "#0ea5e9", "#f43f5e",
     ];
 
-    const builders = Array.from(new Set(data.map(p => p.builder).filter(Boolean))).sort();
+    const builders = Array.from(new Set(filteredData.map(p => p.builder).filter(Boolean))).sort();
     const builderColors: Record<string, string> = {};
     builders.forEach((builder, idx) => {
       if (builder) builderColors[builder] = colorPalette[idx % colorPalette.length];
@@ -62,10 +111,12 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
 
     const dateMap = new Map<string, { totalVolume: number; totalActiveUsers: number; builders: Map<string, { volume: number; activeUsers: number }> }>();
     
-    data.forEach((point) => {
+    filteredData.forEach((point) => {
       if (!point.dt) return;
       const date = new Date(point.dt);
-      const dayKey = date.toISOString().split("T")[0];
+      // Normalize to date only (remove time component) to ensure proper day grouping
+      const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayKey = normalizedDate.toISOString().split("T")[0];
       const builder = point.builder || 'Unknown';
       const volume = typeof point.volume === 'number' ? point.volume : parseFloat(String(point.volume)) || 0;
       const activeUsers = typeof point.activeUsers === 'number' ? point.activeUsers : parseInt(String(point.activeUsers)) || 0;
@@ -105,7 +156,7 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
     const totalVolume = aggregatedByDate.reduce((sum, d) => sum + d.totalVolume, 0);
 
     return { aggregatedByDate, builders, colors: builderColors, maxVolume, totalVolume };
-  }, [data]);
+  }, [filteredData]);
 
   const CHART_HEIGHT = isMobile ? 280 : 400;
   const CHART_WIDTH = 800;
@@ -229,12 +280,43 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
     );
   }
 
+  const timeFrameOptions = [
+    { key: "DAY", label: "Day" },
+    { key: "WEEK", label: "Week" },
+    { key: "MONTH", label: "Month" },
+    { key: "ALL", label: "All" },
+  ];
+
+  // Handle timeframe change locally (no need to call parent if not provided)
+  const handleTimeFrameChange = (timeFrame: string) => {
+    if (onTimeFrameChange) {
+      onTimeFrameChange(timeFrame);
+    }
+  };
+
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-2 md:mb-4 px-2 md:px-0">
         <div>
           <h2 className="text-sm sm:text-base md:text-xl font-bold text-white">Volume Trend</h2>
           <p className="text-gray-400 text-[10px] sm:text-xs md:text-sm">Daily builder volume over time</p>
+        </div>
+        <div className="flex gap-1 p-1 bg-gray-900/50 rounded-lg">
+          {timeFrameOptions.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleTimeFrameChange(key)}
+              className={`
+                px-2 md:px-3 py-1 md:py-1.5 text-[10px] md:text-xs font-medium rounded-md transition-all duration-200
+                ${currentTimeFrame === key 
+                  ? 'bg-gray-800 text-white shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                }
+              `}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -285,18 +367,6 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
               </text>
             ))}
 
-            {xAxisLabels.map((label, i) => (
-              <text
-                key={`x-label-${i}`}
-                x={label.x}
-                y={CHART_HEIGHT - 8}
-                textAnchor="middle"
-                className="text-[9px] md:text-[10px]"
-                fill="#6b7280"
-              >
-                {label.label}
-              </text>
-            ))}
 
             {barData.map((bar, i) => (
               <rect

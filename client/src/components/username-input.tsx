@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Loader2, Search, ArrowRight } from "lucide-react";
 
 interface UsernameInputProps {
@@ -27,7 +26,28 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
     queryFn: async () => {
       const res = await fetch(`/api/users/search?q=${encodeURIComponent(username)}`);
       if (!res.ok) throw new Error('Failed to fetch suggestions');
-      return res.json();
+      const data = await res.json();
+      // Debug logging
+      console.log('Search API response:', data);
+      // Ensure data is an array and has the expected structure
+      if (Array.isArray(data)) {
+        const filtered = data.filter((item: any) => {
+          if (!item) return false;
+          // Check if item has username field (required)
+          const hasUsername = item.username && typeof item.username === 'string' && item.username.trim().length > 0;
+          if (!hasUsername) {
+            console.warn('Suggestion missing username:', item);
+          }
+          return hasUsername;
+        });
+        console.log(`Filtered ${filtered.length} valid suggestions from ${data.length} total`);
+        return filtered.map((item: any) => ({
+          username: String(item.username).trim(),
+          profileImage: item.profileImage ? String(item.profileImage).trim() : undefined
+        }));
+      }
+      console.warn('Search API returned non-array data:', typeof data, data);
+      return [];
     },
   });
 
@@ -110,24 +130,40 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                   className="w-full border border-border/50 border-t-0 bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-1 sm:p-1.5 space-y-0.5 max-h-40 sm:max-h-48 md:max-h-60 overflow-y-auto scrollbar-hidden">
-                    {suggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        data-testid={`suggestion-${index}`}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full text-left px-2 sm:px-2.5 py-1 sm:py-1.5 hover-elevate transition-all duration-150 text-fluid-xs sm:text-fluid-sm text-foreground flex items-center gap-1.5 sm:gap-2"
-                      >
-                        <img 
-                          src={suggestion.profileImage || `https://unavatar.io/polymarket/${suggestion.username}`}
-                          alt={suggestion.username}
-                          className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 bg-background/20"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion.username}`;
-                          }}
-                        />
-                        {suggestion.username}
-                      </button>
-                    ))}
+                    {suggestions.map((suggestion, index) => {
+                      const displayUsername = suggestion?.username || 'Unknown';
+                      const profileImg = suggestion?.profileImage;
+                      
+                      return (
+                        <button
+                          key={`${displayUsername}-${index}`}
+                          data-testid={`suggestion-${index}`}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          className="w-full text-left px-2 sm:px-2.5 py-1 sm:py-1.5 hover-elevate transition-all duration-150 text-fluid-xs sm:text-fluid-sm text-foreground flex items-center gap-1.5 sm:gap-2"
+                        >
+                          {profileImg ? (
+                            <img 
+                              src={profileImg}
+                              alt={displayUsername}
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 bg-background/20 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://unavatar.io/polymarket/${displayUsername}`;
+                              }}
+                            />
+                          ) : (
+                            <img 
+                              src={`https://unavatar.io/polymarket/${displayUsername}`}
+                              alt={displayUsername}
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 bg-background/20 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${displayUsername}`;
+                              }}
+                            />
+                          )}
+                          <span className="truncate font-medium">{displayUsername}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -201,24 +237,40 @@ export function UsernameInput({ onSubmit, compact = false }: UsernameInputProps)
                   className="w-full border border-border/50 border-t-0 bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out animate-in slide-in-from-top-2 fade-in"
                 >
                   <div className="p-1.5 sm:p-2 space-y-0.5 sm:space-y-1 max-h-48 sm:max-h-60 overflow-y-auto scrollbar-hidden">
-                    {suggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        data-testid={`suggestion-${index}`}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full text-left px-2.5 sm:px-3 py-1.5 sm:py-2 hover-elevate transition-all duration-150 text-fluid-sm text-foreground flex items-center gap-2"
-                      >
-                        <img 
-                          src={suggestion.profileImage || `https://unavatar.io/polymarket/${suggestion.username}`}
-                          alt={suggestion.username}
-                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex-shrink-0 bg-background/20"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${suggestion.username}`;
-                          }}
-                        />
-                        {suggestion.username}
-                      </button>
-                    ))}
+                    {suggestions.map((suggestion, index) => {
+                      const displayUsername = suggestion?.username || 'Unknown';
+                      const profileImg = suggestion?.profileImage;
+                      
+                      return (
+                        <button
+                          key={`${displayUsername}-${index}`}
+                          data-testid={`suggestion-${index}`}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          className="w-full text-left px-2.5 sm:px-3 py-1.5 sm:py-2 hover-elevate transition-all duration-150 text-fluid-sm text-foreground flex items-center gap-2"
+                        >
+                          {profileImg ? (
+                            <img 
+                              src={profileImg}
+                              alt={displayUsername}
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex-shrink-0 bg-background/20 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://unavatar.io/polymarket/${displayUsername}`;
+                              }}
+                            />
+                          ) : (
+                            <img 
+                              src={`https://unavatar.io/polymarket/${displayUsername}`}
+                              alt={displayUsername}
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex-shrink-0 bg-background/20 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${displayUsername}`;
+                              }}
+                            />
+                          )}
+                          <span className="truncate font-medium">{displayUsername}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
