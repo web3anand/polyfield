@@ -5,8 +5,20 @@ import axios from 'axios';
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 
 // Get Supabase credentials from environment variables (required)
-// Default to correct project URL: https://bzlxrggciehkcslchooe.supabase.co
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bzlxrggciehkcslchooe.supabase.co';
+// IMPORTANT: Always use the correct Supabase project URL
+const CORRECT_SUPABASE_URL = 'https://bzlxrggciehkcslchooe.supabase.co';
+let SUPABASE_URL = process.env.SUPABASE_URL || CORRECT_SUPABASE_URL;
+
+// Force correct URL if wrong one is detected
+if (SUPABASE_URL.includes('orxyqgecymsuwuxtjdck')) {
+  console.error('❌ ERROR: Wrong Supabase URL detected in environment variable!');
+  console.error(`   Found: ${SUPABASE_URL}`);
+  console.error(`   This URL (orxyqgecymsuwuxtjdck) is incorrect and will fail.`);
+  console.error(`   Using correct URL instead: ${CORRECT_SUPABASE_URL}`);
+  console.error(`   ⚠️  Please update SUPABASE_URL in Vercel environment variables!`);
+  SUPABASE_URL = CORRECT_SUPABASE_URL;
+}
+
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 
 if (!SUPABASE_SERVICE_KEY) {
