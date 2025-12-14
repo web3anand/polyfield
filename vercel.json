@@ -15,8 +15,8 @@
   ],
   "crons": [
     {
-      "path": "/api/leaderboard/sync",
-      "schedule": "*/30 * * * *"
+      "path": "/api/leaderboard/sync?type=all&timePeriod=all",
+      "schedule": "*/15 * * * *"
     }
   ],
   "functions": {

@@ -47,8 +47,8 @@ function formatVolume(volume: number): string {
 }
 
 export default function Leaderboard() {
-  const [location] = useLocation();
-  const [volumeTimeFrame, setVolumeTimeFrame] = useState<string>("DAY");
+  const [location, setLocation] = useLocation();
+  const [volumeTimeFrame, setVolumeTimeFrame] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
@@ -83,8 +83,9 @@ export default function Leaderboard() {
     queryFn: async () => {
       const allBuilders: BuilderLeaderboardEntry[] = [];
       let page = 0;
-      const limit = 1000; // Fetch in chunks from Supabase
+      const limit = 2000; // Increased limit to fetch more data per request
 
+      // Fetch all available data from Supabase
       while (true) {
         const offset = page * limit;
         const response = await fetch(`/api/leaderboard/builders?timePeriod=ALL&limit=${limit}&offset=${offset}&fetchAll=true`);
@@ -95,13 +96,28 @@ export default function Leaderboard() {
         }
 
         const data = await response.json();
-        if (!Array.isArray(data) || data.length === 0) break;
+        if (!Array.isArray(data)) {
+          if (page === 0) throw new Error("Invalid response format from API");
+          break;
+        }
+        
+        if (data.length === 0) {
+          console.log(`✓ Fetched all builders: ${allBuilders.length} total`);
+          break;
+        }
 
         allBuilders.push(...data);
-        if (data.length < limit) break; // No more data
+        console.log(`📊 Fetched page ${page + 1}: ${data.length} builders (total: ${allBuilders.length})`);
+        
+        // Continue fetching if we got a full page
+        if (data.length < limit) {
+          console.log(`✓ Reached end of data at page ${page + 1}`);
+          break; // No more data
+        }
         page++;
       }
 
+      console.log(`✅ Total builders loaded: ${allBuilders.length}`);
       return allBuilders;
     },
     enabled: !isUsersPage,
@@ -117,23 +133,58 @@ export default function Leaderboard() {
     queryFn: async () => {
       const allUsers: UserLeaderboardEntry[] = [];
       let page = 0;
-      const limit = 1000; // Fetch in chunks from Supabase
+      const limit = 2000; // Increased limit to fetch more data per request
 
+      // Fetch all available data from Supabase
       while (true) {
         const offset = page * limit;
-        const response = await fetch(`/api/leaderboard/users?timePeriod=ALL&limit=${limit}&offset=${offset}&fetchAll=true`);
+        try {
+          const response = await fetch(`/api/leaderboard/users?timePeriod=ALL&limit=${limit}&offset=${offset}&fetchAll=true`);
 
-        if (!response.ok) {
-          if (page === 0) throw new Error("Failed to fetch users");
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage = `Failed to fetch users (${response.status})`;
+            try {
+              const errorData = JSON.parse(errorText);
+              errorMessage = errorData.message || errorData.error || errorMessage;
+            } catch {
+              errorMessage = errorText || errorMessage;
+            }
+            if (page === 0) {
+              console.error("Failed to fetch users:", errorMessage);
+              throw new Error(errorMessage);
+            }
+            break;
+          }
+
+          const data = await response.json();
+          if (!Array.isArray(data)) {
+            console.error("Invalid response format, expected array:", data);
+            if (page === 0) throw new Error("Invalid response format from API");
+            break;
+          }
+          
+          if (data.length === 0) {
+            console.log(`✓ Fetched all users: ${allUsers.length} total`);
+            break;
+          }
+
+          allUsers.push(...data);
+          console.log(`📊 Fetched page ${page + 1}: ${data.length} users (total: ${allUsers.length})`);
+          
+          // Continue fetching if we got a full page
+          if (data.length < limit) {
+            console.log(`✓ Reached end of data at page ${page + 1}`);
+            break; // No more data
+          }
+          page++;
+        } catch (error: any) {
+          if (page === 0) {
+            console.error("Error fetching users:", error);
+            throw error instanceof Error ? error : new Error(error?.message || "Failed to fetch users");
+          }
           break;
         }
-
-        const data = await response.json();
-        if (!Array.isArray(data) || data.length === 0) break;
-
-        allUsers.push(...data);
-        if (data.length < limit) break; // No more data
-        page++;
       }
 
       // Sort by rank
@@ -143,6 +194,7 @@ export default function Leaderboard() {
         return rankA - rankB;
       });
 
+      console.log(`✅ Total users loaded: ${allUsers.length}`);
       return allUsers;
     },
     enabled: isUsersPage,
@@ -419,11 +471,12 @@ export default function Leaderboard() {
   };
 
   const { data: volumeData, isLoading: isLoadingVolume, error: volumeError } = useQuery({
-    queryKey: ["builder-volume-timeseries", volumeTimeFrame],
+    queryKey: ["builder-volume-timeseries"],
     queryFn: async () => {
-      console.log(`📊 Fetching volume data for timePeriod: ${volumeTimeFrame}`);
+      console.log(`📊 Fetching volume data (all timeframes)`);
       try {
-        const url = `/api/leaderboard/builders/volume?timePeriod=${volumeTimeFrame}`;
+        // Always fetch ALL data, let the component filter client-side
+        const url = `/api/leaderboard/builders/volume?timePeriod=ALL`;
         const response = await fetch(url);
         // Check if response is OK
         if (!response.ok) {
@@ -602,6 +655,7 @@ export default function Leaderboard() {
                   data={volumeData || []} 
                   isLoading={isLoadingVolume}
                   onTimeFrameChange={setVolumeTimeFrame}
+                  currentTimeFrame={volumeTimeFrame}
                 />
               </div>
             )}
@@ -631,14 +685,28 @@ export default function Leaderboard() {
                       </div>
                     ) : usersError ? (
                       <div className="text-center py-12">
-                        <p className="text-destructive">Failed to load leaderboard</p>
+                        <p className="text-destructive font-semibold">Failed to load leaderboard</p>
                         <p className="text-muted-foreground text-sm mt-2">
                           {usersError instanceof Error ? usersError.message : "Unknown error"}
                         </p>
+                        {usersError instanceof Error && usersError.message.includes('fetch') && (
+                          <p className="text-muted-foreground text-xs mt-1">
+                            Please check your connection and try refreshing the page.
+                          </p>
+                        )}
                       </div>
                     ) : null}
                     <div className="min-h-[600px]" style={{ contain: 'layout', isolation: 'isolate', position: 'relative', willChange: 'auto' }}>
-                      {filteredUsers.length > 0 ? (
+                      {!isLoadingUsers && !usersError && filteredUsers.length === 0 ? (
+                        <div className="text-center py-12">
+                          <p className="text-muted-foreground font-medium">No users found</p>
+                          <p className="text-muted-foreground text-sm mt-2">
+                            {searchQuery 
+                              ? `No users match "${searchQuery}"`
+                              : "The leaderboard database is empty. Data will appear after the sync job runs."}
+                          </p>
+                        </div>
+                      ) : filteredUsers.length > 0 ? (
                         <>
                           <div className="mb-4 px-3 py-2 h-10 flex items-center justify-end text-xs text-muted-foreground border-b border-border/30" style={{ contain: 'layout', position: 'relative', minHeight: '40px', height: '40px', flexShrink: 0 }}>
                             <span className="font-medium whitespace-nowrap">
@@ -704,9 +772,18 @@ export default function Leaderboard() {
                                           </Avatar>
                                           <div className="flex-1 min-w-0 overflow-hidden">
                                             <div className="flex items-center gap-1.5">
-                                              <span className="font-bold text-foreground text-sm truncate" style={{ imageRendering: "pixelated" }}>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  setLocation(`/?username=${encodeURIComponent(user.userName)}`);
+                                                }}
+                                                className="font-bold text-foreground text-sm truncate hover:text-primary transition-colors cursor-pointer text-left"
+                                                style={{ imageRendering: "pixelated" }}
+                                                title={`View ${user.userName}'s dashboard`}
+                                              >
                                                 {user.userName}
-                                              </span>
+                                              </button>
                                               {user.xUsername && (
                                                 <a
                                                   href={`https://x.com/${user.xUsername}`}
@@ -806,7 +883,14 @@ export default function Leaderboard() {
                         <div className="text-center py-12">
                           <p className="text-muted-foreground">No users found matching "{searchQuery}"</p>
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-muted-foreground font-medium">No users found</p>
+                          <p className="text-muted-foreground text-sm mt-2">
+                            The leaderboard database is empty. Data will appear after the sync job runs.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     {/* Pagination Controls */}
                     {totalPages > 1 && filteredUsers.length > 0 && (
@@ -823,31 +907,49 @@ export default function Leaderboard() {
                         </Button>
 
                         <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
+                          {totalPages <= 100 ? (
+                            // Show all pages when 100 or fewer
+                            Array.from({ length: totalPages }, (_, i) => {
+                              const pageNum = i + 1;
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  disabled={isLoadingUsers}
+                                  className="min-w-[2.5rem]"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })
+                          ) : (
+                            // Smart pagination for more than 100 pages
+                            Array.from({ length: 5 }, (_, i) => {
+                              let pageNum;
+                              if (currentPage <= 3) {
+                                pageNum = i + 1;
+                              } else if (currentPage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = currentPage - 2 + i;
+                              }
 
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                disabled={isLoadingUsers}
-                                className="min-w-[2.5rem]"
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  disabled={isLoadingUsers}
+                                  className="min-w-[2.5rem]"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })
+                          )}
                         </div>
 
                         <Button
@@ -992,7 +1094,14 @@ export default function Leaderboard() {
                         <div className="text-center py-12">
                           <p className="text-muted-foreground">No builders found matching "{searchQuery}"</p>
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="text-center py-12">
+                          <p className="text-muted-foreground font-medium">No builders found</p>
+                          <p className="text-muted-foreground text-sm mt-2">
+                            The leaderboard database is empty. Data will appear after the sync job runs.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     {/* Pagination Controls */}
                     {totalPages > 1 && filteredBuilders.length > 0 && (
@@ -1009,31 +1118,49 @@ export default function Leaderboard() {
                         </Button>
 
                         <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (currentPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = currentPage - 2 + i;
-                            }
+                          {totalPages <= 100 ? (
+                            // Show all pages when 100 or fewer
+                            Array.from({ length: totalPages }, (_, i) => {
+                              const pageNum = i + 1;
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  disabled={isLoadingBuilders}
+                                  className="min-w-[2.5rem]"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })
+                          ) : (
+                            // Smart pagination for more than 100 pages
+                            Array.from({ length: 5 }, (_, i) => {
+                              let pageNum;
+                              if (currentPage <= 3) {
+                                pageNum = i + 1;
+                              } else if (currentPage >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = currentPage - 2 + i;
+                              }
 
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                disabled={isLoadingBuilders}
-                                className="min-w-[2.5rem]"
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
+                              return (
+                                <Button
+                                  key={pageNum}
+                                  variant={currentPage === pageNum ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(pageNum)}
+                                  disabled={isLoadingBuilders}
+                                  className="min-w-[2.5rem]"
+                                >
+                                  {pageNum}
+                                </Button>
+                              );
+                            })
+                          )}
                         </div>
 
                         <Button
@@ -1054,5 +1181,6 @@ export default function Leaderboard() {
             </Card>
         </div>
       </div>
-    );
+    </div>
+  );
 }

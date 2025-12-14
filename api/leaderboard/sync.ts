@@ -20,26 +20,28 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Sync users leaderboard - fetches until zero data, uses upsert (update existing, insert new)
 async function syncUsersLeaderboard(timePeriod: string = 'all') {
-  console.log(`🔄 Syncing users leaderboard (${timePeriod}) - fetching until zero data...`);
+  console.log(`🔄 Syncing users leaderboard (${timePeriod}) - fetching ALL pages until zero data...`);
   
   const limit = 50; // API max per request
-  const fetchBatchSize = 5; // Fetch 5 pages at a time
-  const saveBatchSize = 100; // Save 100 records at a time
-  const delayBetweenBatches = 2000; // 2 seconds delay
-  const delayBetweenPages = 500; // 500ms delay between pages
+  const fetchBatchSize = 10; // Fetch 10 pages at a time (increased for better performance)
+  const saveBatchSize = 200; // Save 200 records at a time (increased for better performance)
+  const delayBetweenBatches = 1500; // 1.5 seconds delay
+  const delayBetweenPages = 300; // 300ms delay between pages (reduced for faster sync)
   
   let page = 0;
   let hasMoreData = true;
   let totalSynced = 0;
   let totalErrors = 0;
+  let totalFetched = 0;
   const allUsers: any[] = [];
+  const startTime = Date.now();
   
-  // Fetch ALL pages until we get zero data
+  // Fetch ALL pages until we get zero data (can handle 100+ pages)
   while (hasMoreData) {
     const batchStart = page;
     const batchEnd = page + fetchBatchSize;
     
-    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}...`);
+    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}... (Total fetched so far: ${totalFetched})`);
     
     for (let batchIndex = 0; batchIndex < fetchBatchSize; batchIndex++) {
       const currentPage = batchStart + batchIndex;
@@ -80,13 +82,16 @@ async function syncUsersLeaderboard(timePeriod: string = 'all') {
         }));
         
         allUsers.push(...transformedUsers);
-        console.log(`    ✓ Page ${currentPage + 1}: ${users.length} users (total: ${allUsers.length})`);
+        totalFetched += users.length;
+        console.log(`    ✓ Page ${currentPage + 1}: ${users.length} users (total fetched: ${totalFetched}, in memory: ${allUsers.length})`);
       } catch (error: any) {
         console.error(`    ❌ Error fetching page ${currentPage + 1}:`, error.message);
+        // Continue to next page instead of stopping (unless it's the first page)
         if (currentPage === 0) {
           hasMoreData = false;
           break;
         }
+        // For other pages, continue fetching
       }
     }
     
@@ -96,74 +101,80 @@ async function syncUsersLeaderboard(timePeriod: string = 'all') {
     }
   }
   
-  console.log(`✓ Fetched ${allUsers.length} total users from Polymarket API`);
+  const fetchTime = Date.now() - startTime;
+  console.log(`✓ Fetched ${allUsers.length} total users from Polymarket API in ${(fetchTime / 1000).toFixed(2)}s`);
   
   if (allUsers.length === 0) {
     console.warn('⚠️ No users to sync');
-    return { synced: 0, errors: 0, totalFetched: 0 };
+    return { synced: 0, errors: 0, totalFetched: 0, fetchTime: fetchTime };
   }
   
   // Sort by rank
   allUsers.sort((a, b) => a.rank - b.rank);
   
+  console.log(`💾 Starting database upsert for ${allUsers.length} users (${Math.ceil(allUsers.length / saveBatchSize)} batches)...`);
+  const saveStartTime = Date.now();
+  
   // Upsert data in batches (update existing, insert new) - no profile_image
   for (let i = 0; i < allUsers.length; i += saveBatchSize) {
     const batch = allUsers.slice(i, i + saveBatchSize);
+    const batchNum = Math.floor(i / saveBatchSize) + 1;
+    const totalBatches = Math.ceil(allUsers.length / saveBatchSize);
     
-    // Use upsert to update existing records or insert new ones
-    // Conflict on username + time_period (unique constraint)
-    const { data, error } = await supabase
-      .from('leaderboard_users')
-      .upsert(batch, {
-        onConflict: 'username,time_period',
-        ignoreDuplicates: false,
-      })
-      .select();
-    
-    if (error) {
-      console.error(`❌ Error upserting batch ${Math.floor(i / saveBatchSize) + 1}:`, error);
-      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+    try {
+      // Use upsert to update existing records or insert new ones
+      // Conflict on username + time_period (unique constraint)
+      const { data, error } = await supabase
+        .from('leaderboard_users')
+        .upsert(batch, {
+          onConflict: 'username,time_period',
+          ignoreDuplicates: false,
+        })
+        .select();
+      
+      if (error) {
+        console.error(`❌ Error upserting batch ${batchNum}/${totalBatches}:`, error.message);
+        totalErrors += batch.length;
+      } else {
+        totalSynced += batch.length;
+        console.log(`✓ Upserted batch ${batchNum}/${totalBatches} (${batch.length} users, returned ${data?.length || 0} rows)`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Exception upserting batch ${batchNum}/${totalBatches}:`, error.message);
       totalErrors += batch.length;
-    } else {
-      totalSynced += batch.length;
-      console.log(`✓ Upserted batch ${Math.floor(i / saveBatchSize) + 1}/${Math.ceil(allUsers.length / saveBatchSize)} (${batch.length} users, returned ${data?.length || 0} rows)`);
-    }
-    
-    if (error) {
-      console.error(`❌ Error upserting batch ${Math.floor(i / saveBatchSize) + 1}:`, error);
-      totalErrors += batch.length;
-    } else {
-      totalSynced += batch.length;
-      console.log(`✓ Upserted batch ${Math.floor(i / saveBatchSize) + 1}/${Math.ceil(allUsers.length / saveBatchSize)} (${batch.length} users)`);
     }
   }
   
-  console.log(`✅ Users sync complete: ${totalSynced} synced, ${totalErrors} errors`);
-  return { synced: totalSynced, errors: totalErrors, totalFetched: allUsers.length };
+  const saveTime = Date.now() - saveStartTime;
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ Users sync complete: ${totalSynced} synced, ${totalErrors} errors (Total time: ${(totalTime / 1000).toFixed(2)}s, Save time: ${(saveTime / 1000).toFixed(2)}s)`);
+  return { synced: totalSynced, errors: totalErrors, totalFetched: allUsers.length, fetchTime, saveTime, totalTime };
 }
 
 // Sync builders leaderboard - fetches until zero data, uses upsert (update existing, insert new)
 async function syncBuildersLeaderboard(timePeriod: string = 'all') {
-  console.log(`🔄 Syncing builders leaderboard (${timePeriod}) - fetching until zero data...`);
+  console.log(`🔄 Syncing builders leaderboard (${timePeriod}) - fetching ALL pages until zero data...`);
   
   const limit = 50; // API max per request
-  const fetchBatchSize = 5; // Fetch 5 pages at a time
-  const saveBatchSize = 100; // Save 100 records at a time
-  const delayBetweenBatches = 2000; // 2 seconds delay
-  const delayBetweenPages = 500; // 500ms delay between pages
+  const fetchBatchSize = 10; // Fetch 10 pages at a time (increased for better performance)
+  const saveBatchSize = 200; // Save 200 records at a time (increased for better performance)
+  const delayBetweenBatches = 1500; // 1.5 seconds delay
+  const delayBetweenPages = 300; // 300ms delay between pages (reduced for faster sync)
   
   let page = 0;
   let hasMoreData = true;
   let totalSynced = 0;
   let totalErrors = 0;
+  let totalFetched = 0;
   const allBuilders: any[] = [];
+  const startTime = Date.now();
   
-  // Fetch ALL pages until we get zero data
+  // Fetch ALL pages until we get zero data (can handle 100+ pages)
   while (hasMoreData) {
     const batchStart = page;
     const batchEnd = page + fetchBatchSize;
     
-    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}...`);
+    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}... (Total fetched so far: ${totalFetched})`);
     
     for (let batchIndex = 0; batchIndex < fetchBatchSize; batchIndex++) {
       const currentPage = batchStart + batchIndex;
@@ -203,13 +214,16 @@ async function syncBuildersLeaderboard(timePeriod: string = 'all') {
         }));
         
         allBuilders.push(...transformedBuilders);
-        console.log(`    ✓ Page ${currentPage + 1}: ${builders.length} builders (total: ${allBuilders.length})`);
+        totalFetched += builders.length;
+        console.log(`    ✓ Page ${currentPage + 1}: ${builders.length} builders (total fetched: ${totalFetched}, in memory: ${allBuilders.length})`);
       } catch (error: any) {
         console.error(`    ❌ Error fetching page ${currentPage + 1}:`, error.message);
+        // Continue to next page instead of stopping (unless it's the first page)
         if (currentPage === 0) {
           hasMoreData = false;
           break;
         }
+        // For other pages, continue fetching
       }
     }
     
@@ -219,50 +233,54 @@ async function syncBuildersLeaderboard(timePeriod: string = 'all') {
     }
   }
   
-  console.log(`✓ Fetched ${allBuilders.length} total builders from Polymarket API`);
+  const fetchTime = Date.now() - startTime;
+  console.log(`✓ Fetched ${allBuilders.length} total builders from Polymarket API in ${(fetchTime / 1000).toFixed(2)}s`);
   
   if (allBuilders.length === 0) {
     console.warn('⚠️ No builders to sync');
-    return { synced: 0, errors: 0, totalFetched: 0 };
+    return { synced: 0, errors: 0, totalFetched: 0, fetchTime: fetchTime };
   }
   
   // Sort by rank
   allBuilders.sort((a, b) => a.rank - b.rank);
   
+  console.log(`💾 Starting database upsert for ${allBuilders.length} builders (${Math.ceil(allBuilders.length / saveBatchSize)} batches)...`);
+  const saveStartTime = Date.now();
+  
   // Upsert data in batches (update existing, insert new)
   for (let i = 0; i < allBuilders.length; i += saveBatchSize) {
     const batch = allBuilders.slice(i, i + saveBatchSize);
+    const batchNum = Math.floor(i / saveBatchSize) + 1;
+    const totalBatches = Math.ceil(allBuilders.length / saveBatchSize);
     
-    // Use upsert to update existing records or insert new ones
-    // Conflict on builder_name + time_period (unique constraint)
-    const { data, error } = await supabase
-      .from('leaderboard_builders')
-      .upsert(batch, {
-        onConflict: 'builder_name,time_period',
-        ignoreDuplicates: false,
-      })
-      .select();
-    
-    if (error) {
-      console.error(`❌ Error upserting batch ${Math.floor(i / saveBatchSize) + 1}:`, error);
-      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+    try {
+      // Use upsert to update existing records or insert new ones
+      // Conflict on builder_name + time_period (unique constraint)
+      const { data, error } = await supabase
+        .from('leaderboard_builders')
+        .upsert(batch, {
+          onConflict: 'builder_name,time_period',
+          ignoreDuplicates: false,
+        })
+        .select();
+      
+      if (error) {
+        console.error(`❌ Error upserting batch ${batchNum}/${totalBatches}:`, error.message);
+        totalErrors += batch.length;
+      } else {
+        totalSynced += batch.length;
+        console.log(`✓ Upserted batch ${batchNum}/${totalBatches} (${batch.length} builders, returned ${data?.length || 0} rows)`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Exception upserting batch ${batchNum}/${totalBatches}:`, error.message);
       totalErrors += batch.length;
-    } else {
-      totalSynced += batch.length;
-      console.log(`✓ Upserted batch ${Math.floor(i / saveBatchSize) + 1}/${Math.ceil(allBuilders.length / saveBatchSize)} (${batch.length} builders, returned ${data?.length || 0} rows)`);
-    }
-    
-    if (error) {
-      console.error(`❌ Error upserting batch ${Math.floor(i / saveBatchSize) + 1}:`, error);
-      totalErrors += batch.length;
-    } else {
-      totalSynced += batch.length;
-      console.log(`✓ Upserted batch ${Math.floor(i / saveBatchSize) + 1}/${Math.ceil(allBuilders.length / saveBatchSize)} (${batch.length} builders)`);
     }
   }
   
-  console.log(`✅ Builders sync complete: ${totalSynced} synced, ${totalErrors} errors`);
-  return { synced: totalSynced, errors: totalErrors, totalFetched: allBuilders.length };
+  const saveTime = Date.now() - saveStartTime;
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ Builders sync complete: ${totalSynced} synced, ${totalErrors} errors (Total time: ${(totalTime / 1000).toFixed(2)}s, Save time: ${(saveTime / 1000).toFixed(2)}s)`);
+  return { synced: totalSynced, errors: totalErrors, totalFetched: allBuilders.length, fetchTime, saveTime, totalTime };
 }
 
 // Health check function

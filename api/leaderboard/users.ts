@@ -28,8 +28,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const timePeriod = (req.query.timePeriod as string) || "all";
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Cap at 1000
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0); // Ensure non-negative
 
     console.log(`📊 [VERCEL API] Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
 
@@ -58,13 +58,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Transform Supabase data to match frontend expectations
     const transformedUsers = cachedUsers.map((user: any) => ({
-      rank: user.rank,
-      userName: user.username,
-      xUsername: user.x_username,
+      rank: user.rank?.toString() || String(user.rank || 0),
+      userName: user.username || '',
+      xUsername: user.x_username || undefined,
       vol: parseFloat(user.volume || 0),
       walletAddress: user.wallet_address || undefined,
       profileImage: user.profile_image || undefined,
-      pnl: user.pnl !== null ? parseFloat(user.pnl) : undefined,
+      pnl: user.pnl !== null && user.pnl !== undefined ? parseFloat(user.pnl) : undefined,
     }));
 
     return res.status(200).json(transformedUsers);
@@ -89,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     return res.status(500).json({
       error: "Failed to fetch user leaderboard",
+      message: error?.message || "Unknown error occurred",
     });
   }
 }

@@ -21,6 +21,16 @@ export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Read username from URL params on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const usernameFromUrl = urlParams.get('username');
+    if (usernameFromUrl && usernameFromUrl !== connectedUsername) {
+      setConnectedUsername(usernameFromUrl);
+      setRefreshKey(prev => prev + 1);
+    }
+  }, []); // Only run on mount
+
   useEffect(() => {
     if (connectedUsername) {
       queryClient.invalidateQueries({ queryKey: ["dashboard", connectedUsername] });
@@ -34,23 +44,61 @@ export default function Dashboard() {
     gcTime: 0,
     retry: 1,
     retryDelay: 2000,
-    refetchInterval: (query) => {
-      if (query.state.error || !query.state.data) {
-        return false;
-      }
-      return 30 * 1000;
-    },
+    refetchInterval: false, // Disable auto-refetch - this endpoint is expensive (10+ seconds)
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch dashboard data' }));
-        throw new Error(errorData.error || 'Failed to fetch dashboard data');
+      // Create an AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      try {
+        const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Failed to fetch dashboard data' }));
+          throw new Error(errorData.error || 'Failed to fetch dashboard data');
+        }
+        
+        const jsonData = await res.json();
+        console.log('Dashboard API response:', jsonData);
+        
+        if (!jsonData || !jsonData.profile) {
+          console.error('Invalid response data - missing profile:', jsonData);
+          throw new Error('Invalid response data');
+        }
+        
+        // Ensure all required fields exist with defaults
+        const validatedData = {
+          profile: jsonData.profile || {},
+          stats: jsonData.stats || {
+            totalPnL: 0,
+            realizedPnL: 0,
+            unrealizedPnL: 0,
+            winRate: 0,
+            totalVolume: 0,
+            openPositionsValue: 0,
+            totalTrades: 0,
+            activePositions: 0,
+            closedPositions: 0,
+            bestTrade: 0,
+            worstTrade: 0,
+          },
+          pnlHistory: jsonData.pnlHistory || [],
+          positions: jsonData.positions || [],
+          recentTrades: jsonData.recentTrades || [],
+        };
+        
+        console.log('Validated dashboard data:', validatedData);
+        return validatedData;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout - the dashboard data fetch took too long. Please try again.');
+        }
+        throw error;
       }
-      const jsonData = await res.json();
-      if (!jsonData || !jsonData.profile) {
-        throw new Error('Invalid response data');
-      }
-      return jsonData;
     },
   });
 
@@ -189,11 +237,45 @@ export default function Dashboard() {
   }
 
   if (!data) {
-    return null;
+    console.error('No data received from API');
+    return (
+      <div className="min-h-screen bg-background pt-[clamp(48px,40px+2vw,64px)]">
+        <div className="container mx-auto px-fluid-sm py-fluid-lg">
+          <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-4">
+            <Card className="w-full max-w-lg p-fluid-card text-center space-y-3">
+              <h2 className="text-fluid-lg font-semibold text-foreground">No Data Available</h2>
+              <p className="text-fluid-xs text-muted-foreground">No data was returned from the API.</p>
+              <Button onClick={handleDisconnect} variant="outline">Try Different Username</Button>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
   }
 
+  // Log what's missing for debugging
   if (!data.profile || !data.stats || !data.pnlHistory || !data.positions || !data.recentTrades) {
-    return null;
+    console.error('Missing required data fields:', {
+      hasProfile: !!data.profile,
+      hasStats: !!data.stats,
+      hasPnLHistory: !!data.pnlHistory,
+      hasPositions: !!data.positions,
+      hasRecentTrades: !!data.recentTrades,
+      data
+    });
+    return (
+      <div className="min-h-screen bg-background pt-[clamp(48px,40px+2vw,64px)]">
+        <div className="container mx-auto px-fluid-sm py-fluid-lg">
+          <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-4">
+            <Card className="w-full max-w-lg p-fluid-card text-center space-y-3">
+              <h2 className="text-fluid-lg font-semibold text-foreground">Incomplete Data</h2>
+              <p className="text-fluid-xs text-muted-foreground">The API response is missing required fields. Check the console for details.</p>
+              <Button onClick={handleDisconnect} variant="outline">Try Different Username</Button>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const { profile, stats, pnlHistory, positions, recentTrades } = data;
@@ -308,7 +390,7 @@ export default function Dashboard() {
                 {stats.realizedPnL >= 0 ? '+' : ''}${stats.realizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-fluid-card border-2 border-primary/30">
+            <Card className="p-fluid-card border-2 border-primary/30 rounded-b-xl">
               <p className="text-fluid-xs font-medium text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 uppercase tracking-wide">Unrealized PnL</p>
               <p className={`text-fluid-xl sm:text-fluid-2xl lg:text-fluid-3xl font-bold tabular-nums ${stats.unrealizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-unrealized-pnl">
                 {stats.unrealizedPnL >= 0 ? '+' : ''}${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
