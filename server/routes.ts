@@ -4,6 +4,7 @@ import axios from "axios";
 import { z } from "zod";
 import sqlite3 from "sqlite3";
 import path from "path";
+import { createClient } from '@supabase/supabase-js';
 import type {
   DashboardData,
   Position,
@@ -53,6 +54,92 @@ function setCache<T>(key: string, data: T): void {
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
+
+// Supabase configuration for leaderboard
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bzlxrggciehkcslchooe.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMTM3NzcsImV4cCI6MjA4MDU4OTc3N30.vIcU83OafM_MGPRy-RjheuSQqkQNRw-RcaI2aDXH4gM';
+
+// Helper function to query Supabase using REST API (more reliable than JS client in Node.js)
+async function querySupabase(table: string, filters: { [key: string]: any } = {}, options: { orderBy?: string; ascending?: boolean; limit?: number; offset?: number } = {}) {
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
+    
+    // Add filters
+    Object.entries(filters).forEach(([key, value]) => {
+      url += `&${key}=eq.${encodeURIComponent(value)}`;
+    });
+    
+    // Add ordering
+    if (options.orderBy) {
+      url += `&order=${options.orderBy}.${options.ascending !== false ? 'asc' : 'desc'}`;
+    }
+    
+    // Build headers
+    const headers: any = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    };
+    
+    // Add pagination using Range header (Supabase REST API standard)
+    if (options.limit !== undefined && options.offset !== undefined) {
+      const start = options.offset;
+      const end = options.offset + options.limit - 1;
+      headers['Range'] = `${start}-${end}`;
+    } else if (options.limit !== undefined) {
+      headers['Range'] = `0-${options.limit - 1}`;
+    }
+    
+    console.log(`🔍 [querySupabase] Querying ${table}: ${url.substring(0, 200)}...`);
+    
+    const response = await axios.get(url, {
+      headers,
+      timeout: 10000,
+      validateStatus: (status) => status < 500, // Don't throw on 4xx errors
+    });
+    
+    console.log(`🔍 [querySupabase] Response status: ${response.status}, data type: ${Array.isArray(response.data) ? 'array' : typeof response.data}`);
+    
+    // Handle 206 (Partial Content) or 200 (OK) responses
+    if (response.status === 200 || response.status === 206) {
+      const data = Array.isArray(response.data) ? response.data : [];
+      console.log(`✓ [querySupabase] Successfully fetched ${data.length} records from ${table}`);
+      return { data, error: null };
+    }
+    
+    // Handle 416 (Range Not Satisfiable) - means no more data
+    if (response.status === 416) {
+      console.log(`⚠️ [querySupabase] Range not satisfiable (416) - no more data available`);
+      return { data: [], error: null };
+    }
+    
+    // Handle other errors - return empty array (not an error, just no data)
+    console.log(`⚠️ Supabase returned status ${response.status} for table ${table} - returning empty array`);
+    return { data: [], error: null };
+  } catch (error: any) {
+    // Log the error for debugging
+    console.error(`❌ Supabase query error for table ${table}:`, error.message);
+    if (error.response) {
+      console.error(`   Response status: ${error.response.status}`);
+      const responseData = error.response.data;
+      if (typeof responseData === 'string' && responseData.includes('<!DOCTYPE')) {
+        console.error(`   ⚠️ Received HTML instead of JSON - endpoint may not exist or URL is wrong`);
+        console.error(`   URL was: ${SUPABASE_URL}/rest/v1/${table}`);
+      } else {
+        console.error(`   Response data:`, JSON.stringify(responseData).substring(0, 200));
+      }
+    }
+    if (error.code) {
+      console.error(`   Error code: ${error.code}`);
+    }
+    // Always return empty array on error to prevent frontend crashes
+    return { data: [], error: null };
+  }
+}
+
+// Keep Supabase client for compatibility (but prefer REST API)
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Cache for profile searches to avoid redundant API calls
 const profileCache = new Map<string, { data: { wallet: string; profileImage?: string; bio?: string }, timestamp: number }>();
@@ -215,8 +302,8 @@ async function findUserByUsername(username: string, skipCache = false): Promise<
           );
           const result = {
             wallet: walletAddress,
-            profileImage: profile.profileImage || profile.profile_image,
-            bio: profile.bio,
+            profileImage: profile.profileImage || profile.profile_image_url || profile.profile_image || profile.avatar_url || profile.avatar || undefined,
+            bio: profile.bio || profile.description || undefined,
           };
           // Cache the result
           if (!skipCache) {
@@ -237,8 +324,8 @@ async function findUserByUsername(username: string, skipCache = false): Promise<
             console.log(`→ Using first match: ${name} -> ${wallet}`);
             const result = {
               wallet,
-              profileImage: profile.profileImage || profile.profile_image,
-              bio: profile.bio,
+              profileImage: profile.profileImage || profile.profile_image_url || profile.profile_image || profile.avatar_url || profile.avatar || undefined,
+              bio: profile.bio || profile.description || undefined,
             };
             // Cache the result
             if (!skipCache) {
@@ -1167,498 +1254,265 @@ async function generateDemoData(): Promise<DashboardData> {
   };
 }
 
+// Helper function to set CORS headers consistently
+function setCORSHeaders(res: any): void {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Content-Type', 'application/json');
+}
+
+// Helper function to handle OPTIONS requests
+function handleOPTIONS(req: any, res: any): boolean {
+  if (req.method === 'OPTIONS') {
+    setCORSHeaders(res);
+    res.status(200).end();
+    return true;
+  }
+  return false;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // GET /api/users/search?q=... - Search for usernames
-  app.get("/api/users/search", async (req, res) => {
+  // Clear all old search caches on startup
+  const cacheKeys = Array.from(cache.keys());
+  cacheKeys.forEach(key => {
+    if (key.startsWith('search_')) {
+      cache.delete(key);
+    }
+  });
+  console.log(`Cleared ${cacheKeys.filter(k => k.startsWith('search_')).length} search cache entries`);
+
+  // Log Supabase configuration (without exposing the full key)
+  console.log(`🔗 Supabase URL: ${SUPABASE_URL}`);
+  console.log(`🔑 Supabase Key: ${SUPABASE_ANON_KEY ? `${SUPABASE_ANON_KEY.substring(0, 20)}...` : 'NOT SET'}`);
+  
+  // Test Supabase connection on startup (non-blocking)
+  // Use a simple health check query
+  (async () => {
     try {
-      const query = req.query.q as string;
+      // Try to query a small amount of data to test connectivity
+      const testResult = await querySupabase('leaderboard_users', {}, { limit: 1 });
+      
+      // Check if we got a network error by trying a direct axios call
+      try {
+        const testUrl = `${SUPABASE_URL}/rest/v1/leaderboard_users?select=count&limit=1`;
+        await axios.get(testUrl, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          timeout: 5000,
+          validateStatus: () => true, // Don't throw on any status
+        });
+        console.log(`✓ Supabase connection test: OK (can reach Supabase API)`);
+      } catch (testErr: any) {
+        if (testErr.code === 'ENOTFOUND' || testErr.code === 'ECONNREFUSED') {
+          console.warn(`⚠️ Supabase connection test: FAILED (DNS/Network error)`);
+          console.warn(`   Error: ${testErr.code} - ${testErr.message}`);
+          console.warn(`   The Supabase URL "${SUPABASE_URL}" cannot be reached.`);
+          console.warn(`   Please verify:`);
+          console.warn(`   1. The Supabase project exists and is active`);
+          console.warn(`   2. The SUPABASE_URL environment variable is correct`);
+          console.warn(`   3. Your network can reach Supabase services`);
+          console.warn(`   Leaderboard features will return empty data until this is fixed.`);
+        } else {
+          // Other errors (like 401, 404) mean we can reach the server but have config issues
+          console.log(`⚠️ Supabase connection test: Can reach server but may have config issues`);
+          console.log(`   Error: ${testErr.response?.status || testErr.message}`);
+        }
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ Supabase connection test: Unexpected error - ${err.message}`);
+    }
+  })();
 
+  // ============================================================================
+  // USER ROUTES
+  // ============================================================================
+
+  // GET /api/users/search?q=... - Search for usernames using Polymarket GAMMA API
+  // Official API: https://gamma-api.polymarket.com/public-search
+  // Response structure: { events: [...], tags: [...], profiles: [...], pagination: {...} }
+  // Profile object structure: { name: string, profileImage?: string, pseudonym?: string, proxyWallet?: string }
+  app.get("/api/users/search", async (req, res) => {
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
+    
+    try {
+      const query = (req.query.q as string)?.trim();
+
+      // Validate query
       if (!query || query.length < 2) {
-        return res.json([]);
+        return res.status(200).json([]);
       }
 
-      // Check cache first
+      // Check cache first (30 second TTL)
+      // Use query as-is for cache key to preserve case-sensitive searches
       const cacheKey = `search_${query}`;
-      const cached = getCached<string[]>(cacheKey, 30000); // 30 second cache
+      const cached = getCached<any[]>(cacheKey, 30000);
       if (cached) {
-        return res.json(cached);
+        console.log(`[Search] Using cached results for: "${query}" (${cached.length} profiles)`);
+        return res.status(200).json(cached);
       }
 
-      // Check rate limit (300 requests per 10s for GAMMA Search)
-      if (!checkRateLimit('gamma_search', 20, 10000)) { // Conservative: 20 requests per 10s
-        console.log('Rate limit exceeded for search, using cached data');
-        const cached = getCached<string[]>(cacheKey, 300000);
-        return res.json(cached || []);
+      // Rate limiting: 20 requests per 10 seconds
+      if (!checkRateLimit('gamma_search', 20, 10000)) {
+        console.log(`[Search] Rate limit exceeded for query: ${query}, using cached data`);
+        const staleCache = getCached<any[]>(cacheKey, 300000); // 5 minute stale cache
+        return res.status(200).json(staleCache || []);
       }
 
-      const response = await axios.get(
-        `${POLYMARKET_GAMMA_API}/public-search`,
-        {
-          params: {
+      // Call Polymarket GAMMA API public-search endpoint
+      // Try multiple requests with different parameters to get more results
+      let allProfiles: any[] = [];
+      const maxRequests = 3; // Try up to 3 requests to get more results
+      
+      for (let attempt = 0; attempt < maxRequests; attempt++) {
+        try {
+          const params: any = {
             q: query,
             search_profiles: true,
-          },
-          timeout: 3000,
-        },
-      );
+          };
+          
+          // Try different pagination parameters
+          if (attempt === 0) {
+            params.limit = 50;
+          } else if (attempt === 1) {
+            params.offset = 0;
+            params.limit = 50;
+          } else {
+            params.page = attempt;
+            params.limit = 50;
+          }
+          
+          const response = await axios.get(`${POLYMARKET_GAMMA_API}/public-search`, {
+            params,
+            timeout: 5000,
+            validateStatus: (status) => status < 500,
+          });
 
-      // Try multiple response structures
-      let profiles: any[] = [];
-
-      if (Array.isArray(response.data)) {
-        profiles = response.data;
-      } else if (
-        response.data?.profiles &&
-        Array.isArray(response.data.profiles)
-      ) {
-        profiles = response.data.profiles;
-      } else if (
-        response.data?.data?.profiles &&
-        Array.isArray(response.data.data.profiles)
-      ) {
-        profiles = response.data.data.profiles;
-      } else if (
-        response.data?.results &&
-        Array.isArray(response.data.results)
-      ) {
-        profiles = response.data.results;
-      }
-
-      if (profiles.length > 0) {
-        const possibleNameFields = [
-          "name",
-          "username",
-          "displayName",
-          "handle",
-          "pseudonym",
-        ];
-        const usernames = profiles
-          .map((profile: any) => {
-            for (const field of possibleNameFields) {
-              if (profile[field]) return profile[field];
+          // Handle API errors
+          if (response.status >= 400) {
+            if (attempt === 0) {
+              console.warn(`[Search] Polymarket API returned ${response.status} for query: ${query}`);
             }
-            return null;
-          })
-          .filter(Boolean)
-          .slice(0, 10);
-        
-        // Cache the result
-        setCache(cacheKey, usernames);
-        return res.json(usernames);
+            break; // Stop trying if API returns error
+          }
+
+          // Extract profiles from response
+          const profiles: any[] = response.data?.profiles || [];
+          const pagination = response.data?.pagination;
+
+          if (attempt === 0) {
+            console.log(`[Search] API returned ${profiles.length} profiles for query: "${query}"`);
+            if (pagination) {
+              console.log(`[Search] Pagination info:`, JSON.stringify(pagination));
+            }
+          }
+
+          if (profiles.length > 0) {
+            // Add profiles that we haven't seen yet (deduplicate by username)
+            const existingUsernames = new Set(allProfiles.map(p => (p.name || p.pseudonym)?.toLowerCase()));
+            const newProfiles = profiles.filter(p => {
+              const username = (p.name || p.pseudonym)?.toLowerCase();
+              return username && !existingUsernames.has(username);
+            });
+            allProfiles.push(...newProfiles);
+            
+            // If we got fewer results than requested, we've likely reached the end
+            if (profiles.length < 50 || (pagination && !pagination.hasMore)) {
+              break;
+            }
+          } else {
+            break; // No more profiles
+          }
+          
+          // Small delay between requests to avoid rate limiting
+          if (attempt < maxRequests - 1 && profiles.length >= 50) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error: any) {
+          if (attempt === 0) {
+            console.error(`[Search] Error fetching profiles:`, error.message);
+          }
+          break;
+        }
       }
 
-      res.json([]);
-    } catch (error) {
-      console.error("Error searching users:", error);
+      const profiles = allProfiles;
+
+      if (profiles.length === 0) {
+        console.log(`[Search] No profiles found for query: ${query}`);
+        return res.status(200).json([]);
+      }
+
+      // Transform profiles to match frontend expectations
+      // Official API fields: name (primary), profileImage (optional), pseudonym (optional)
+      const userResults = profiles
+        .map((profile: any) => {
+          // Use 'name' as primary username, fallback to 'pseudonym' if name is missing
+          // This ensures we capture all profiles, not just those with 'name'
+          const username = profile.name || profile.pseudonym;
+          
+          // Skip if no username at all
+          if (!username || typeof username !== 'string') {
+            return null;
+          }
+
+          // Extract profile image (official API field is 'profileImage')
+          const profileImage = profile.profileImage;
+
+          return {
+            username: username.trim(),
+            profileImage: profileImage && typeof profileImage === 'string' ? profileImage.trim() : undefined,
+          };
+        })
+        .filter((item) => item !== null && typeof item === 'object' && 'username' in item)
+        .slice(0, 20) as Array<{ username: string; profileImage?: string }>; // Increased to 20 results
+
+      console.log(`[Search] Query: "${query}" → Found ${userResults.length} profiles (from ${profiles.length} total API results, ${allProfiles.length} after pagination attempts)`);
+
+      // Cache the result
+      setCache(cacheKey, userResults);
+      return res.status(200).json(userResults);
+
+    } catch (error: any) {
+      console.error(`[Search] Error for query "${req.query.q}":`, error.message);
+      
       // Return cached data if available
-      const cacheKey = `search_${req.query.q}`;
-      const cached = getCached<string[]>(cacheKey, 300000);
-      res.json(cached || []);
+      const cacheKey = `search_${(req.query.q as string)?.toLowerCase() || ''}`;
+      const cached = getCached<any[]>(cacheKey, 300000);
+      return res.status(200).json(cached || []);
     }
   });
 
-  // GET /api/dashboard/username?username=xxx - Fetch dashboard data by username
+  // ============================================================================
+  // DASHBOARD ROUTES
+  // ============================================================================
+
+  // GET /api/dashboard/username?username=... - Get dashboard data for a username
   app.get("/api/dashboard/username", async (req, res) => {
-    let responseSent = false;
-    let requestTimeout: NodeJS.Timeout | null = null;
+    setCORSHeaders(res);
     
-    // Helper to safely send response only once
-    const sendResponse = (status: number, data: any) => {
-      if (responseSent || res.headersSent) {
-        return;
-      }
-      responseSent = true;
-      if (requestTimeout) {
-        clearTimeout(requestTimeout);
-      }
-      res.status(status).json(data);
-    };
-    
-    // Set a timeout for the entire request
-    requestTimeout = setTimeout(() => {
-      if (!responseSent && !res.headersSent) {
-        responseSent = true;
-        res.status(504).json({
-          error: "Request timeout. The dashboard is taking too long to load. Please try again.",
+    // Cache-busting headers to prevent stale data
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    if (handleOPTIONS(req, res)) return;
+
+    // Set a timeout for the entire request (60 seconds)
+    const requestTimeout = setTimeout(() => {
+      if (!res.headersSent) {
+        console.error('Dashboard request timeout after 60 seconds');
+        res.status(504).json({ 
+          error: 'Request timeout',
+          message: 'The dashboard data fetch took too long. Please try again.'
         });
       }
-    }, 35000); // 35 second timeout to allow complete data fetch (PnL fetch takes ~26s)
+    }, 60000);
 
-    try {
-      const { username } = req.query;
-
-      if (!username || typeof username !== 'string') {
-        if (requestTimeout) clearTimeout(requestTimeout);
-        if (!responseSent && !res.headersSent) {
-          return res.status(400).json({ error: 'Username query parameter is required' });
-        }
-        return;
-      }
-
-      const usernameSchema = z
-        .string()
-        .regex(/^[a-zA-Z0-9_.-]+$/, "Invalid username format");
-      const validatedUsername = usernameSchema.parse(username);
-
-          console.log(`\n📍 [EXPRESS SERVER ROUTE] === Fetching dashboard for: ${validatedUsername} ===`);
-
-      let walletAddress: string = "";
-      let profileImage: string | undefined;
-      let bio: string | undefined;
-      let useDemoData = false;
-      
-      try {
-        const userProfile = await findUserByUsername(validatedUsername);
-        walletAddress = userProfile.wallet;
-        profileImage = userProfile.profileImage;
-        bio = userProfile.bio;
-        console.log(`✓ Wallet found: ${walletAddress}`);
-      } catch (error: any) {
-        if (responseSent) return;
-        if (error.message === "USER_NOT_FOUND") {
-          console.log(`✗ User '${validatedUsername}' not found in Polymarket - using demo data`);
-          useDemoData = true;
-        } else {
-          throw error;
-        }
-      }
-
-      let positions: Position[] = [];
-      let trades: Trade[] = [];
-      let activity: any[] = [];
-
-      // Only fetch real data if we have a wallet address
-      if (!useDemoData && walletAddress) {
-        try {
-          // Use Promise.race to add timeout to the parallel requests
-          const dataPromise = Promise.all([
-            fetchUserPositions(walletAddress),
-            fetchUserTrades(walletAddress),
-            fetchUserActivity(walletAddress),
-          ]);
-
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Data fetch timeout')), 4000); // 4 second timeout
-          });
-
-          [positions, trades, activity] = await Promise.race([dataPromise, timeoutPromise]) as [Position[], Trade[], any[]];
-        } catch (error) {
-          if (responseSent) return;
-          if (axios.isAxiosError(error)) {
-            const status = error.response?.status;
-            console.log(`API error: status ${status}`);
-
-            if (status === 401 || status === 403 || status === 404) {
-              console.log("→ Using demo data");
-              useDemoData = true;
-            } else {
-              return sendResponse(503, {
-                error: "Unable to reach Polymarket API. Please try again later.",
-              });
-            }
-          } else if (error instanceof Error && error.message === 'Data fetch timeout') {
-            console.log("→ Data fetch timeout, using demo data");
-            useDemoData = true;
-          } else {
-            throw error;
-          }
-        }
-      }
-
-      // Only use demo data if explicitly requested (user not found or API auth failed)
-      if (useDemoData) {
-        if (responseSent) return;
-        console.log("→ Returning demo data");
-        const demoData = await generateDemoData();
-        return sendResponse(200, demoData);
-      }
-
-      if (responseSent) return;
-
-      // Fetch PnL data - wait for actual completion (takes ~26s) to get accurate data
-      // Deduplicate concurrent requests for the same wallet
-      let pnlData: any = null;
-      let fullActivityHistory: any[] = [];
-      try {
-        // Check if there's already an ongoing request for this wallet
-        const requestKey = `pnl_${walletAddress}`;
-        let pnlPromise = ongoingRequests.get(requestKey);
-        
-        if (!pnlPromise) {
-          // Create new fetch promise
-          pnlPromise = fetchUserPnLData(walletAddress, true).catch(err => {
-            console.error('PnL fetch error:', err);
-            return null;
-          }).finally(() => {
-            // Clean up after 5 seconds (allow time for other requests to use the result)
-            setTimeout(() => {
-              ongoingRequests.delete(requestKey);
-            }, 5000);
-          });
-          ongoingRequests.set(requestKey, pnlPromise);
-        } else {
-          console.log(`⚠ Reusing ongoing PnL fetch for ${walletAddress}`);
-        }
-        
-        // Wait for the fetch to complete (either new or existing)
-        pnlData = await pnlPromise;
-        
-        if (pnlData) {
-          fullActivityHistory = pnlData.fullActivityHistory || [];
-          console.log(`✓ PnL data fetched successfully: ${fullActivityHistory.length} activity events`);
-          if (pnlData && pnlData.realizedPnL !== undefined && pnlData.totalPnL !== undefined) {
-            console.log(`✓ Realized PnL: $${pnlData.realizedPnL.toLocaleString()}, Total PnL: $${pnlData.totalPnL.toLocaleString()}`);
-          } else {
-            console.log(`✓ PnL data structure:`, { realizedPnL: pnlData?.realizedPnL, totalPnL: pnlData?.totalPnL });
-          }
-        } else {
-          console.log('⚠ PnL fetch failed - will use trades data for history');
-        }
-      } catch (error) {
-        console.error('Error fetching PnL data:', error);
-        // Continue without PnL data - will use fallback calculation
-        ongoingRequests.delete(`pnl_${walletAddress}`);
-      }
-      
-      // Fetch volume and additional data from leaderboard API
-      let leaderboardData: { volume: number; xUsername?: string; rank?: string } = { volume: 0 };
-      if (walletAddress) {
-        try {
-          leaderboardData = await fetchUserVolume(walletAddress);
-        } catch (error) {
-          console.warn('Failed to fetch leaderboard data, will use fallback:', error);
-        }
-      }
-
-      // Calculate stats - use fetched PnL data if available, otherwise use fallback
-      const stats = await calculateStatsWithPnLData(positions, trades, activity, walletAddress, pnlData, leaderboardData);
-      
-      if (responseSent) return;
-      
-      // Calculate PnL for each trade (attaches profit to SELL trades)
-      const tradeMetrics = calculateRealizedPnLFromTrades(trades);
-      const tradesWithPnL = tradeMetrics.tradesWithPnL;
-      
-      // Generate full historical PnL timeline from actual trades
-      // Pass stats.totalPnL which includes unrealized PnL - this shows today's moment-by-moment PnL
-      const pnlHistory = generateFullPnLHistory(
-        fullActivityHistory,
-        stats.closedPositionsHistory || [],
-        stats.totalPnL, // Total PnL includes unrealized - shows current moment
-        trades.map(t => ({
-          timestamp: t.timestamp,
-          type: t.type,
-          price: t.price,
-          size: t.size,
-          marketName: t.marketName
-        }))
-      );
-      
-      const achievements = calculateAchievements(stats, trades);
-
-      const dashboardData: DashboardData = {
-        profile: {
-          username: validatedUsername,
-          profileImage,
-          bio,
-          walletAddress,
-          xUsername: leaderboardData.xUsername,
-          rank: leaderboardData.rank,
-        },
-        stats,
-        pnlHistory,
-        positions,
-        recentTrades: tradesWithPnL.slice(0, 20), // Use trades with PnL attached
-      };
-
-      console.log(
-        `✓ Dashboard ready - ${stats.totalTrades} trades, $${stats.totalVolume.toFixed(2)} volume`,
-      );
-      console.log("=== Complete ===\n");
-
-      sendResponse(200, dashboardData);
-    } catch (error) {
-      if (responseSent) return;
-      console.error("Error fetching dashboard data:", error);
-
-      if (error instanceof z.ZodError) {
-        sendResponse(400, {
-          error:
-            "Invalid username format. Please use only letters, numbers, underscores, and hyphens.",
-        });
-      } else {
-        sendResponse(500, {
-          error: "Failed to fetch dashboard data. Please try again later.",
-        });
-      }
-    }
-  });
-
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-
-  // Builder Leaderboard endpoint
-  app.get("/api/leaderboard/builders", async (req, res) => {
-    try {
-      const timePeriod = (req.query.timePeriod as string) || "ALL";
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-
-      console.log(`📊 Fetching builder leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
-
-      // Try Supabase first (fast cache)
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        const { data: cachedBuilders, error: supabaseError } = await supabase
-          .from('leaderboard_builders')
-          .select('*')
-          .eq('time_period', timePeriod.toLowerCase())
-          .order('rank', { ascending: true })
-          .range(offset, offset + limit - 1);
-
-        if (!supabaseError && cachedBuilders && cachedBuilders.length > 0) {
-          console.log(`✓ Fetched ${cachedBuilders.length} builders from Supabase cache`);
-          
-          const transformedBuilders = cachedBuilders.map((builder: any) => ({
-            rank: builder.rank.toString(),
-            builder: builder.builder_name,
-            volume: parseFloat(builder.volume || 0),
-            activeUsers: parseInt(builder.active_users || 0),
-            verified: builder.verified === true,
-            builderLogo: builder.builder_logo || undefined,
-            marketsCreated: parseInt(builder.markets_created || 0),
-          }));
-
-          return res.json(transformedBuilders);
-        }
-      } catch (supabaseErr: any) {
-        console.warn('⚠️ Supabase fetch failed, falling back to Polymarket API:', supabaseErr.message);
-      }
-
-      // Fallback to Polymarket API
-      console.log('📡 Fetching from Polymarket API (fallback)...');
-      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
-        params: {
-          timePeriod: timePeriod.toUpperCase(),
-          limit: Math.min(limit, 50), // API max is 50
-          offset,
-        },
-        timeout: 10000,
-      });
-
-      const builders = response.data || [];
-      console.log(`✓ Fetched ${builders.length} builders from Polymarket API`);
-
-      // Transform to match frontend expectations
-      const transformedBuilders = builders.map((builder: any) => ({
-        rank: builder.rank?.toString() || (builders.indexOf(builder) + offset + 1).toString(),
-        builder: builder.builderName || builder.name || builder.builder || 'Unknown',
-        volume: parseFloat(builder.vol || builder.volume || 0),
-        activeUsers: parseInt(builder.activeUsers || 0),
-        verified: builder.verified === true || builder.verified === 'true',
-        builderLogo: builder.builderLogo || builder.logo || builder.image || undefined,
-        marketsCreated: parseInt(builder.marketsCreated || builder.markets || 0),
-      }));
-
-      res.json(transformedBuilders);
-    } catch (error: any) {
-      console.error("Error fetching builder leaderboard:", error);
-      res.status(error.response?.status || 500).json({
-        error: error.response?.data?.error || "Failed to fetch builder leaderboard",
-      });
-    }
-  });
-
-  // User Leaderboard endpoint
-  app.get("/api/leaderboard/users", async (req, res) => {
-    try {
-      const timePeriod = (req.query.timePeriod as string) || "all";
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-
-      console.log(`📊 Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
-
-      // Try Supabase first (fast cache)
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        const { data: cachedUsers, error: supabaseError } = await supabase
-          .from('leaderboard_users')
-          .select('*')
-          .eq('time_period', timePeriod.toLowerCase())
-          .order('rank', { ascending: true })
-          .range(offset, offset + limit - 1);
-
-        if (!supabaseError && cachedUsers && cachedUsers.length > 0) {
-          console.log(`✓ Fetched ${cachedUsers.length} users from Supabase cache`);
-          
-          const transformedUsers = cachedUsers.map((user: any) => ({
-            rank: user.rank,
-            userName: user.username,
-            xUsername: user.x_username,
-            vol: parseFloat(user.volume || 0),
-            walletAddress: user.wallet_address || undefined,
-            profileImage: user.profile_image || undefined,
-            pnl: user.pnl !== null ? parseFloat(user.pnl) : undefined,
-          }));
-
-          return res.json(transformedUsers);
-        }
-      } catch (supabaseErr: any) {
-        console.warn('⚠️ Supabase fetch failed, falling back to Polymarket API:', supabaseErr.message);
-      }
-
-      // Fallback to Polymarket API
-      console.log('📡 Fetching from Polymarket API (fallback)...');
-      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
-        params: {
-          timePeriod: timePeriod.toLowerCase(),
-          orderBy: 'VOL',
-          limit: Math.min(limit, 50), // API max is 50 per request
-          offset,
-          category: 'overall',
-        },
-        timeout: 10000,
-      });
-
-      const users = response.data || [];
-      console.log(`✓ Fetched ${users.length} users from Polymarket API`);
-
-      // Transform data to match frontend expectations
-      const transformedUsers = users.map((user: any, index: number) => {
-        // Polymarket API returns 'proxyWallet' as the wallet address field
-        const walletAddress = user.proxyWallet || user.user || user.walletAddress || user.wallet || user.address;
-        
-        return {
-          rank: user.rank || offset + index + 1,
-          userName: user.userName || user.name || 'Unknown',
-          xUsername: user.xUsername,
-          vol: parseFloat(user.vol || user.volume || 0),
-          walletAddress: walletAddress || undefined, // Use undefined instead of null
-          profileImage: user.profileImage || user.avatar,
-          pnl: user.pnl !== undefined ? parseFloat(user.pnl) : undefined, // Include PnL if available from API
-        };
-      });
-
-      res.json(transformedUsers);
-    } catch (error: any) {
-      console.error("Error fetching user leaderboard:", error);
-      res.status(error.response?.status || 500).json({
-        error: error.response?.data?.error || "Failed to fetch user leaderboard",
-      });
-    }
-  });
-
-  // User Wallet endpoint (username -> wallet) - simpler version for leaderboard
-  app.get("/api/leaderboard/wallet", async (req, res) => {
     try {
       const { username } = req.query;
 
@@ -1667,24 +1521,703 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      console.log(`📊 [EXPRESS] Fetching wallet for username: ${username}`);
+      console.log(`📍 [EXPRESS API ROUTE] Dashboard request for username: ${username}`);
+
+      // Find user by username with timeout
+      let userInfo;
+      try {
+        const findUserPromise = findUserByUsername(username);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('User lookup timeout')), 10000)
+        );
+        userInfo = await Promise.race([findUserPromise, timeoutPromise]) as { wallet: string; profileImage?: string; bio?: string };
+        console.log('User info found:', { wallet: userInfo.wallet, hasImage: !!userInfo.profileImage });
+      } catch (error: any) {
+        // Check if it's a "user not found" error
+        if (error.message?.includes('User not found') || error.message?.includes('No profiles found') || error.message?.includes('USER_NOT_FOUND')) {
+          console.log(`User not found: ${username}`);
+          res.status(404).json({ 
+            error: `User not found: ${username}`,
+            message: 'The requested user could not be found in Polymarket'
+          });
+          return;
+        }
+        if (error.message?.includes('timeout')) {
+          console.error(`Timeout finding user: ${username}`);
+          res.status(504).json({ 
+            error: 'Request timeout',
+            message: 'The user lookup took too long. Please try again.'
+          });
+          return;
+        }
+        // Re-throw other errors to be handled by outer catch
+        throw error;
+      }
+
+      // Helper function to calculate PnL for trades (FIFO method)
+      function calculateTradesWithPnL(trades: any[]): any[] {
+        console.log(`📊 Calculating PnL for ${trades.length} trades...`);
+        
+        // First, assign stable IDs to all trades that don't have one
+        const tradesWithIds = trades.map((trade, index) => {
+          if (!trade.id) {
+            const timestamp = trade.timestamp || trade.created_at || Date.now();
+            const marketName = (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market";
+            const outcome = trade.outcome || "YES";
+            const price = trade.outcomeTokenPrice || trade.price || 0;
+            const size = trade.outcomeTokenAmount || trade.size || 0;
+            const stableId = `trade-${timestamp}-${marketName}-${outcome}-${price}-${size}-${index}`;
+            return { ...trade, id: stableId };
+          }
+          return trade;
+        });
+        
+        // Group trades by market and outcome
+        const marketPositions: Record<string, { buys: any[], sells: any[] }> = {};
+        
+        for (const trade of tradesWithIds) {
+          const marketName = (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market";
+          const outcome = trade.outcome || "YES";
+          const key = `${marketName}_${outcome}`;
+          
+          if (!marketPositions[key]) {
+            marketPositions[key] = { buys: [], sells: [] };
+          }
+          
+          const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+          if (side === "BUY") {
+            marketPositions[key].buys.push(trade);
+          } else {
+            marketPositions[key].sells.push(trade);
+          }
+        }
+
+        const tradePnLMap = new Map<string, number>();
+
+        // Match buys with sells to calculate realized PnL using proper FIFO
+        for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
+          if (sells.length === 0) continue;
+          
+          const sortedBuys = buys
+            .map(buy => ({
+              ...buy,
+              price: parseFloat(buy.outcomeTokenPrice || buy.price || 0),
+              size: parseFloat(buy.outcomeTokenAmount || buy.size || 0),
+              remainingSize: parseFloat(buy.outcomeTokenAmount || buy.size || 0),
+            }))
+            .sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime());
+
+          for (const sell of sells.sort((a, b) => new Date(a.timestamp || a.created_at).getTime() - new Date(b.timestamp || b.created_at).getTime())) {
+            const sellPrice = parseFloat(sell.outcomeTokenPrice || sell.price || 0);
+            let sellSize = parseFloat(sell.outcomeTokenAmount || sell.size || 0);
+            let totalCostBasis = 0;
+            let totalMatchedSize = 0;
+
+            for (const buy of sortedBuys) {
+              if (sellSize <= 0) break;
+              
+              if (buy.remainingSize > 0) {
+                const sizeToMatch = Math.min(sellSize, buy.remainingSize);
+                const costForThisMatch = buy.price * sizeToMatch;
+                
+                totalCostBasis += costForThisMatch;
+                totalMatchedSize += sizeToMatch;
+                buy.remainingSize -= sizeToMatch;
+                sellSize -= sizeToMatch;
+              }
+            }
+
+            if (totalMatchedSize > 0) {
+              const totalProceeds = sellPrice * totalMatchedSize;
+              const pnl = totalProceeds - totalCostBasis;
+              const tradeId = sell.id;
+              tradePnLMap.set(tradeId, pnl);
+            }
+          }
+        }
+
+        return tradesWithIds.map(trade => {
+          const tradeId = trade.id;
+          const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+          
+          if (side === "SELL" && tradePnLMap.has(tradeId)) {
+            return {
+              ...trade,
+              profit: parseFloat(tradePnLMap.get(tradeId)!.toFixed(2))
+            };
+          }
+          return trade;
+        });
+      }
+
+      // Fetch user data in parallel with individual error handling
+      // Note: fetchUserPositions and fetchUserTrades return typed arrays, 
+      // but we need raw API responses for the dashboard format
+      console.log(`📊 Fetching dashboard data for wallet: ${userInfo.wallet}`);
+      
+      const [positionsRaw, tradesRaw, pnlData, leaderboardData] = await Promise.allSettled([
+        axios.get(`${POLYMARKET_DATA_API}/positions`, {
+          params: { user: userInfo.wallet, limit: 1000 },
+          timeout: 15000,
+        }).then(res => res.data || []).catch((err) => {
+          console.error('Error fetching positions:', err.message);
+          return [];
+        }),
+        axios.get(`${POLYMARKET_DATA_API}/trades`, {
+          params: { user: userInfo.wallet, limit: 50 },
+          timeout: 15000,
+        }).then(res => res.data || []).catch((err) => {
+          console.error('Error fetching trades:', err.message);
+          return [];
+        }),
+        fetchUserPnLData(userInfo.wallet).catch((err) => {
+          console.error('Error fetching PnL data:', err.message);
+          return {
+            realizedPnl: 0,
+            unrealizedPnl: 0,
+            totalPnl: 0,
+            portfolioValue: 0,
+            closedPositions: 0,
+            openPositions: 0,
+            closedPositionsHistory: [],
+            allClosedPositions: [],
+          };
+        }),
+        fetchUserVolume(userInfo.wallet).catch((err) => {
+          console.error('Error fetching volume:', err.message);
+          return { volume: 0 };
+        })
+      ]);
+
+      // Extract values from Promise.allSettled results
+      const positions = Array.isArray(positionsRaw.status === 'fulfilled' ? positionsRaw.value : []) 
+        ? (positionsRaw.status === 'fulfilled' ? positionsRaw.value : [])
+        : [];
+      const trades = Array.isArray(tradesRaw.status === 'fulfilled' ? tradesRaw.value : []) 
+        ? (tradesRaw.status === 'fulfilled' ? tradesRaw.value : [])
+        : [];
+      const pnl = pnlData.status === 'fulfilled' ? pnlData.value : {
+        realizedPnl: 0,
+        unrealizedPnl: 0,
+        totalPnl: 0,
+        portfolioValue: 0,
+        closedPositions: 0,
+        openPositions: 0,
+        closedPositionsHistory: [],
+        allClosedPositions: [],
+      };
+      const leaderboard: { volume: number; xUsername?: string; rank?: string } = leaderboardData.status === 'fulfilled' ? leaderboardData.value : { volume: 0 };
+
+      // Filter positions to only those with size > 0
+      const filteredPositions = positions.filter((pos: any) => parseFloat(pos.size || 0) > 0);
+      
+      // Use leaderboard volume if available, otherwise calculate from trades as fallback
+      let totalVolume = leaderboard.volume || 0;
+      const xUsername = leaderboard.xUsername || undefined;
+      const rank = leaderboard.rank || undefined;
+      
+      if (totalVolume === 0 && trades.length > 0) {
+        console.log('   ⚠ Leaderboard volume is 0, calculating from trades as fallback...');
+        totalVolume = trades.reduce((sum: number, trade: any) => {
+          return sum + Math.abs((trade.outcomeTokenAmount || 0) * (trade.outcomeTokenPrice || 0));
+        }, 0);
+        console.log(`   ✓ Fallback volume from trades: $${totalVolume.toLocaleString()}`);
+      }
+
+      // Calculate PnL for each trade
+      const tradesWithPnL = calculateTradesWithPnL(trades);
+      console.log(`📊 Calculated PnL for ${tradesWithPnL.filter((t: any) => t.profit !== undefined).length} SELL trades`);
+
+      // Calculate win rate from SELL trades that have profit data
+      const sellTradesWithProfit = tradesWithPnL.filter((trade: any) => {
+        const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
+        return side === "SELL" && trade.profit !== undefined;
+      });
+      const winningTrades = sellTradesWithProfit.filter((trade: any) => trade.profit > 0).length;
+      const winRate = sellTradesWithProfit.length > 0 ? (winningTrades / sellTradesWithProfit.length) * 100 : 0;
+
+      // Calculate best trade and worst trade
+      let bestTrade = 0;
+      let worstTrade = 0;
+      
+      filteredPositions.forEach((pos: any) => {
+        const unrealizedPnL = parseFloat(pos.cashPnl || 0);
+        if (unrealizedPnL > bestTrade) bestTrade = unrealizedPnL;
+        if (unrealizedPnL < worstTrade) worstTrade = unrealizedPnL;
+      });
+      
+      (pnl.allClosedPositions || []).forEach((pos: any) => {
+        const realizedPnL = parseFloat(pos.realizedPnl || 0);
+        if (realizedPnL > bestTrade) bestTrade = realizedPnL;
+        if (realizedPnL < worstTrade) worstTrade = realizedPnL;
+      });
+
+      // Generate PnL history from closed positions
+      const pnlHistory = [];
+      let cumulativePnl = 0;
+      
+      const sortedPositions = (pnl.closedPositionsHistory || [])
+        .filter((p: any) => p.endDate) // Filter out positions without endDate
+        .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
+      
+      if (sortedPositions.length > 0) {
+        const firstTime = new Date(sortedPositions[0].endDate).getTime();
+        const startTime = firstTime - (7 * 24 * 60 * 60 * 1000);
+        pnlHistory.push({
+          timestamp: new Date(startTime).toISOString(),
+          value: 0
+        });
+      }
+      
+      const shouldSample = sortedPositions.length > 1000;
+      const sampleInterval = shouldSample ? Math.ceil(sortedPositions.length / 500) : 1;
+      
+      for (let i = 0; i < sortedPositions.length; i++) {
+        const pos = sortedPositions[i];
+        cumulativePnl += pos.realizedPnl;
+        
+        if (i % sampleInterval === 0 || i === sortedPositions.length - 1) {
+          pnlHistory.push({
+            timestamp: pos.endDate,
+            value: parseFloat(cumulativePnl.toFixed(2))
+          });
+        }
+      }
+      
+      const unrealizedPnL = pnl.totalPnl - cumulativePnl;
+      if (sortedPositions.length > 0 && Math.abs(unrealizedPnL) > 100) {
+        const now = Date.now();
+        const lastClosedTime = new Date(sortedPositions[sortedPositions.length - 1].endDate).getTime();
+        const daysSinceLastClosed = (now - lastClosedTime) / (24 * 60 * 60 * 1000);
+        
+        if (daysSinceLastClosed > 0.5) {
+          const numPoints = Math.min(5, Math.max(2, Math.floor(daysSinceLastClosed)));
+          const timeStep = (now - lastClosedTime) / numPoints;
+          const pnlStep = unrealizedPnL / numPoints;
+          
+          for (let i = 1; i <= numPoints; i++) {
+            const timestamp = lastClosedTime + (timeStep * i);
+            const value = cumulativePnl + (pnlStep * i);
+            pnlHistory.push({
+              timestamp: new Date(timestamp).toISOString(),
+              value: parseFloat(value.toFixed(2))
+            });
+          }
+        } else {
+          pnlHistory.push({
+            timestamp: new Date().toISOString(),
+            value: pnl.totalPnl
+          });
+        }
+      } else {
+        pnlHistory.push({
+          timestamp: new Date().toISOString(),
+          value: pnl.totalPnl
+        });
+      }
+
+      const dashboardData = {
+        profile: {
+          username,
+          walletAddress: userInfo.wallet,
+          profileImage: userInfo.profileImage || undefined, // Ensure undefined instead of null
+          bio: userInfo.bio || undefined,
+          xUsername: xUsername || undefined,
+          rank: rank || undefined,
+        },
+        stats: {
+          totalPnL: pnl.totalPnl || 0,
+          realizedPnL: pnl.realizedPnl ?? 0, // Note: fetchUserPnLData returns 'realizedPnl' (lowercase n)
+          unrealizedPnL: pnl.unrealizedPnl ?? 0, // Note: fetchUserPnLData returns 'unrealizedPnl' (lowercase n)
+          winRate: Math.round(winRate * 100) / 100,
+          totalVolume: typeof totalVolume === 'number' ? totalVolume : 0,
+          openPositionsValue: pnl.portfolioValue || 0,
+          totalTrades: trades.length,
+          activePositions: pnl.openPositions || 0,
+          closedPositions: pnl.closedPositions || 0,
+          bestTrade: bestTrade || 0,
+          worstTrade: worstTrade || 0,
+        },
+        pnlHistory,
+        positions: filteredPositions.map((pos: any) => ({
+          id: pos.id || `pos-${Math.random()}`,
+          marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
+          marketId: pos.marketId || pos.market?.id || "",
+          marketSlug: pos.marketSlug || pos.market?.slug || "",
+          eventSlug: pos.eventSlug || pos.market?.eventSlug || "",
+          outcome: pos.outcome || "YES",
+          size: parseFloat(pos.size || 0),
+          entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
+          currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
+          unrealizedPnL: parseFloat(pos.cashPnl || 0),
+          status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
+          openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
+        })),
+        recentTrades: tradesWithPnL.slice(0, 10).map((trade: any) => ({
+          id: trade.id || `trade-${Math.random()}`,
+          marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
+          outcome: trade.outcome || "YES",
+          size: parseFloat(trade.outcomeTokenAmount || trade.size || trade.amount || 0),
+          price: parseFloat(trade.outcomeTokenPrice || trade.price || 0),
+          timestamp: trade.timestamp || trade.created_at || new Date().toISOString(),
+          type: (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL",
+          profit: trade.profit !== undefined ? trade.profit : undefined,
+        })),
+      };
+
+      console.log('Dashboard data prepared:', {
+        profile: dashboardData.profile,
+        stats: {
+          ...dashboardData.stats,
+          totalVolume: `$${dashboardData.stats.totalVolume.toLocaleString()}`
+        },
+        pnlHistoryCount: dashboardData.pnlHistory.length,
+        positionsCount: dashboardData.positions.length,
+        tradesCount: dashboardData.recentTrades.length,
+      });
+
+      // Clear timeout and ensure response is sent
+      clearTimeout(requestTimeout);
+      if (!res.headersSent) {
+        res.status(200).json(dashboardData);
+      }
+    } catch (error: any) {
+      clearTimeout(requestTimeout);
+      console.error('Dashboard API error:', error);
+      
+      // Ensure error response is sent
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'Internal server error',
+          message: 'Failed to fetch dashboard data. Please try again.'
+        });
+      } else {
+        console.error('Response already sent, cannot send error response');
+      }
+    }
+  });
+
+  // ============================================================================
+  // LEADERBOARD ROUTES
+  // ============================================================================
+
+  // GET /api/leaderboard/users - Get user leaderboard from Supabase
+  app.get("/api/leaderboard/users", async (req, res) => {
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
+
+    try {
+      const timePeriod = (req.query.timePeriod as string) || "all";
+      const fetchAll = req.query.fetchAll === 'true'; // Flag to fetch all available data
+      
+      // If fetchAll is true, don't use limit/offset - fetch everything
+      // Otherwise, use pagination
+      // If fetchAll is true, fetch in large chunks until no more data
+      // Otherwise, use pagination
+      let allUsers: any[] = [];
+      let result: { data: any[]; error: any };
+      
+      if (fetchAll) {
+        // Fetch ALL records by paginating through all available data
+        console.log(`📊 [EXPRESS API] Fetching ALL users from Supabase (fetchAll mode)`);
+        let page = 0;
+        const chunkSize = 2000; // Large chunks to minimize requests
+        
+        while (true) {
+          const offset = page * chunkSize;
+          try {
+            const chunkResult = await querySupabase(
+              'leaderboard_users',
+              { time_period: timePeriod.toLowerCase() },
+              { orderBy: 'rank', ascending: true, limit: chunkSize, offset }
+            );
+            
+            const chunkData = chunkResult?.data || [];
+            if (chunkData.length === 0) {
+              console.log(`✓ Fetched all users: ${allUsers.length} total (stopped at page ${page})`);
+              break;
+            }
+            
+            allUsers.push(...chunkData);
+            console.log(`📊 Fetched chunk ${page + 1}: ${chunkData.length} users (total: ${allUsers.length})`);
+            
+            // If we got less than chunkSize, we've reached the end
+            if (chunkData.length < chunkSize) {
+              console.log(`✓ Reached end of data at chunk ${page + 1}`);
+              break;
+            }
+            
+            page++;
+          } catch (queryError: any) {
+            console.error(`❌ Error fetching chunk ${page + 1}:`, queryError?.message || queryError);
+            if (page === 0) {
+              // If first chunk fails, return error
+              return res.status(200).json([]);
+            }
+            // Otherwise, return what we have
+            break;
+          }
+        }
+        
+        result = { data: allUsers, error: null };
+      } else {
+        // Use pagination
+        const limit = parseInt(req.query.limit as string) || 1000;
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        console.log(`📊 [EXPRESS API] Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
+        try {
+          result = await querySupabase(
+            'leaderboard_users',
+            { time_period: timePeriod.toLowerCase() },
+            { orderBy: 'rank', ascending: true, limit, offset }
+          );
+        } catch (queryError: any) {
+          console.error('❌ Error calling querySupabase:', queryError?.message || queryError);
+          console.log(`⚠️ Returning empty array due to query error`);
+          return res.status(200).json([]);
+        }
+      }
+      
+      const cachedUsers = result?.data || [];
+      const supabaseError = result?.error;
+
+      // Note: querySupabase now always returns error: null, so this check is redundant
+      // but kept for clarity and future-proofing
+      if (supabaseError) {
+        console.error('❌ Supabase fetch error:', supabaseError);
+        // Return empty array instead of error to prevent frontend crashes
+        // The database might be empty or not synced yet
+        console.log(`⚠️ Returning empty array due to Supabase error (database may be empty or not synced)`);
+        return res.status(200).json([]);
+      }
+
+      // Check if we need to trigger sync (if data is missing or too few records)
+      const shouldTriggerSync = (!cachedUsers || cachedUsers.length === 0);
+      
+      if (shouldTriggerSync) {
+        console.log(`⚠️ No users found in Supabase for timePeriod=${timePeriod}`);
+        console.log(`🔄 Triggering automatic sync in background...`);
+        
+        // Trigger sync in background (non-blocking)
+        (async () => {
+          try {
+            // Try to call sync endpoint if available, otherwise just log
+            const syncUrl = process.env.SYNC_URL || 'http://localhost:3000/api/leaderboard/sync';
+            axios.get(syncUrl, {
+              params: { type: 'users', timePeriod: timePeriod },
+              timeout: 1000, // Quick timeout - don't wait for completion
+            }).catch(() => {
+              // Ignore errors - sync will happen in background or via cron
+            });
+            console.log(`✓ Background sync triggered for users`);
+          } catch (err) {
+            // Silent fail - sync will be handled by cron
+          }
+        })();
+      }
+
+      if (!cachedUsers || cachedUsers.length === 0) {
+        console.log(`📡 Falling back to Polymarket API...`);
+        
+        // Fallback to Polymarket API when Supabase is empty
+        try {
+          const fallbackLimit = 50; // API max is 50 per request
+          const fallbackOffset = 0;
+          const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
+            params: {
+              timePeriod: timePeriod.toLowerCase(),
+              orderBy: 'VOL',
+              limit: fallbackLimit,
+              offset: fallbackOffset,
+              category: 'overall',
+            },
+            timeout: 10000,
+          });
+
+          const users = response.data || [];
+          console.log(`✓ [EXPRESS API] Fetched ${users.length} users from Polymarket API (fallback)`);
+
+          // Transform Polymarket API data to match frontend expectations
+          const transformedUsers = users.map((user: any, index: number) => {
+            const walletAddress = user.proxyWallet || user.user || user.walletAddress || user.wallet || user.address;
+            
+            return {
+              rank: user.rank || fallbackOffset + index + 1,
+              userName: user.userName || user.name || 'Unknown',
+              xUsername: user.xUsername,
+              vol: parseFloat(user.vol || user.volume || 0),
+              walletAddress: walletAddress,
+              profileImage: user.profileImage || user.avatar,
+              pnl: user.pnl !== undefined ? parseFloat(user.pnl) : undefined,
+            };
+          });
+
+          return res.status(200).json(transformedUsers);
+        } catch (apiError: any) {
+          console.error('❌ Polymarket API fallback failed:', apiError.message);
+          return res.status(200).json([]);
+        }
+      }
+
+      console.log(`✓ [EXPRESS API] Fetched ${cachedUsers.length} users from Supabase`);
+      
+      let transformedUsers;
+      try {
+        transformedUsers = cachedUsers.map((user: any) => ({
+          rank: user.rank?.toString() || String(user.rank || 0),
+          userName: user.username || '',
+          xUsername: user.x_username || undefined,
+          vol: parseFloat(user.volume || 0),
+          walletAddress: user.wallet_address || undefined,
+          profileImage: user.profile_image || undefined,
+          pnl: user.pnl !== null && user.pnl !== undefined ? parseFloat(user.pnl) : undefined,
+        }));
+      } catch (transformError: any) {
+        console.error('❌ Error transforming users:', transformError);
+        return res.status(200).json([]);
+      }
+
+      return res.status(200).json(transformedUsers);
+    } catch (error: any) {
+      console.error("❌ [EXPRESS API] Error fetching user leaderboard:", error);
+      // Return empty array instead of 500 to prevent frontend crashes
+      return res.status(200).json([]);
+    }
+  });
+
+  // GET /api/leaderboard/builders - Get builder leaderboard from Supabase
+  app.get("/api/leaderboard/builders", async (req, res) => {
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
+
+    try {
+      const timePeriod = (req.query.timePeriod as string) || "ALL";
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      console.log(`📊 [EXPRESS API] Fetching builder leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
+
+      // Use REST API instead of JS client for better reliability
+      let result;
+      try {
+        result = await querySupabase(
+          'leaderboard_builders',
+          { time_period: timePeriod.toLowerCase() },
+          { orderBy: 'rank', ascending: true, limit, offset }
+        );
+      } catch (queryError: any) {
+        console.error('❌ Error calling querySupabase:', queryError?.message || queryError);
+        console.log(`⚠️ Returning empty array due to query error`);
+        return res.status(200).json([]);
+      }
+      
+      const cachedBuilders = result?.data || [];
+      const supabaseError = result?.error;
+
+      // Note: querySupabase now always returns error: null, so this check is redundant
+      // but kept for clarity and future-proofing
+      if (supabaseError) {
+        console.error('❌ Supabase fetch error:', supabaseError);
+        // Return empty array instead of error to prevent frontend crashes
+        // The database might be empty or not synced yet
+        console.log(`⚠️ Returning empty array due to Supabase error (database may be empty or not synced)`);
+        return res.status(200).json([]);
+      }
+
+      if (!cachedBuilders || cachedBuilders.length === 0) {
+        console.log(`⚠️ No builders found in Supabase for timePeriod=${timePeriod}, offset=${offset}`);
+        console.log(`📡 Falling back to Polymarket API...`);
+        
+        // Fallback to Polymarket API when Supabase is empty
+        try {
+          const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
+            params: {
+              timePeriod: timePeriod.toUpperCase(),
+              limit: Math.min(limit, 50), // API max is 50
+              offset,
+            },
+            timeout: 10000,
+          });
+
+          const builders = response.data || [];
+          console.log(`✓ [EXPRESS API] Fetched ${builders.length} builders from Polymarket API (fallback)`);
+
+          // Transform Polymarket API data to match frontend expectations
+          const transformedBuilders = builders.map((builder: any) => ({
+            rank: builder.rank?.toString() || (builders.indexOf(builder) + offset + 1).toString(),
+            builder: builder.builderName || builder.name || builder.builder || 'Unknown',
+            volume: parseFloat(builder.vol || builder.volume || 0),
+            activeUsers: parseInt(builder.activeUsers || 0),
+            verified: builder.verified === true || builder.verified === 'true',
+            builderLogo: builder.builderLogo || builder.logo || builder.image || undefined,
+            marketsCreated: parseInt(builder.marketsCreated || builder.markets || 0),
+          }));
+
+          return res.status(200).json(transformedBuilders);
+        } catch (apiError: any) {
+          console.error('❌ Polymarket API fallback failed:', apiError.message);
+          return res.status(200).json([]);
+        }
+      }
+
+      console.log(`✓ [EXPRESS API] Fetched ${cachedBuilders.length} builders from Supabase`);
+      
+      let transformedBuilders;
+      try {
+        transformedBuilders = cachedBuilders.map((builder: any) => ({
+          rank: builder.rank?.toString() || String(builder.rank || 0),
+          builder: builder.builder_name || '',
+          volume: parseFloat(builder.volume || 0),
+          activeUsers: parseInt(builder.active_users || 0),
+          verified: builder.verified === true,
+          builderLogo: builder.builder_logo || undefined,
+          marketsCreated: parseInt(builder.markets_created || 0),
+        }));
+      } catch (transformError: any) {
+        console.error('❌ Error transforming builders:', transformError);
+        return res.status(200).json([]);
+      }
+
+      return res.status(200).json(transformedBuilders);
+    } catch (error: any) {
+      console.error("❌ [EXPRESS API] Error fetching builder leaderboard:", error);
+      // Return empty array instead of 500 to prevent frontend crashes
+      return res.status(200).json([]);
+    }
+  });
+
+  // GET /api/leaderboard/wallet?username=... - Get wallet address for username
+  app.get("/api/leaderboard/wallet", async (req, res) => {
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
+
+    try {
+      const { username } = req.query;
+
+      if (!username || typeof username !== 'string') {
+        res.status(400).json({ error: 'Username is required' });
+        return;
+      }
+
+      console.log(`📊 [EXPRESS API] Fetching wallet for username: ${username}`);
 
       try {
-        // Get wallet address from username (same as dashboard)
         const userInfo = await findUserByUsername(username);
         const walletAddress = userInfo.wallet;
         
         console.log(`✓ Found wallet for ${username}: ${walletAddress}`);
 
-        res.json({
+        res.status(200).json({
           username,
           walletAddress,
         });
       } catch (error: any) {
         console.error(`❌ Error processing ${username}:`, error.message);
         
-        // Return error but don't break the leaderboard
-        res.json({
+        res.status(200).json({
           username,
           walletAddress: null,
           error: error.message,
@@ -1699,18 +2232,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PnL by wallet address endpoint
+  // GET /api/leaderboard/pnl?wallet=... - Get PnL for wallet
   app.get("/api/leaderboard/pnl", async (req, res) => {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.setHeader('Content-Type', 'application/json');
-
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
-    }
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
 
     try {
       const { wallet } = req.query;
@@ -1720,21 +2246,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      console.log(`📊 [EXPRESS] Fetching PnL for wallet: ${wallet}`);
+      console.log(`📊 [EXPRESS API] Fetching PnL for wallet: ${wallet}`);
 
       try {
-        const { fetchUserPnLData } = await import('../api/utils/polymarket-pnl.js');
         const pnlData = await fetchUserPnLData(wallet, false);
         
         res.status(200).json({
           wallet,
-          totalPnL: pnlData.totalPnL,
+          totalPnL: pnlData.totalPnl,
           realizedPnL: pnlData.realizedPnl,
           unrealizedPnL: pnlData.unrealizedPnl,
         });
       } catch (error: any) {
         console.error(`❌ Error fetching PnL for ${wallet}:`, error);
-        // Return zero PnL instead of error to prevent breaking the leaderboard
         res.status(200).json({
           wallet,
           totalPnL: 0,
@@ -1751,64 +2275,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User Wallet & PnL endpoint (username -> wallet -> PnL)
-  app.get("/api/leaderboard/user-pnl", async (req, res) => {
-    try {
-      const { username } = req.query;
-
-      if (!username || typeof username !== 'string') {
-        res.status(400).json({ error: 'Username is required' });
-        return;
-      }
-
-      console.log(`📊 [EXPRESS] Fetching wallet and PnL for username: ${username}`);
-
-      try {
-        // Step 1: Get wallet address from username
-        const userInfo = await findUserByUsername(username);
-        const walletAddress = userInfo.wallet;
-        
-        console.log(`✓ Found wallet for ${username}: ${walletAddress}`);
-
-        // Step 2: Get PnL data using wallet address
-        const { fetchUserPnLData } = await import('../api/utils/polymarket-pnl.js');
-        const pnlData = await fetchUserPnLData(walletAddress, false);
-        
-        res.json({
-          username,
-          walletAddress,
-          totalPnL: pnlData.totalPnL,
-          realizedPnL: pnlData.realizedPnL,
-          unrealizedPnL: pnlData.unrealizedPnL,
-        });
-      } catch (error: any) {
-        console.error(`❌ Error processing ${username}:`, error.message);
-        
-        // Return error but don't break the leaderboard
-        res.json({
-          username,
-          walletAddress: null,
-          totalPnL: 0,
-          realizedPnL: 0,
-          unrealizedPnL: 0,
-          error: error.message,
-        });
-      }
-    } catch (error: any) {
-      console.error('Error in user-pnl endpoint:', error);
-      res.status(500).json({ 
-        error: 'Failed to fetch user PnL data',
-        message: error.message 
-      });
-    }
-  });
-
-  // Builder Volume Time-Series endpoint
+  // GET /api/leaderboard/builders/volume?timePeriod=... - Get builder volume timeseries
   app.get("/api/leaderboard/builders/volume", async (req, res) => {
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
+    setCORSHeaders(res);
     
+    if (handleOPTIONS(req, res)) return;
+
     try {
       let timePeriod = (req.query.timePeriod as string) || "ALL";
 
@@ -1816,7 +2288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // But allow explicit timePeriod override
       const apiTimePeriod = timePeriod === "ALL" ? "DAY" : timePeriod.toUpperCase();
 
-      console.log(`📊 [SERVER] Fetching builder volume time-series: requested=${timePeriod}, api=${apiTimePeriod}`);
+      console.log(`📊 [EXPRESS API] Fetching builder volume time-series: requested=${timePeriod}, api=${apiTimePeriod}`);
 
       const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/volume`, {
         params: {
@@ -1826,8 +2298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const rawData = response.data || [];
-      console.log(`✓ [SERVER] Fetched ${rawData.length} raw volume data points`);
-      console.log(`✓ [SERVER] Sample raw entry:`, JSON.stringify(rawData[0], null, 2));
+      console.log(`✓ [EXPRESS API] Fetched ${rawData.length} raw volume data points`);
 
       // Return data per builder (not aggregated) so frontend can show different colors
       const volumeData = rawData
@@ -1835,8 +2306,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const builder = entry.builder || entry.Builder || 'Unknown';
           const volume = parseFloat(entry.volume || entry.vol || 0) || 0;
           const dt = entry.dt || entry.date || entry.timestamp;
-          
-          console.log(`   Processing entry: builder=${builder}, volume=${volume}, dt=${dt}`);
           
           return {
             dt: dt,
@@ -1846,359 +2315,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
             verified: entry.verified || false,
           };
         })
-        .filter((entry: any) => entry.dt && entry.builder && entry.builder !== 'Unknown') // Filter out invalid entries
+        .filter((entry: any) => entry.dt && entry.builder && entry.builder !== 'Unknown')
         .sort((a: { dt: string }, b: { dt: string }) => new Date(a.dt).getTime() - new Date(b.dt).getTime());
 
-      console.log(`✓ [SERVER] Sending ${volumeData.length} data points (per builder)`);
-      console.log(`✓ [SERVER] Sample processed entry:`, JSON.stringify(volumeData[0], null, 2));
-      console.log(`✓ [SERVER] Builders in response:`, Array.from(new Set(volumeData.map((e: any) => e.builder))).slice(0, 5));
+      console.log(`✓ [EXPRESS API] Sending ${volumeData.length} data points (per builder)`);
 
-      return res.json(volumeData);
+      res.status(200).json(volumeData);
     } catch (error: any) {
-      console.error("❌ [SERVER] Error fetching builder volume time-series:", error);
+      console.error("❌ [EXPRESS API] Error fetching builder volume time-series:", error);
+      
       if (error.response) {
         console.error("Response status:", error.response.status);
         console.error("Response data:", error.response.data);
+        
+        if (error.response.status >= 500) {
+          console.warn("External API error, returning empty array");
+          return res.status(200).json([]);
+        }
+        
+        return res.status(error.response.status).json({
+          error: error.response.data?.error || "Failed to fetch builder volume time-series",
+        });
       }
-      return res.status(error.response?.status || 500).json({
-        error: error.response?.data?.error || "Failed to fetch builder volume time-series",
+      
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        console.warn("Request timeout, returning empty array");
+        return res.status(200).json([]);
+      }
+      
+      console.warn("Unknown error, returning empty array");
+      return res.status(200).json([]);
+    }
+  });
+
+  // GET /api/leaderboard/sync - Trigger leaderboard sync (health check and sync trigger)
+  app.get("/api/leaderboard/sync", async (req, res) => {
+    setCORSHeaders(res);
+    
+    if (handleOPTIONS(req, res)) return;
+
+    try {
+      const { type, timePeriod, health } = req.query;
+      
+      // Health check
+      if (health === 'true') {
+        try {
+          // Check Supabase for data freshness
+          const usersResult = await querySupabase('leaderboard_users', { time_period: 'all' }, { limit: 1 });
+          const buildersResult = await querySupabase('leaderboard_builders', { time_period: 'all' }, { limit: 1 });
+          
+          const usersCount = await querySupabase('leaderboard_users', { time_period: 'all' }, {});
+          const buildersCount = await querySupabase('leaderboard_builders', { time_period: 'all' }, {});
+          
+          return res.status(200).json({
+            success: true,
+            health: {
+              users: {
+                count: usersCount.data?.length || 0,
+                hasData: (usersResult.data?.length || 0) > 0,
+              },
+              builders: {
+                count: buildersCount.data?.length || 0,
+                hasData: (buildersResult.data?.length || 0) > 0,
+              },
+            },
+            timestamp: new Date().toISOString(),
+          });
+        } catch (error: any) {
+          return res.status(200).json({
+            success: false,
+            health: { error: error.message },
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      // For sync, we'll trigger it via the Vercel function if available
+      // Or return a message that sync should be triggered manually
+      res.status(200).json({
+        success: true,
+        message: 'Sync endpoint - use Vercel function /api/leaderboard/sync or run npm run sync:leaderboard',
+        note: 'For local development, sync is handled by Vercel cron or manual trigger',
+      });
+    } catch (error: any) {
+      console.error('Sync endpoint error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
       });
     }
   });
 
-  // Micro-Edge Scanner endpoints
-  app.get("/api/scanner/alerts", (req, res) => {
-    try {
-      // Try multiple possible database paths (local dev and VPS)
-      const possiblePaths = [
-        path.join(process.cwd(), 'scanner/edges.db'),
-        path.join(process.cwd(), 'vps-bots/scanner/edges.db'),
-        '/home/linuxuser/polyfield-bots/scanner/edges.db',
-        path.join(__dirname, '../scanner/edges.db'),
-        path.join(__dirname, '../../scanner/edges.db')
-      ];
-
-      let db: sqlite3.Database | null = null;
-      let dbPath = '';
-
-      // Try each path until one works
-      for (const dbPathAttempt of possiblePaths) {
-        try {
-          if (require('fs').existsSync(dbPathAttempt)) {
-            db = new sqlite3.Database(dbPathAttempt);
-            dbPath = dbPathAttempt;
-            console.log(`✅ Found scanner DB at: ${dbPath}`);
-            break;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-
-      if (!db) {
-        console.log('⚠️  Scanner DB not found in any known location');
-        return res.json([]);
-      }
-
-      const limit = parseInt(req.query.limit as string) || 20;
-      
-      db.all(
-        'SELECT * FROM edges WHERE status = ? ORDER BY timestamp DESC LIMIT ?',
-        ['active', limit],
-        (err: any, rows: any) => {
-          if (err) {
-            console.error('Scanner DB error:', err);
-            res.json([]);
-          } else {
-            // Transform data to match frontend expectations
-            const alerts = (rows || []).map((row: any) => ({
-              id: row.id || row.market_id || '',
-              title: row.title || row.market_title || 'Unknown Market',
-              outcome: row.outcome || 'YES',
-              ev: row.ev || 0,
-              marketPrice: row.marketPrice || row.market_price || 0,
-              trueProb: row.trueProb || row.true_prob || 0,
-              liquidity: row.liquidity || 0,
-              timestamp: row.timestamp || Date.now(),
-              status: row.status || 'active'
-            }));
-            console.log(`📊 Returning ${alerts.length} scanner alerts`);
-            res.json(alerts);
-          }
-          db.close();
-        }
-      );
-    } catch (error) {
-      console.error('Scanner alerts error:', error);
-      res.json([]);
-    }
-  });
-
-  app.get("/api/scanner/metrics", (req, res) => {
-    try {
-      // Try multiple possible database paths
-      const possiblePaths = [
-        path.join(process.cwd(), 'scanner/edges.db'),
-        path.join(process.cwd(), 'vps-bots/scanner/edges.db'),
-        '/home/linuxuser/polyfield-bots/scanner/edges.db',
-        path.join(__dirname, '../scanner/edges.db'),
-        path.join(__dirname, '../../scanner/edges.db')
-      ];
-
-      let db: sqlite3.Database | null = null;
-      let dbPath = '';
-
-      for (const dbPathAttempt of possiblePaths) {
-        try {
-          if (require('fs').existsSync(dbPathAttempt)) {
-            db = new sqlite3.Database(dbPathAttempt);
-            dbPath = dbPathAttempt;
-            break;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-
-      if (!db) {
-        console.log('⚠️  Scanner DB not found for metrics');
-        return res.json({
-          alertsThisMonth: 0,
-          avgEV: 0,
-          hitRate: 0,
-          conversion: 0,
-          avgLatency: "N/A",
-          activeScans: 0
-        });
-      }
-
-      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-      
-      db.get(
-        'SELECT COUNT(*) as alertsThisMonth, AVG(ev) as avgEV FROM edges WHERE timestamp > ? AND status = ?',
-        [thirtyDaysAgo, 'active'],
-        (err: any, row: any) => {
-          if (err) {
-            console.error('Scanner metrics error:', err);
-            res.json({
-              alertsThisMonth: 0,
-              avgEV: 0,
-              hitRate: 0,
-              conversion: 0,
-              avgLatency: "N/A",
-              activeScans: 0
-            });
-            db.close();
-            return;
-          }
-          
-          const metrics = {
-            alertsThisMonth: row?.alertsThisMonth || 0,
-            avgEV: row?.avgEV || 0,
-            hitRate: 71.2,
-            conversion: 28.3,
-            avgLatency: "0.8s",
-            activeScans: row?.alertsThisMonth || 0
-          };
-          
-          res.json(metrics);
-          db.close();
-        }
-      );
-    } catch (error) {
-      console.error('Scanner metrics error:', error);
-      res.json({
-        alertsThisMonth: 0,
-        avgEV: 0,
-        hitRate: 0,
-        conversion: 0,
-        avgLatency: "N/A",
-        activeScans: 0
-      });
-    }
-  });
-
-  app.post("/api/scanner/backtest", async (req, res) => {
-    try {
-      const { backtest } = require('../scanner/backtest');
-      const days = parseInt(req.body.days as string) || 30;
-      const result = await backtest(days);
-      res.json(result);
-    } catch (error) {
-      console.error('Backtest error:', error);
-      res.status(500).json({ error: 'Backtest failed' });
-    }
-  });
-
-  // Oracle Bot endpoints
-  app.get("/api/oracle/markets", (req, res) => {
-    try {
-      // Try multiple possible database paths (dev, VPS, relative)
-      const possiblePaths = [
-        path.join(process.cwd(), 'oracle/oracles.db'),
-        path.join(process.cwd(), '..', 'oracle/oracles.db'),
-        path.join(__dirname, '..', 'oracle/oracles.db'),
-        '/home/ubuntu/oracle/oracles.db', // VPS path
-        'oracle/oracles.db' // Relative path
-      ];
-      
-      let dbPath = possiblePaths[0];
-      let db: sqlite3.Database | null = null;
-      
-      // Try to find existing database
-      for (const tryPath of possiblePaths) {
-        try {
-          const fs = require('fs');
-          if (fs.existsSync(tryPath)) {
-            dbPath = tryPath;
-            db = new sqlite3.Database(dbPath, (err) => {
-              if (err) {
-                console.log(`Oracle DB error at ${tryPath}:`, err.message);
-                return;
-              }
-            });
-            break;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-      
-      // If no existing DB found, use default path
-      if (!db) {
-        dbPath = possiblePaths[0];
-        db = new sqlite3.Database(dbPath, (err) => {
-          if (err) {
-            console.log('Oracle DB not available, returning empty data');
-            return res.json([]);
-          }
-        });
-      }
-
-      const limit = parseInt(req.query.limit as string) || 20;
-      
-      db.all(
-        'SELECT * FROM oracles ORDER BY lastUpdate DESC LIMIT ?',
-        [limit],
-        (err: any, rows: any) => {
-          if (err) {
-            console.error('Oracle DB error:', err);
-            res.json([]);
-          } else {
-            res.json(rows || []);
-          }
-          db.close();
-        }
-      );
-    } catch (error) {
-      console.error('Oracle markets error:', error);
-      res.json([]);
-    }
-  });
-
-  app.get("/api/oracle/stats", (req, res) => {
-    try {
-      // Try multiple possible database paths (dev, VPS, relative)
-      const possiblePaths = [
-        path.join(process.cwd(), 'oracle/oracles.db'),
-        path.join(process.cwd(), '..', 'oracle/oracles.db'),
-        path.join(__dirname, '..', 'oracle/oracles.db'),
-        '/home/ubuntu/oracle/oracles.db', // VPS path
-        'oracle/oracles.db' // Relative path
-      ];
-      
-      let dbPath = possiblePaths[0];
-      let db: sqlite3.Database | null = null;
-      
-      // Try to find existing database
-      for (const tryPath of possiblePaths) {
-        try {
-          const fs = require('fs');
-          if (fs.existsSync(tryPath)) {
-            dbPath = tryPath;
-            db = new sqlite3.Database(dbPath, (err) => {
-              if (err) {
-                console.log(`Oracle DB error at ${tryPath}:`, err.message);
-                return;
-              }
-            });
-            break;
-          }
-        } catch (e) {
-          // Continue to next path
-        }
-      }
-      
-      // If no existing DB found, use default path
-      if (!db) {
-        dbPath = possiblePaths[0];
-        db = new sqlite3.Database(dbPath, (err) => {
-          if (err) {
-            console.log('Oracle DB not available, returning empty stats');
-            return res.json({
-              marketsTracked: 0,
-              totalAlerts: 0,
-              consensusDetected: 0,
-              disputed: 0,
-              autoBets: 0,
-              winRate: 0,
-              edgeTime: "N/A"
-            });
-          }
-        });
-      }
-
-      db.get(
-        `SELECT 
-          COUNT(*) as marketsTracked,
-          SUM(CASE WHEN alerts != '' THEN 1 ELSE 0 END) as totalAlerts,
-          SUM(CASE WHEN status = 'CONSENSUS' THEN 1 ELSE 0 END) as consensusDetected,
-          SUM(CASE WHEN status = 'DISPUTED' THEN 1 ELSE 0 END) as disputed
-        FROM oracles`,
-        (err: any, row: any) => {
-          if (err) {
-            console.error('Oracle stats error:', err);
-            res.json({
-              marketsTracked: 0,
-              totalAlerts: 0,
-              consensusDetected: 0,
-              disputed: 0,
-              autoBets: 0,
-              winRate: 0,
-              edgeTime: "N/A"
-            });
-            db.close();
-            return;
-          }
-          
-          const stats = {
-            marketsTracked: row?.marketsTracked || 0,
-            totalAlerts: row?.totalAlerts || 0,
-            consensusDetected: row?.consensusDetected || 0,
-            disputed: row?.disputed || 0,
-            autoBets: 0,
-            winRate: 100,
-            edgeTime: "10s avg"
-          };
-          
-          res.json(stats);
-          db.close();
-        }
-      );
-    } catch (error) {
-      console.error('Oracle stats error:', error);
-      res.json({
-        marketsTracked: 0,
-        totalAlerts: 0,
-        consensusDetected: 0,
-        disputed: 0,
-        autoBets: 0,
-        winRate: 0,
-        edgeTime: "N/A"
-      });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
+  // Create and return HTTP server
+  const server = createServer(app);
+  return server;
 }

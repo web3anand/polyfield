@@ -216,8 +216,8 @@ export default function OracleBot() {
                   <div className="absolute -top-0.5 -right-0.5 md:-top-1 md:-right-1 w-2 h-2 md:w-3 md:h-3 bg-green-500 animate-pulse" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm font-semibold text-foreground">Scanner Status: LIVE</p>
-                  <p className="text-[10px] md:text-xs text-muted-foreground">Polling every minute • Web-only alerts (no Telegram)</p>
+                  <p className="text-xs md:text-sm font-semibold text-foreground">Oracle Status: LIVE</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Polling every minute • Web-only alerts</p>
                 </div>
               </div>
               <Button

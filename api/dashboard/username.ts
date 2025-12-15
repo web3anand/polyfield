@@ -18,22 +18,30 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
       timeout: 5000,
     });
 
+    // According to official Polymarket API docs, response structure is:
+    // { events: [...], tags: [...], profiles: [...], pagination: {...} }
     let profiles: any[] = [];
 
-    if (Array.isArray(response.data)) {
-      profiles = response.data;
-    } else if (response.data?.profiles && Array.isArray(response.data.profiles)) {
+    if (response.data?.profiles && Array.isArray(response.data.profiles)) {
+      // Official API structure: profiles array at root level
       profiles = response.data.profiles;
+    } else if (Array.isArray(response.data)) {
+      // Fallback: if response is directly an array
+      profiles = response.data;
     }
 
     if (profiles.length > 0) {
       console.log("First profile structure:", JSON.stringify(profiles[0], null, 2));
       
-      // Look for exact username match first
-      let profile = profiles.find(p => 
-        p.username?.toLowerCase() === username.toLowerCase() ||
-        p.display_name?.toLowerCase() === username.toLowerCase()
-      );
+      // According to official Polymarket API docs:
+      // - name (string) - the primary username field
+      // - pseudonym (string) - alternative name
+      // - username, display_name, displayName, handle - fallback fields
+      // Look for exact username match first, checking 'name' field first (official API primary field)
+      let profile = profiles.find(p => {
+        const profileName = p.name || p.pseudonym || p.username || p.display_name || p.displayName || p.handle;
+        return profileName?.toLowerCase() === username.toLowerCase();
+      });
       
       // If no exact match, use the first result
       if (!profile) {
@@ -42,9 +50,15 @@ async function findUserByUsername(username: string): Promise<{ wallet: string; p
 
       console.log("Selected profile:", JSON.stringify(profile, null, 2));
 
+      // Extract wallet address - proxyWallet is the official field name
+      const wallet = profile.proxyWallet || profile.wallet || profile.address || profile.walletAddress;
+      if (!wallet) {
+        throw new Error('No wallet address found in profile');
+      }
+
       return {
-        wallet: profile.proxyWallet || profile.wallet || profile.address,
-        profileImage: profile.profileImage || profile.profile_image_url || profile.avatar_url,
+        wallet,
+        profileImage: profile.profileImage || profile.profile_image_url || profile.avatar_url || profile.profile_image,
         bio: profile.bio || profile.description
       };
     }
@@ -385,19 +399,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sortedPositions = (pnlData.closedPositionsHistory || [])
       .sort((a: any, b: any) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
     
-    for (const pos of sortedPositions) {
-      cumulativePnl += pos.realizedPnl;
+    // Add starting point (7 days before first closed position or 1 day ago if no history)
+    if (sortedPositions.length > 0) {
+      const firstTime = new Date(sortedPositions[0].endDate).getTime();
+      const startTime = firstTime - (7 * 24 * 60 * 60 * 1000);
       pnlHistory.push({
-        timestamp: pos.endDate,
-        value: cumulativePnl
+        timestamp: new Date(startTime).toISOString(),
+        value: 0
       });
     }
     
-    // Always add a current point with total PnL (or starting point if no history)
-    pnlHistory.push({
-      timestamp: new Date().toISOString(),
-      value: pnlData.totalPnl
-    });
+    // Sample if too many positions for performance
+    const shouldSample = sortedPositions.length > 1000;
+    const sampleInterval = shouldSample ? Math.ceil(sortedPositions.length / 500) : 1;
+    
+    for (let i = 0; i < sortedPositions.length; i++) {
+      const pos = sortedPositions[i];
+      cumulativePnl += pos.realizedPnl;
+      
+      // Include all points or sample for large datasets
+      if (i % sampleInterval === 0 || i === sortedPositions.length - 1) {
+        pnlHistory.push({
+          timestamp: pos.endDate,
+          value: parseFloat(cumulativePnl.toFixed(2))
+        });
+      }
+    }
+    
+    // Handle gap between last closed position and current total PnL (includes unrealized)
+    const unrealizedPnL = pnlData.totalPnl - cumulativePnl;
+    if (sortedPositions.length > 0 && Math.abs(unrealizedPnL) > 100) {
+      const now = Date.now();
+      const lastClosedTime = new Date(sortedPositions[sortedPositions.length - 1].endDate).getTime();
+      const daysSinceLastClosed = (now - lastClosedTime) / (24 * 60 * 60 * 1000);
+      
+      if (daysSinceLastClosed > 0.5) {
+        // Add intermediate points for smooth transition to current value
+        const numPoints = Math.min(5, Math.max(2, Math.floor(daysSinceLastClosed)));
+        const timeStep = (now - lastClosedTime) / numPoints;
+        const pnlStep = unrealizedPnL / numPoints;
+        
+        for (let i = 1; i <= numPoints; i++) {
+          const timestamp = lastClosedTime + (timeStep * i);
+          const value = cumulativePnl + (pnlStep * i);
+          pnlHistory.push({
+            timestamp: new Date(timestamp).toISOString(),
+            value: parseFloat(value.toFixed(2))
+          });
+        }
+      } else {
+        // Just add current point with total PnL
+        pnlHistory.push({
+          timestamp: new Date().toISOString(),
+          value: pnlData.totalPnl
+        });
+      }
+    } else {
+      // Add current point with total PnL
+      pnlHistory.push({
+        timestamp: new Date().toISOString(),
+        value: pnlData.totalPnl
+      });
+    }
 
     const dashboardData = {
       profile: {

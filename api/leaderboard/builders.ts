@@ -3,8 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MzAxNzQsImV4cCI6MjA3NzIwNjE3NH0.pk46vevHaUjX0Ewq8dAfNidNgQjjov3fX7CJU997b8U';
+// Use environment variables - should be set in Vercel
+// Support both old and new Supabase env var naming conventions
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://bzlxrggciehkcslchooe.supabase.co';
+
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMTM3NzcsImV4cCI6MjA4MDU4OTc3N30.vIcU83OafM_MGPRy-RjheuSQqkQNRw-RcaI2aDXH4gM';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -32,61 +42,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`📊 [VERCEL API] Fetching builder leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
 
-    // Try Supabase first (fast cache)
-    try {
-      const { data: cachedBuilders, error: supabaseError } = await supabase
-        .from('leaderboard_builders')
-        .select('*')
-        .eq('time_period', timePeriod.toLowerCase())
-        .order('rank', { ascending: true })
-        .range(offset, offset + limit - 1);
+    // Fetch from Supabase only (no fallback to Polymarket)
+    const { data: cachedBuilders, error: supabaseError } = await supabase
+      .from('leaderboard_builders')
+      .select('*')
+      .eq('time_period', timePeriod.toLowerCase())
+      .order('rank', { ascending: true })
+      .range(offset, offset + limit - 1);
 
-      if (!supabaseError && cachedBuilders && cachedBuilders.length > 0) {
-        console.log(`✓ [VERCEL API] Fetched ${cachedBuilders.length} builders from Supabase cache`);
-        
-        // Transform Supabase data to match frontend expectations
-        const transformedBuilders = cachedBuilders.map((builder: any) => ({
-          rank: builder.rank.toString(),
-          builder: builder.builder_name,
-          volume: parseFloat(builder.volume || 0),
-          activeUsers: parseInt(builder.active_users || 0),
-          verified: builder.verified === true,
-          builderLogo: builder.builder_logo || undefined,
-          marketsCreated: parseInt(builder.markets_created || 0),
-        }));
-
-        return res.status(200).json(transformedBuilders);
-      }
-    } catch (supabaseErr: any) {
-      console.warn('⚠️ Supabase fetch failed, falling back to Polymarket API:', supabaseErr.message);
+    if (supabaseError) {
+      console.error('❌ Supabase fetch error:', supabaseError);
+      return res.status(500).json({
+        error: 'Failed to fetch from database',
+        message: supabaseError.message,
+      });
     }
 
-    // Fallback to Polymarket API
-    console.log('📡 Fetching from Polymarket API (fallback)...');
-    const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
-      params: {
-        timePeriod: timePeriod.toUpperCase(),
-        limit: Math.min(limit, 50), // API max is 50
-        offset,
-      },
-      timeout: 10000,
-    });
+    if (!cachedBuilders || cachedBuilders.length === 0) {
+      console.log(`⚠️ No builders found in database for timePeriod=${timePeriod}, offset=${offset}`);
+      return res.status(200).json([]);
+    }
 
-    const builders = response.data || [];
-    console.log(`✓ [VERCEL API] Fetched ${builders.length} builders from Polymarket API`);
-
-    // Transform to match frontend expectations if needed
-    const transformedBuilders = builders.map((builder: any) => ({
-      rank: builder.rank?.toString() || (builders.indexOf(builder) + offset + 1).toString(),
-      builder: builder.builderName || builder.name || builder.builder || 'Unknown',
-      volume: parseFloat(builder.vol || builder.volume || 0),
-      activeUsers: parseInt(builder.activeUsers || 0),
-      verified: builder.verified === true || builder.verified === 'true',
-      builderLogo: builder.builderLogo || builder.logo || builder.image || undefined,
-      marketsCreated: parseInt(builder.marketsCreated || builder.markets || 0),
+    console.log(`✓ [VERCEL API] Fetched ${cachedBuilders.length} builders from Supabase`);
+    
+    // Transform Supabase data to match frontend expectations
+    const transformedBuilders = cachedBuilders.map((builder: any) => ({
+      rank: builder.rank.toString(),
+      builder: builder.builder_name,
+      volume: parseFloat(builder.volume || 0),
+      activeUsers: parseInt(builder.active_users || 0),
+      verified: builder.verified === true,
+      builderLogo: builder.builder_logo || undefined,
+      marketsCreated: parseInt(builder.markets_created || 0),
     }));
 
-    res.status(200).json(transformedBuilders);
+    return res.status(200).json(transformedBuilders);
   } catch (error: any) {
     console.error("❌ [VERCEL API] Error fetching builder leaderboard:", error);
     

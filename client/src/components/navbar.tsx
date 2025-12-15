@@ -19,20 +19,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: "01", label: "TRACKER", href: "/", isActive: false },
+  { id: "02", label: "ORACLE", href: "/oracle", isActive: false },
   { 
-    id: "02", 
-    label: "SCANNER", 
-    href: "/scanner/whales", 
-    isActive: false,
-    hasDropdown: true,
-    subItems: [
-      { label: "Whales Hub", href: "/scanner/whales" },
-      { label: "Micro Edge Scanner", href: "/scanner/micro-edge" }
-    ]
-  },
-  { id: "03", label: "INSIDOOR", href: "/oracle", isActive: false },
-  { 
-    id: "04", 
+    id: "03", 
     label: "LEADERBOARD", 
     href: "/leaderboard/builders", 
     isActive: false, 
@@ -54,7 +43,6 @@ export function Navbar() {
   const navRef = useRef<HTMLElement | null>(null);
   const isClickingDropdown = useRef<boolean>(false);
 
-  // Memoize active item calculation to prevent unnecessary re-renders
   const activeItem = useMemo(() => {
     const found = navItems.find(item => {
       if (item.subItems) {
@@ -65,12 +53,10 @@ export function Navbar() {
     return found?.id || "01";
   }, [location]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     if (!openDropdown) return;
     
     function handleClickOutside(event: MouseEvent) {
-      // Don't close if we're in the process of clicking a dropdown item
       if (isClickingDropdown.current) {
         isClickingDropdown.current = false;
         return;
@@ -78,7 +64,6 @@ export function Navbar() {
       
       const target = event.target as HTMLElement;
       
-      // Check if click is inside any dropdown
       let clickedInside = false;
       dropdownRefs.current.forEach((ref) => {
         if (ref && ref.contains(target)) {
@@ -97,22 +82,18 @@ export function Navbar() {
     };
   }, [openDropdown]);
 
-  // Close dropdown when location changes
   useEffect(() => {
     setOpenDropdown(null);
   }, [location]);
 
-  // Create navbar container for portal
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
-    // Get or create container div (only create if it doesn't exist)
     let container = document.getElementById('navbar-root');
     if (!container) {
       container = document.createElement('div');
       container.id = 'navbar-root';
       
-      // Insert at the very beginning of body, before #root
       const rootElement = document.getElementById('root');
       if (rootElement) {
         document.body.insertBefore(container, rootElement);
@@ -121,15 +102,9 @@ export function Navbar() {
       }
     }
 
-    // Mark container as ready
     setContainerReady(true);
 
-    // No cleanup needed - let the container persist
-    // React's portal will handle adding/removing children naturally
-    return () => {
-      // Don't remove container - it will be reused on re-renders
-      // Removing it causes React portal cleanup errors
-    };
+    return () => {};
   }, []);
 
   const handleItemClick = (itemId: string) => {
@@ -144,30 +119,28 @@ export function Navbar() {
   const navbarContent = (
     <nav 
       data-navbar="fixed"
-      className="navbar-fixed w-full bg-black/95 backdrop-blur-md border-b border-gray-800/50 shadow-lg"
+      className="navbar-fixed w-full bg-black/95 backdrop-blur-md border-b border-gray-800/50 shadow-lg transition-responsive"
       ref={(el) => {
         if (el) {
           navRef.current = el;
-          // CSS handles positioning via index.css and index.html styles
-          // No manual style manipulation needed
         }
       }}
     >
-      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
-        <div className="flex items-center justify-center h-12 md:h-16 relative">
+      <div className="w-full px-fluid-sm sm:px-4 md:px-6 lg:px-8">
+        <div className="flex items-center justify-center h-fluid-navbar relative">
           {/* POLYFEILD BETA Brand - Fixed Left */}
-          <div className="absolute left-2 md:left-4 flex items-center gap-1.5 md:gap-3">
-            <h2 className="text-sm md:text-lg lg:text-xl tracking-tight">
+          <div className="absolute left-2 sm:left-3 md:left-4 flex items-center gap-1 sm:gap-1.5 md:gap-2">
+            <h2 className="text-fluid-sm sm:text-fluid-base md:text-fluid-lg lg:text-fluid-xl tracking-tight">
               <span className="poly-scramble text-green-400 drop-shadow-lg">POLY</span>
               <span className="field-scramble text-gray-300">FIELD</span>
             </h2>
-            <span className="text-[10px] md:text-xs font-bold px-2 md:px-2.5 py-0.5 md:py-1 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/40 rounded-md shadow-sm">
+            <span className="text-fluid-xs font-bold px-1.5 sm:px-2 py-0.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/40 rounded-md shadow-sm hidden xs:inline-block">
               BETA
             </span>
           </div>
           
           {/* Desktop Navigation Items - Centered */}
-          <div className="hidden md:flex items-center space-x-6 lg:space-x-8">
+          <div className="hidden md:flex items-center gap-fluid-sm lg:gap-fluid-md">
             {navItems.map((item) => (
               <div 
                 key={item.id} 
@@ -190,21 +163,20 @@ export function Navbar() {
                             setOpenDropdown(openDropdown === item.id ? null : item.id);
                           }}
                           className={`
-                            relative flex items-center justify-center space-x-2 px-4 py-2 text-sm font-mono
-                            min-w-[120px] h-10 transition-all duration-200 group
+                            relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
+                            min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
                             ${
                               activeItem === item.id
-                                ? "text-white"
+                                ? "text-white opacity-100"
                                 : "text-gray-400 hover:text-white"
                             }
                           `}
                         >
-                      <span className="text-gray-500">[{item.id}]</span>
-                      <span className="text-gray-500">//</span>
-                      <span className="uppercase tracking-wide">{item.label}</span>
-                      <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
+                      <span className="text-gray-500 text-fluid-xs">[{item.id}]</span>
+                      <span className="text-gray-500 text-fluid-xs">//</span>
+                      <span className="tracking-wide text-fluid-xs">{item.label}</span>
+                      <ChevronDown className={`w-3 h-3 lg:w-3.5 lg:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                       
-                      {/* Animated underline */}
                       <div 
                         className={`
                           absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
@@ -217,10 +189,9 @@ export function Navbar() {
                       />
                     </button>
                     
-                    {/* Dropdown Menu */}
                     {openDropdown === item.id && (
                       <div 
-                        className="absolute top-full left-0 mt-2 w-56 bg-gradient-to-br from-black to-gray-950 border border-gray-800/50 shadow-2xl rounded-lg backdrop-blur-sm z-[100] overflow-hidden"
+                        className="absolute top-full left-0 mt-2 w-48 lg:w-56 bg-black/95 backdrop-blur-md border border-gray-800/50 shadow-2xl z-[100] overflow-hidden"
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -237,21 +208,32 @@ export function Navbar() {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 isClickingDropdown.current = false;
-                                console.log('Clicking submenu item:', subItem.label, subItem.href);
                                 setLocation(subItem.href);
                                 handleItemClick(item.id);
                                 setOpenDropdown(null);
                               }}
                               className={`
-                                w-full text-left block px-4 py-3 text-sm font-mono transition-colors cursor-pointer
+                                w-full text-left flex items-center gap-1.5 px-3 lg:px-4 py-2.5 lg:py-3 text-fluid-xs lg:text-fluid-sm font-mono transition-all duration-200 cursor-pointer relative group
                                 ${
                                   location === subItem.href
-                                    ? "text-white bg-gray-800"
-                                    : "text-gray-400 hover:text-white hover:bg-gray-900"
+                                    ? "text-white"
+                                    : "text-gray-400 hover:text-white"
                                 }
                               `}
                             >
-                              {subItem.label}
+                              <span className="text-gray-500 text-fluid-xs">[{String(idx + 1).padStart(2, '0')}]</span>
+                              <span className="text-gray-500 text-fluid-xs">//</span>
+                              <span className="tracking-wide">{subItem.label.toUpperCase()}</span>
+                              <div 
+                                className={`
+                                  absolute bottom-0 left-3 right-3 h-0.5 bg-white transition-all duration-300 ease-out
+                                  ${
+                                    location === subItem.href 
+                                      ? "opacity-100" 
+                                      : "opacity-0 group-hover:opacity-100"
+                                  }
+                                `}
+                              />
                             </button>
                           );
                         })}
@@ -263,23 +245,22 @@ export function Navbar() {
                     href={item.href}
                     onClick={() => handleItemClick(item.id)}
                     className={`
-                      relative flex items-center justify-center space-x-2 px-4 py-2 text-sm font-mono
-                      min-w-[120px] h-10 transition-all duration-200 group
+                      relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
+                      min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
                       ${
                         activeItem === item.id
-                          ? "text-white"
+                          ? "text-white opacity-100"
                           : "text-gray-400 hover:text-white"
                       }
                     `}
                   >
-                    <span className="text-gray-500">[{item.id}]</span>
-                    <span className="text-gray-500">//</span>
-                    <span className="uppercase tracking-wide">{item.label}</span>
+                    <span className="text-gray-500 text-fluid-xs">[{item.id}]</span>
+                    <span className="text-gray-500 text-fluid-xs">//</span>
+                    <span className="tracking-wide text-fluid-xs">{item.label}</span>
                     {item.hasDropdown && (
-                      <ChevronDown className="w-3.5 h-3.5 ml-1" strokeWidth={2.5} />
+                      <ChevronDown className="w-3 h-3 lg:w-3.5 lg:h-3.5" strokeWidth={2.5} />
                     )}
                     
-                    {/* Animated underline */}
                     <div 
                       className={`
                         absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
@@ -301,12 +282,12 @@ export function Navbar() {
           {/* Mobile Menu Button - Fixed Right */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="absolute right-2 md:right-4 md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all duration-200"
+            className="absolute right-2 sm:right-3 md:right-4 md:hidden p-1.5 sm:p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all duration-200"
           >
             {isMobileMenuOpen ? (
-              <X className="w-5 h-5" strokeWidth={2.5} />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} />
             ) : (
-              <AlignJustify className="w-5 h-5" strokeWidth={2.5} />
+              <AlignJustify className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} />
             )}
           </button>
         </div>
@@ -327,7 +308,7 @@ export function Navbar() {
                           setOpenDropdown(openDropdown === item.id ? null : item.id);
                         }}
                         className={`
-                          w-full flex items-center justify-between space-x-1.5 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-mono
+                          w-full flex items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
                           transition-all duration-200
                           ${
                             activeItem === item.id
@@ -336,16 +317,16 @@ export function Navbar() {
                           }
                         `}
                       >
-                        <div className="flex items-center space-x-1 md:space-x-2">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-gray-500">[{item.id}]</span>
                           <span className="text-gray-500">//</span>
                           <span className="uppercase tracking-wide">{item.label}</span>
                         </div>
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
+                        <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                       </button>
                       
                       {openDropdown === item.id && (
-                        <div className="ml-3 md:ml-4 border-l border-gray-800">
+                        <div className="ml-3 sm:ml-4 border-l border-gray-800">
                           {item.subItems.map((subItem, idx) => {
                             return (
                               <button
@@ -360,7 +341,7 @@ export function Navbar() {
                                   setOpenDropdown(null);
                                 }}
                                 className={`
-                                  w-full text-left block px-3 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-mono cursor-pointer
+                                  w-full text-left block px-2.5 sm:px-3 py-1.5 sm:py-2 text-fluid-xs sm:text-fluid-sm font-mono cursor-pointer
                                   ${
                                     location === subItem.href
                                       ? "text-white bg-gray-900"
@@ -380,7 +361,7 @@ export function Navbar() {
                       href={item.href}
                       onClick={() => handleItemClick(item.id)}
                       className={`
-                        w-full flex items-center space-x-1.5 md:space-x-2 px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-mono
+                        w-full flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
                         transition-all duration-200 group relative
                         ${
                           activeItem === item.id
@@ -393,10 +374,9 @@ export function Navbar() {
                       <span className="text-gray-500">//</span>
                       <span className="uppercase tracking-wide">{item.label}</span>
                       {item.hasDropdown && (
-                        <ChevronDown className="w-3.5 h-3.5 ml-1" strokeWidth={2.5} />
+                        <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-1" strokeWidth={2.5} />
                       )}
                       
-                      {/* Animated underline for mobile */}
                       <div 
                         className={`
                           absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
@@ -420,12 +400,10 @@ export function Navbar() {
     </nav>
   );
 
-  // Always render navbar - use portal when container is ready, otherwise render directly
   if (typeof document === 'undefined') {
     return null;
   }
 
-  // If container is ready, use portal
   if (containerReady) {
     const container = document.getElementById('navbar-root');
     if (container) {
@@ -433,6 +411,5 @@ export function Navbar() {
     }
   }
 
-  // Fallback: render directly (will be moved to portal once container is ready)
   return navbarContent;
 }

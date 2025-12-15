@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
@@ -14,20 +14,63 @@ interface PixelChartProps {
   data: VolumeDataPoint[];
   isLoading?: boolean;
   onTimeFrameChange?: (timeFrame: string) => void;
+  currentTimeFrame?: string;
 }
 
-export function PixelChart({ data, isLoading }: PixelChartProps) {
-  const [tooltip, setTooltip] = useState<{
-    date: string;
-    builders: Array<{ builder: string; volume: number; color: string }>;
-    totalVolume: number;
-    x: number;
-    y: number;
-  } | null>(null);
+export function PixelChart({ data, isLoading, onTimeFrameChange, currentTimeFrame = "ALL" }: PixelChartProps) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  // Filter data based on selected timeframe - shows all individual day candles within the period
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0 || currentTimeFrame === "ALL") {
+      return data;
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(today);
+    endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(today);
+
+    switch (currentTimeFrame) {
+      case "DAY":
+        // Show only today's data (single day candle)
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay.getTime() === today.getTime();
+        });
+      
+      case "WEEK":
+        // Show last 7 days - all individual day candles
+        startDate.setDate(today.getDate() - 6); // 7 days including today
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay >= startDate && pointDay <= today;
+        });
+      
+      case "MONTH":
+        // Show last 30 days - all individual day candles for the month
+        startDate.setDate(today.getDate() - 29); // 30 days including today
+        return data.filter(point => {
+          if (!point.dt) return false;
+          const pointDate = new Date(point.dt);
+          const pointDay = new Date(pointDate.getFullYear(), pointDate.getMonth(), pointDate.getDate());
+          return pointDay >= startDate && pointDay <= today;
+        });
+      
+      default:
+        return data;
+    }
+  }, [data, currentTimeFrame]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -38,227 +81,188 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Calculate tooltip position to keep it within viewport
-  useEffect(() => {
-    if (!tooltip || !containerRef.current) {
-      setTooltipStyle({});
+  const processedData = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) {
+      return { 
+        aggregatedByDate: [] as Array<{ 
+          date: string; 
+          totalVolume: number; 
+          totalActiveUsers: number;
+          builders: Array<{ builder: string; volume: number; activeUsers: number; color: string }> 
+        }>,
+        builders: [] as string[], 
+        colors: {} as Record<string, string>,
+        maxVolume: 0,
+        totalVolume: 0,
+      };
+    }
+
+    const colorPalette = [
+      "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444",
+      "#06b6d4", "#f97316", "#ec4899", "#14b8a6", "#6366f1",
+      "#84cc16", "#a855f7", "#22c55e", "#0ea5e9", "#f43f5e",
+    ];
+
+    const builders = Array.from(new Set(filteredData.map(p => p.builder).filter(Boolean))).sort();
+    const builderColors: Record<string, string> = {};
+    builders.forEach((builder, idx) => {
+      if (builder) builderColors[builder] = colorPalette[idx % colorPalette.length];
+    });
+
+    const dateMap = new Map<string, { totalVolume: number; totalActiveUsers: number; builders: Map<string, { volume: number; activeUsers: number }> }>();
+    
+    filteredData.forEach((point) => {
+      if (!point.dt) return;
+      const date = new Date(point.dt);
+      // Normalize to date only (remove time component) to ensure proper day grouping
+      const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayKey = normalizedDate.toISOString().split("T")[0];
+      const builder = point.builder || 'Unknown';
+      const volume = typeof point.volume === 'number' ? point.volume : parseFloat(String(point.volume)) || 0;
+      const activeUsers = typeof point.activeUsers === 'number' ? point.activeUsers : parseInt(String(point.activeUsers)) || 0;
+      
+      if (!dateMap.has(dayKey)) {
+        dateMap.set(dayKey, { totalVolume: 0, totalActiveUsers: 0, builders: new Map() });
+      }
+      
+      const entry = dateMap.get(dayKey)!;
+      entry.totalVolume += volume;
+      entry.totalActiveUsers += activeUsers;
+      
+      const existing = entry.builders.get(builder) || { volume: 0, activeUsers: 0 };
+      entry.builders.set(builder, { 
+        volume: existing.volume + volume, 
+        activeUsers: existing.activeUsers + activeUsers 
+      });
+    });
+
+    const aggregatedByDate = Array.from(dateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { totalVolume, totalActiveUsers, builders: builderMap }]) => ({
+        date,
+        totalVolume,
+        totalActiveUsers,
+        builders: Array.from(builderMap.entries())
+          .map(([builder, { volume, activeUsers }]) => ({
+            builder,
+            volume,
+            activeUsers,
+            color: builderColors[builder] || colorPalette[0],
+          }))
+          .sort((a, b) => b.volume - a.volume),
+      }));
+
+    const maxVolume = Math.max(...aggregatedByDate.map(d => d.totalVolume), 1);
+    const totalVolume = aggregatedByDate.reduce((sum, d) => sum + d.totalVolume, 0);
+
+    return { aggregatedByDate, builders, colors: builderColors, maxVolume, totalVolume };
+  }, [filteredData]);
+
+  const CHART_HEIGHT = isMobile ? 280 : 400;
+  const CHART_WIDTH = 800;
+  const PADDING = { top: 20, right: 20, bottom: 40, left: 60 };
+  const innerWidth = CHART_WIDTH - PADDING.left - PADDING.right;
+  const innerHeight = CHART_HEIGHT - PADDING.top - PADDING.bottom;
+
+  const barData = useMemo(() => {
+    const { aggregatedByDate, maxVolume } = processedData;
+    if (aggregatedByDate.length === 0) return [];
+
+    const barGap = 2;
+    const totalBars = aggregatedByDate.length;
+    const barWidth = Math.max(4, (innerWidth - (totalBars - 1) * barGap) / totalBars);
+
+    return aggregatedByDate.map((d, i) => {
+      const x = PADDING.left + i * (barWidth + barGap);
+      const height = (d.totalVolume / maxVolume) * innerHeight;
+      const y = PADDING.top + innerHeight - height;
+      return { x, y, width: barWidth, height, data: d };
+    });
+  }, [processedData, innerWidth, innerHeight]);
+
+  const handleInteraction = useCallback((clientX: number, clientY: number) => {
+    if (!svgRef.current || !containerRef.current || barData.length === 0) return;
+    
+    const svgRect = svgRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const scaleX = CHART_WIDTH / svgRect.width;
+    
+    const x = (clientX - svgRect.left) * scaleX;
+    const relativeX = x - PADDING.left;
+    
+    if (relativeX < 0 || relativeX > innerWidth) {
+      setActiveIndex(null);
+      setMousePosition(null);
       return;
     }
 
-    // Use requestAnimationFrame to ensure tooltip is rendered before measuring
-    const updatePosition = () => {
-      if (!containerRef.current || !tooltipRef.current) return;
-
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const tooltipRect = tooltipRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const padding = 12; // Padding from viewport edges
-
-      let left = tooltip.x;
-      let top = tooltip.y;
-      let transform = 'translate(-50%, calc(-100% - 12px))';
-
-      // Get actual tooltip dimensions
-      const tooltipWidth = tooltipRect.width || (isMobile ? 250 : 300);
-      const tooltipHeight = tooltipRect.height || (isMobile ? 150 : 200);
-
-      // Calculate absolute positions relative to viewport
-      const containerLeft = containerRect.left;
-      const containerTop = containerRect.top;
-      const absoluteLeft = containerLeft + tooltip.x;
-      const absoluteTop = containerTop + tooltip.y;
-
-      // Check horizontal bounds
-      const leftEdge = absoluteLeft - tooltipWidth / 2;
-      const rightEdge = absoluteLeft + tooltipWidth / 2;
-
-      if (leftEdge < padding) {
-        // Too far left, align to left edge of viewport
-        const newAbsoluteLeft = padding + tooltipWidth / 2;
-        left = newAbsoluteLeft - containerLeft;
-        transform = 'translate(-50%, calc(-100% - 12px))';
-      } else if (rightEdge > viewportWidth - padding) {
-        // Too far right, align to right edge of viewport
-        const newAbsoluteLeft = viewportWidth - padding - tooltipWidth / 2;
-        left = newAbsoluteLeft - containerLeft;
-        transform = 'translate(-50%, calc(-100% - 12px))';
-      }
-
-      // Check vertical bounds
-      const topEdge = absoluteTop - tooltipHeight - 12;
-      const bottomEdge = absoluteTop + 12;
-
-      if (topEdge < padding) {
-        // Too high, show below instead
-        transform = transform.replace('calc(-100% - 12px)', 'calc(100% + 12px)');
-      } else if (bottomEdge + tooltipHeight > viewportHeight - padding) {
-        // Too low, try to show above
-        const newTopEdge = absoluteTop - tooltipHeight - 12;
-        if (newTopEdge >= padding) {
-          transform = transform.replace('calc(100% + 12px)', 'calc(-100% - 12px)');
-        } else {
-          // If can't fit above or below, position at top of viewport
-          top = padding + tooltipHeight / 2 - containerTop;
-          transform = 'translate(-50%, -50%)';
-        }
-      }
-
-      setTooltipStyle({
-        left: `${left}px`,
-        top: `${top}px`,
-        transform,
-      });
-    };
-
-    // Initial positioning
-    requestAnimationFrame(() => {
-      requestAnimationFrame(updatePosition);
-    });
-  }, [tooltip, isMobile]);
-
-  // Process data: group by builder and create time series for each
-  const processedData = useMemo(() => {
-    console.log("📊 PixelChart processing data:", data?.length || 0, "points");
-    console.log("📊 Sample data:", data?.slice(0, 3));
-      if (!data || data.length === 0) {
-      console.log("⚠️ No data to process");
-      return { 
-        builderSeries: [], 
-        builders: [] as string[], 
-        colors: {} as Record<string, string>, 
-        allDates: [] as string[], 
-        dateTotals: new Map<string, number>() 
-      };
-    }
-
-    console.log(`📊 Processing all data (no time filtering)`);
-
-    // Filter out invalid points - show all data
-    const filtered = data.filter((point) => {
-      return point.dt && point.volume !== undefined;
-    });
-
-    console.log(`📊 Filtered data: ${filtered.length} points (from ${data.length} total)`);
-
-    // Get unique builders and assign colors
-    const builders = Array.from(new Set(filtered.map(p => p.builder).filter(Boolean))).sort();
-    console.log(`📊 Found ${builders.length} unique builders:`, builders);
-    const builderColors: Record<string, string> = {};
+    const barGap = 2;
+    const barWidth = barData[0]?.width || 4;
+    const index = Math.floor(relativeX / (barWidth + barGap));
+    const clampedIndex = Math.max(0, Math.min(index, barData.length - 1));
     
-    // Color palette - distinct colors for each builder
-    const colorPalette = [
-      "#10b981", // emerald
-      "#3b82f6", // blue
-      "#8b5cf6", // purple
-      "#f59e0b", // amber
-      "#ef4444", // red
-      "#06b6d4", // cyan
-      "#f97316", // orange
-      "#ec4899", // pink
-      "#14b8a6", // teal
-      "#6366f1", // indigo
-      "#84cc16", // lime
-      "#a855f7", // violet
-      "#22c55e", // green
-      "#0ea5e9", // sky
-      "#f43f5e", // rose
-      "#eab308", // yellow
-    ];
-
-    builders.forEach((builder, idx) => {
-      if (builder) {
-        builderColors[builder] = colorPalette[idx % colorPalette.length];
-      }
+    setActiveIndex(clampedIndex);
+    setMousePosition({
+      x: clientX - containerRect.left,
+      y: clientY - containerRect.top,
     });
+  }, [barData, innerWidth]);
 
-    // Group data by builder and create time series
-    const builderDataMap = new Map<string, Array<{ date: string; timestamp: number; volume: number }>>();
-    const allDatesSet = new Set<string>();
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    handleInteraction(e.clientX, e.clientY);
+  }, [handleInteraction]);
 
-    filtered.forEach((point) => {
-      const date = new Date(point.dt);
-      const dayKey = date.toISOString().split("T")[0];
-      const builder = point.builder || 'Unknown';
-      const volume = typeof point.volume === 'number' ? point.volume : parseFloat(String(point.volume)) || 0;
-      
-      allDatesSet.add(dayKey);
-      
-      if (!builderDataMap.has(builder)) {
-        builderDataMap.set(builder, []);
-      }
-      
-      if (builder) {
-        builderDataMap.get(builder)!.push({
-          date: dayKey,
-          timestamp: date.getTime(),
-          volume,
-        });
-      }
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      handleInteraction(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, [handleInteraction]);
+
+  const handleMouseLeave = useCallback(() => {
+    setActiveIndex(null);
+    setMousePosition(null);
+  }, []);
+
+  const activeBar = activeIndex !== null ? barData[activeIndex] : null;
+  const activeData = activeBar?.data || null;
+
+  const yAxisLabels = useMemo(() => {
+    const { maxVolume } = processedData;
+    const steps = 5;
+    return Array.from({ length: steps + 1 }, (_, i) => {
+      const value = (maxVolume / steps) * (steps - i);
+      return {
+        value,
+        y: PADDING.top + (innerHeight / steps) * i,
+        label: value >= 1_000_000 
+          ? `$${(value / 1_000_000).toFixed(1)}M`
+          : value >= 1_000 
+            ? `$${(value / 1_000).toFixed(0)}K`
+            : `$${value.toFixed(0)}`,
+      };
     });
+  }, [processedData, innerHeight]);
 
-    // Get all unique dates and sort them
-    const allDates = Array.from(allDatesSet).sort();
-
-    // Create time series for each builder
-    const builderSeries = builders.map((builder) => {
-      if (!builder) return null;
-      const builderPoints = builderDataMap.get(builder) || [];
-      // Sort by date
-      builderPoints.sort((a, b) => a.timestamp - b.timestamp);
-      
-      // Fill in missing dates with 0 volume
-      const completeSeries = allDates.map(date => {
-        const existing = builderPoints.find(p => p.date === date);
-        return existing || {
-          date,
-          timestamp: new Date(date).getTime(),
-          volume: 0,
+  const xAxisLabels = useMemo(() => {
+    const { aggregatedByDate } = processedData;
+    if (aggregatedByDate.length === 0) return [];
+    
+    const maxLabels = isMobile ? 5 : 8;
+    const step = Math.max(1, Math.floor(aggregatedByDate.length / maxLabels));
+    
+    return aggregatedByDate
+      .filter((_, i) => i % step === 0 || i === aggregatedByDate.length - 1)
+      .map((d) => {
+        const originalIndex = processedData.aggregatedByDate.indexOf(d);
+        const bar = barData[originalIndex];
+        const x = bar ? bar.x + bar.width / 2 : PADDING.left;
+        const dateObj = new Date(d.date);
+        return {
+          x,
+          label: dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         };
       });
-
-      return {
-        builder: builder,
-        color: builderColors[builder] || colorPalette[0],
-        dataPoints: completeSeries,
-        totalVolume: completeSeries.reduce((sum, p) => sum + p.volume, 0),
-      };
-    }).filter((series): series is NonNullable<typeof series> => series !== null);
-
-    // Sort builders by total volume (descending)
-    builderSeries.sort((a, b) => b.totalVolume - a.totalVolume);
-
-    // Calculate total volume per date (sum of all builders on that date)
-    const dateTotals = new Map<string, number>();
-    allDates.forEach(date => {
-      const total = builderSeries.reduce((sum, series) => {
-        const point = series.dataPoints.find(p => p.date === date);
-        return sum + (point?.volume || 0);
-      }, 0);
-      dateTotals.set(date, total);
-    });
-
-    console.log(`✓ Processed ${builderSeries.length} builder time series with ${allDates.length} dates`);
-    console.log(`✓ Sample builder series:`, builderSeries[0]?.builder, builderSeries[0]?.dataPoints?.slice(0, 3));
-    return { builderSeries, builders, colors: builderColors, allDates, dateTotals };
-  }, [data]);
-
-  const maxVolume = useMemo(() => {
-    if (processedData.builderSeries.length === 0) return 1;
-    return Math.max(
-      ...processedData.builderSeries.flatMap(series => series.dataPoints.map(p => p.volume))
-    );
-  }, [processedData]);
-
-  const totalVolume = useMemo(() => {
-    return processedData.builderSeries.reduce((sum, series) => sum + series.totalVolume, 0);
-  }, [processedData]);
-
-  // Pixel chart dimensions - responsive
-  const PIXEL_SIZE = 8;
-  const GAP = 2;
-  const CHART_HEIGHT = isMobile ? 250 : 400;
-  const CHART_WIDTH = Math.max(processedData.allDates.length * (PIXEL_SIZE + GAP), 800);
+  }, [processedData, barData, isMobile]);
 
   if (isLoading) {
     return (
@@ -276,266 +280,224 @@ export function PixelChart({ data, isLoading }: PixelChartProps) {
     );
   }
 
+  const timeFrameOptions = [
+    { key: "DAY", label: "Day" },
+    { key: "WEEK", label: "Week" },
+    { key: "MONTH", label: "Month" },
+    { key: "ALL", label: "All" },
+  ];
+
+  // Handle timeframe change locally (no need to call parent if not provided)
+  const handleTimeFrameChange = (timeFrame: string) => {
+    if (onTimeFrameChange) {
+      onTimeFrameChange(timeFrame);
+    }
+  };
+
   return (
     <div className="w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 md:mb-4">
+      <div className="flex items-center justify-between mb-2 md:mb-4 px-2 md:px-0">
         <div>
-          <h2 className="text-base md:text-xl font-bold text-white">Volume Trend</h2>
-          <p className="text-gray-400 text-xs md:text-sm">Daily builder volume over time</p>
+          <h2 className="text-sm sm:text-base md:text-xl font-bold text-white">Volume Trend</h2>
+          <p className="text-gray-400 text-[10px] sm:text-xs md:text-sm">Daily builder volume over time</p>
+        </div>
+        <div className="flex gap-1 p-1 bg-gray-900/50 rounded-lg">
+          {timeFrameOptions.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleTimeFrameChange(key)}
+              className={`
+                px-2 md:px-3 py-1 md:py-1.5 text-[10px] md:text-xs font-medium rounded-md transition-all duration-200
+                ${currentTimeFrame === key 
+                  ? 'bg-gray-800 text-white shadow-sm' 
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+                }
+              `}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Pixel Chart - Full Width, No Background - Time series per builder */}
-      {processedData.builderSeries.length === 0 ? (
-        <div className="text-center py-8 md:py-12">
-          <p className="text-gray-400 text-sm">No volume data available</p>
+      {processedData.aggregatedByDate.length === 0 ? (
+        <div className="text-center py-6 md:py-12">
+          <p className="text-gray-400 text-xs md:text-sm">No volume data available</p>
         </div>
       ) : (
         <div 
           ref={containerRef}
-          className="w-full relative overflow-x-auto" 
+          className="w-full relative select-none overflow-x-auto"
           style={{ minHeight: CHART_HEIGHT }}
-          onClick={(e) => {
-            // Only hide tooltip if clicking outside the bars
-            if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'svg') {
-              setTooltip(null);
-            }
-          }}
-          onTouchEnd={(e) => {
-            // Don't hide on touch end - let user see the tooltip
-            // Only hide if touching outside
-            if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'svg') {
-              setTooltip(null);
-            }
-          }}
-          onTouchCancel={() => setTooltip(null)}
         >
           <svg
-            width={CHART_WIDTH}
-            height={CHART_HEIGHT}
+            ref={svgRef}
             viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-            className="overflow-visible"
-            style={{ imageRendering: "pixelated", minWidth: "100%" }}
-            preserveAspectRatio="none"
+            className="w-full h-auto min-w-[600px]"
+            style={{ touchAction: 'none' }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            onTouchStart={handleTouchMove}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleMouseLeave}
           >
-            <defs>
-              {/* Pixel glow effect */}
-              <filter id="pixel-glow">
-                <feGaussianBlur stdDeviation="1" result="coloredBlur" />
-                <feMerge>
-                  <feMergeNode in="coloredBlur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            
-            {/* Render each builder's time series - bars can overlap on same date */}
-            {processedData.builderSeries.flatMap((series) => {
-              return series.dataPoints
-                .filter((point) => point.volume > 0) // Only render bars with volume > 0
-                .map((point, pointIndex) => {
-                  const height = maxVolume > 0 
-                    ? (point.volume / maxVolume) * CHART_HEIGHT 
-                    : 0;
-                  const pixelHeight = Math.max(Math.ceil(height / PIXEL_SIZE) * PIXEL_SIZE, PIXEL_SIZE);
-                  const dateIndex = processedData.allDates.indexOf(point.date);
-                  
-                  if (dateIndex === -1) {
-                    console.warn(`⚠️ Date ${point.date} not found in allDates`);
-                    return null;
-                  }
-                  
-                  const x = dateIndex * (PIXEL_SIZE + GAP);
-                  const y = CHART_HEIGHT - pixelHeight;
+            {yAxisLabels.map((label, i) => (
+              <line
+                key={`grid-${i}`}
+                x1={PADDING.left}
+                y1={label.y}
+                x2={PADDING.left + innerWidth}
+                y2={label.y}
+                stroke="#1f2937"
+                strokeWidth="1"
+              />
+            ))}
 
-                  return (
-                    <rect
-                      key={`${series.builder}-${point.date}-${pointIndex}`}
-                      x={x}
-                      y={y}
-                      width={PIXEL_SIZE}
-                      height={pixelHeight}
-                      fill={series.color}
-                      style={{
-                        imageRendering: "pixelated",
-                        filter: "url(#pixel-glow)",
-                        stroke: "rgba(0, 0, 0, 0.3)",
-                        strokeWidth: "0.5",
-                        cursor: "pointer",
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const container = e.currentTarget.closest('div');
-                        if (container) {
-                          const containerRect = container.getBoundingClientRect();
-                          const pointRect = e.currentTarget.getBoundingClientRect();
-                          const totalVolumeForDate = processedData.dateTotals?.get(point.date) || 0;
-                          
-                          // Get all builders for this date
-                          const buildersForDate = processedData.builderSeries
-                            .map(series => {
-                              const datePoint = series.dataPoints.find(p => p.date === point.date);
-                              if (datePoint && datePoint.volume > 0) {
-                                return {
-                                  builder: series.builder,
-                                  volume: datePoint.volume,
-                                  color: series.color,
-                                };
-                              }
-                              return null;
-                            })
-                            .filter((b): b is { builder: string; volume: number; color: string } => b !== null)
-                            .sort((a, b) => b.volume - a.volume); // Sort by volume descending
-                          
-                          setTooltip({
-                            date: point.date,
-                            builders: buildersForDate,
-                            totalVolume: totalVolumeForDate,
-                            x: pointRect.left - containerRect.left + pointRect.width / 2,
-                            y: pointRect.top - containerRect.top,
-                          });
-                        }
-                      }}
-                      onTouchStart={(e) => {
-                        e.stopPropagation();
-                        const container = e.currentTarget.closest('div');
-                        if (container && e.touches && e.touches.length > 0) {
-                          const containerRect = container.getBoundingClientRect();
-                          const touch = e.touches[0];
-                          const totalVolumeForDate = processedData.dateTotals?.get(point.date) || 0;
-                          
-                          // Get all builders for this date
-                          const buildersForDate = processedData.builderSeries
-                            .map(series => {
-                              const datePoint = series.dataPoints.find(p => p.date === point.date);
-                              if (datePoint && datePoint.volume > 0) {
-                                return {
-                                  builder: series.builder,
-                                  volume: datePoint.volume,
-                                  color: series.color,
-                                };
-                              }
-                              return null;
-                            })
-                            .filter((b): b is { builder: string; volume: number; color: string } => b !== null)
-                            .sort((a, b) => b.volume - a.volume); // Sort by volume descending
-                          
-                          setTooltip({
-                            date: point.date,
-                            builders: buildersForDate,
-                            totalVolume: totalVolumeForDate,
-                            x: touch.clientX - containerRect.left,
-                            y: touch.clientY - containerRect.top,
-                          });
-                        }
-                      }}
-                    />
-                  );
-                })
-                .filter((rect): rect is JSX.Element => rect !== null);
-            })}
+            {yAxisLabels.map((label, i) => (
+              <text
+                key={`y-label-${i}`}
+                x={PADDING.left - 8}
+                y={label.y}
+                textAnchor="end"
+                dominantBaseline="middle"
+                className="text-[10px] md:text-[11px]"
+                fill="#6b7280"
+              >
+                {label.label}
+              </text>
+            ))}
 
-            {/* X-axis labels - show dates */}
-            {processedData.allDates
-              .filter((_, index) => {
-                // Show fewer labels on mobile
-                const step = isMobile 
-                  ? Math.max(1, Math.floor(processedData.allDates.length / 5))
-                  : Math.max(1, Math.floor(processedData.allDates.length / 10));
-                return index % step === 0;
-              })
-              .map((date) => {
-                const dateIndex = processedData.allDates.indexOf(date);
-                const x = dateIndex * (PIXEL_SIZE + GAP) + PIXEL_SIZE / 2;
-                const dateObj = new Date(date);
-                return (
-                  <text
-                    key={`label-${date}`}
-                    x={x}
-                    y={CHART_HEIGHT + (isMobile ? 16 : 20)}
-                    textAnchor="middle"
-                    className={isMobile ? 'text-[8px]' : 'text-[9px]'}
-                    style={{ fill: '#6b7280' }}
-                  >
-                    {dateObj.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </text>
-                );
-              })}
+
+            {barData.map((bar, i) => (
+              <rect
+                key={`bar-${i}`}
+                x={bar.x}
+                y={bar.y}
+                width={bar.width}
+                height={Math.max(1, bar.height)}
+                fill={activeIndex === i ? "#60a5fa" : "#3b82f6"}
+                rx="1"
+                className="transition-colors duration-100"
+              />
+            ))}
+
+            {activeBar && (
+              <line
+                x1={activeBar.x + activeBar.width / 2}
+                y1={PADDING.top}
+                x2={activeBar.x + activeBar.width / 2}
+                y2={PADDING.top + innerHeight}
+                stroke="#4b5563"
+                strokeWidth="1"
+                strokeDasharray="4,4"
+              />
+            )}
+
+            <rect
+              x={PADDING.left}
+              y={PADDING.top}
+              width={innerWidth}
+              height={innerHeight}
+              fill="transparent"
+              style={{ cursor: 'crosshair' }}
+            />
           </svg>
           
-          {/* Tooltip */}
-          {tooltip && (
+          {activeData && mousePosition && (
             <div
-              ref={tooltipRef}
-              className="absolute pointer-events-auto z-50 bg-gray-900/95 border border-gray-700 rounded px-2 md:px-3 py-1.5 md:py-2 shadow-lg"
+              className="absolute pointer-events-none z-50"
               style={{
-                ...tooltipStyle,
-                minWidth: isMobile ? '160px' : '200px',
-                maxWidth: isMobile ? '250px' : '300px',
+                left: `${mousePosition.x}px`,
+                top: `${Math.max(20, mousePosition.y - 20)}px`,
+                transform: mousePosition.x > (containerRef.current?.clientWidth || 0) / 2 
+                  ? 'translate(-100%, -100%)' 
+                  : 'translate(10px, -100%)',
               }}
-              onClick={(e) => e.stopPropagation()}
             >
-              <style>{`
-                .tooltip-scroll::-webkit-scrollbar {
-                  display: none;
-                }
-                .tooltip-scroll {
-                  -ms-overflow-style: none;
-                  scrollbar-width: none;
-                }
-              `}</style>
-              <div className={isMobile ? 'text-[10px] space-y-1' : 'text-xs space-y-1.5'}>
-                <div className={`font-bold text-white ${isMobile ? 'mb-0.5 text-[10px]' : 'mb-1'}`}>
-                  {new Date(tooltip.date).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: isMobile ? undefined : "numeric",
-                  })}
+              <div className="bg-[#111827] border border-[#374151] rounded-md shadow-xl min-w-[220px]">
+                <div className="px-3 py-2 border-b border-[#374151]">
+                  <div className="text-white font-medium text-sm">
+                    {new Date(activeData.date).toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </div>
                 </div>
                 
-                {/* All Builders */}
-                <div className={`space-y-0.5 md:space-y-1 ${isMobile ? 'max-h-32' : 'max-h-48'} overflow-y-auto tooltip-scroll`}>
-                  {tooltip.builders.map((builder) => (
-                    <div key={builder.builder} className={`flex items-center justify-between gap-1 md:gap-2 ${isMobile ? 'py-0.5' : 'py-1'}`}>
-                      <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
-                        <div
-                          className={isMobile ? 'w-2 h-2' : 'w-2.5 h-2.5'}
-                          style={{
-                            backgroundColor: builder.color,
-                            border: '1px solid #4b5563',
-                            imageRendering: "pixelated",
-                          }}
-                        />
-                        <span className={`text-gray-300 ${isMobile ? 'text-[9px]' : 'text-[10px]'} truncate`}>{builder.builder}</span>
+                <div className="px-3 py-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-xs">Total Volume</span>
+                    <span className="text-white font-semibold text-sm">
+                      ${activeData.totalVolume >= 1_000_000 
+                        ? `${(activeData.totalVolume / 1_000_000).toFixed(2)}M` 
+                        : activeData.totalVolume >= 1_000 
+                          ? `${(activeData.totalVolume / 1_000).toFixed(1)}K`
+                          : activeData.totalVolume.toFixed(0)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-xs">Active Users</span>
+                    <span className="text-emerald-400 font-medium text-sm">
+                      {activeData.totalActiveUsers.toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-xs">Builders</span>
+                    <span className="text-blue-400 font-medium text-sm">
+                      {activeData.builders.length}
+                    </span>
+                  </div>
+                  
+                  {activeData.builders.length > 0 && (
+                    <div className="border-t border-[#374151] pt-2 mt-2">
+                      <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-2">Top Builders</div>
+                      <div className="space-y-1.5">
+                        {activeData.builders.slice(0, 6).map((builder) => {
+                          const percentage = ((builder.volume / activeData.totalVolume) * 100).toFixed(1);
+                          return (
+                            <div key={builder.builder} className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div
+                                  className="w-2 h-2 rounded-sm flex-shrink-0"
+                                  style={{ backgroundColor: builder.color }}
+                                />
+                                <span className="text-gray-300 text-xs truncate">
+                                  {builder.builder}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-gray-500 text-xs">
+                                  {percentage}%
+                                </span>
+                                <span className="text-gray-400 text-xs font-medium w-16 text-right">
+                                  ${builder.volume >= 1_000_000 
+                                    ? `${(builder.volume / 1_000_000).toFixed(1)}M` 
+                                    : builder.volume >= 1_000 
+                                      ? `${(builder.volume / 1_000).toFixed(0)}K`
+                                      : builder.volume.toFixed(0)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {activeData.builders.length > 6 && (
+                          <div className="text-gray-500 text-[10px] pt-1">
+                            +{activeData.builders.length - 6} more builders
+                          </div>
+                        )}
                       </div>
-                      <span className={`text-green-400 font-semibold ${isMobile ? 'text-[9px]' : 'text-[10px]'} whitespace-nowrap`}>
-                        ${(builder.volume / 1_000_000).toFixed(2)}M
-                      </span>
                     </div>
-                  ))}
+                  )}
                 </div>
-                
-                 {/* Total Volume */}
-                 <div className={`border-t border-gray-700 ${isMobile ? 'pt-1 mt-1' : 'pt-1.5 mt-1.5'}`}>
-                   <div className="flex items-center justify-between">
-                     <div className={`text-gray-400 ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>Total Volume</div>
-                     <div className={`text-blue-400 font-semibold ${isMobile ? 'text-[10px]' : 'text-[11px]'}`}>
-                       ${(tooltip.totalVolume / 1_000_000).toFixed(2)}M
-                     </div>
-                   </div>
-                 </div>
               </div>
-              {/* Tooltip arrow */}
-              <div
-                className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-700"
-              />
             </div>
           )}
         </div>
       )}
-
     </div>
   );
 }
-

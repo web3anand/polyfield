@@ -1,5 +1,5 @@
 -- COMPLETE DATABASE RESET WITH PROPER RLS CONFIGURATION
--- Run this in Supabase SQL editor: https://supabase.com/dashboard/project/orxyqgecymsuwuxtjdck/sql
+-- Run this in Supabase SQL editor: https://supabase.com/dashboard/project/bzlxrggciehkcslchooe/sql
 -- WARNING: This will DELETE ALL DATA in edges and oracles tables
 
 -- ============================================

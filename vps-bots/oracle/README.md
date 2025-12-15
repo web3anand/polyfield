@@ -35,7 +35,7 @@ Copy `.env.template` to `.env` and add your keys:
 
 ```env
 # Required
-SUPABASE_URL=https://orxyqgecymsuwuxtjdck.supabase.co
+SUPABASE_URL=https://bzlxrggciehkcslchooe.supabase.co
 SUPABASE_KEY=your_service_role_key
 
 # Optional (for LLM features)

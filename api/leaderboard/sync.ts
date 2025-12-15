@@ -3,200 +3,311 @@ import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTYzMDE3NCwiZXhwIjoyMDc3MjA2MTc0fQ.rAsHr2LEV81Ry7DmuxQejKFvnk9qPpoTJJtRMF9ra1E';
+
+// Supabase config - support multiple env var naming conventions
+// Priority: SUPABASE_URL > NEXT_PUBLIC_SUPABASE_URL > default
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://bzlxrggciehkcslchooe.supabase.co';
+
+const SUPABASE_SERVICE_KEY =
+  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+
+if (!SUPABASE_SERVICE_KEY) {
+  console.error('❌ Missing SUPABASE_SERVICE_KEY environment variable');
+  console.error('   SUPABASE_URL:', SUPABASE_URL);
+  console.error('   Checked: SUPABASE_SERVICE_KEY, SUPABASE_KEY');
+  throw new Error('Missing SUPABASE_SERVICE_KEY - must be set in Vercel environment variables');
+}
+
+// Log what we're using (for debugging)
+console.log(`🔗 Using Supabase URL: ${SUPABASE_URL}`);
+console.log(`🔑 Service Key: ${SUPABASE_SERVICE_KEY ? `${SUPABASE_SERVICE_KEY.substring(0, 20)}...` : 'NOT SET'}`);
+console.log(`📋 Env vars checked: SUPABASE_URL=${process.env.SUPABASE_URL ? 'SET' : 'NOT SET'}, NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
+
+// Validate Supabase URL - reject old project
+if (SUPABASE_URL.includes('orxyqgecymsuwuxtjdck')) {
+  console.error(`❌ ERROR: Old Supabase project URL detected!`);
+  console.error(`   Found: ${SUPABASE_URL}`);
+  console.error(`   This project no longer exists. Please update Vercel environment variables:`);
+  console.error(`   - Set SUPABASE_URL to: https://bzlxrggciehkcslchooe.supabase.co`);
+  console.error(`   - Or set NEXT_PUBLIC_SUPABASE_URL to: https://bzlxrggciehkcslchooe.supabase.co`);
+  throw new Error('Invalid Supabase URL: old project detected. Update Vercel environment variables.');
+}
+
+if (!SUPABASE_URL.includes('bzlxrggciehkcslchooe')) {
+  console.warn(`⚠️ WARNING: Supabase URL does not match expected project!`);
+  console.warn(`   Expected: bzlxrggciehkcslchooe.supabase.co`);
+  console.warn(`   Got: ${SUPABASE_URL}`);
+  console.warn(`   This may cause connection errors. Please check Vercel environment variables.`);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// Sync users leaderboard
-async function syncUsersLeaderboard(timePeriod: string = 'all', maxPages: number = 30) {
-  console.log(`🔄 Syncing users leaderboard (${timePeriod})...`);
+// Sync users leaderboard - fetches until zero data, uses upsert (update existing, insert new)
+async function syncUsersLeaderboard(timePeriod: string = 'all') {
+  console.log(`🔄 Syncing users leaderboard (${timePeriod}) - fetching ALL pages until zero data...`);
   
-  const allUsers: any[] = [];
   const limit = 50; // API max per request
+  const fetchBatchSize = 10; // Fetch 10 pages at a time (increased for better performance)
+  const saveBatchSize = 200; // Save 200 records at a time (increased for better performance)
+  const delayBetweenBatches = 1500; // 1.5 seconds delay
+  const delayBetweenPages = 300; // 300ms delay between pages (reduced for faster sync)
   
-  // Fetch all pages in parallel
-  const fetchPromises = Array.from({ length: maxPages }).map(async (_, page) => {
-    const offset = page * limit;
+  let page = 0;
+  let hasMoreData = true;
+  let totalSynced = 0;
+  let totalErrors = 0;
+  let totalFetched = 0;
+  const allUsers: any[] = [];
+  const startTime = Date.now();
+  
+  // Fetch ALL pages until we get zero data (can handle 100+ pages)
+  while (hasMoreData) {
+    const batchStart = page;
+    const batchEnd = page + fetchBatchSize;
     
-    try {
-      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
-        params: {
-          timePeriod: timePeriod.toLowerCase(),
-          orderBy: 'VOL',
-          limit,
-          offset,
-          category: 'overall',
-        },
-        timeout: 10000,
-      });
+    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}... (Total fetched so far: ${totalFetched})`);
+    
+    for (let batchIndex = 0; batchIndex < fetchBatchSize; batchIndex++) {
+      const currentPage = batchStart + batchIndex;
+      const offset = currentPage * limit;
       
-      const users = response.data || [];
-      if (users.length === 0) return [];
-      
-      return users.map((user: any) => ({
-        rank: user.rank || offset + users.indexOf(user) + 1,
-        username: user.userName || user.name || 'Unknown',
-        x_username: user.xUsername,
-        volume: parseFloat(user.vol || user.volume || 0),
-        wallet_address: user.proxyWallet || user.user || user.walletAddress || user.wallet || user.address || null,
-        profile_image: user.profileImage || user.avatar || null,
-        pnl: user.pnl !== undefined ? parseFloat(user.pnl) : null,
-        time_period: timePeriod.toLowerCase(),
-      }));
-    } catch (error: any) {
-      console.error(`❌ Error fetching page ${page + 1}:`, error.message);
-      return [];
+      try {
+        if (batchIndex > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenPages));
+        }
+        
+        const response = await axios.get(`${POLYMARKET_DATA_API}/v1/leaderboard`, {
+          params: {
+            timePeriod: timePeriod.toLowerCase(),
+            orderBy: 'VOL',
+            limit,
+            offset,
+            category: 'overall',
+          },
+          timeout: 15000,
+        });
+        
+        const users = response.data || [];
+        if (users.length === 0) {
+          hasMoreData = false;
+          console.log(`  ⚠️ Page ${currentPage + 1} returned no data - stopping fetch`);
+          break;
+        }
+        
+        const transformedUsers = users.map((user: any) => ({
+          rank: user.rank || offset + users.indexOf(user) + 1,
+          username: user.userName || user.name || 'Unknown',
+          x_username: user.xUsername,
+          volume: parseFloat(user.vol || user.volume || 0),
+          wallet_address: user.proxyWallet || user.user || user.walletAddress || user.wallet || user.address || null,
+          profile_image: user.profileImage || user.avatar || null,
+          pnl: user.pnl !== undefined ? parseFloat(user.pnl) : null,
+          time_period: timePeriod.toLowerCase(),
+        }));
+        
+        allUsers.push(...transformedUsers);
+        totalFetched += users.length;
+        console.log(`    ✓ Page ${currentPage + 1}: ${users.length} users (total fetched: ${totalFetched}, in memory: ${allUsers.length})`);
+      } catch (error: any) {
+        console.error(`    ❌ Error fetching page ${currentPage + 1}:`, error.message);
+        // Continue to next page instead of stopping (unless it's the first page)
+        if (currentPage === 0) {
+          hasMoreData = false;
+          break;
+        }
+        // For other pages, continue fetching
+      }
     }
-  });
+    
+    if (hasMoreData) {
+      page += fetchBatchSize;
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+  }
   
-  const results = await Promise.all(fetchPromises);
-  results.forEach(pageData => {
-    if (Array.isArray(pageData)) {
-      allUsers.push(...pageData);
-    }
-  });
+  const fetchTime = Date.now() - startTime;
+  console.log(`✓ Fetched ${allUsers.length} total users from Polymarket API in ${(fetchTime / 1000).toFixed(2)}s`);
+  
+  if (allUsers.length === 0) {
+    console.warn('⚠️ No users to sync');
+    return { synced: 0, errors: 0, totalFetched: 0, fetchTime: fetchTime };
+  }
   
   // Sort by rank
   allUsers.sort((a, b) => a.rank - b.rank);
   
-  console.log(`✓ Fetched ${allUsers.length} users from Polymarket API`);
+  console.log(`💾 Starting database upsert for ${allUsers.length} users (${Math.ceil(allUsers.length / saveBatchSize)} batches)...`);
+  const saveStartTime = Date.now();
   
-  if (allUsers.length === 0) {
-    console.warn('⚠️ No users to sync');
-    return { synced: 0, errors: 0 };
-  }
-  
-  // Delete old data for this time period
-  const { error: deleteError } = await supabase
-    .from('leaderboard_users')
-    .delete()
-    .eq('time_period', timePeriod.toLowerCase());
-  
-  if (deleteError) {
-    console.error('❌ Error deleting old users:', deleteError);
-  } else {
-    console.log(`✓ Deleted old users data for ${timePeriod}`);
-  }
-  
-  // Insert new data in batches of 100
-  let synced = 0;
-  let errors = 0;
-  const batchSize = 100;
-  
-  for (let i = 0; i < allUsers.length; i += batchSize) {
-    const batch = allUsers.slice(i, i + batchSize);
-    
-    const { error } = await supabase
-      .from('leaderboard_users')
-      .insert(batch);
-    
-    if (error) {
-      console.error(`❌ Error inserting batch ${Math.floor(i / batchSize) + 1}:`, error);
-      errors += batch.length;
-    } else {
-      synced += batch.length;
-      console.log(`✓ Inserted batch ${Math.floor(i / batchSize) + 1} (${batch.length} users)`);
-    }
-  }
-  
-  console.log(`✅ Users sync complete: ${synced} synced, ${errors} errors`);
-  return { synced, errors };
-}
-
-// Sync builders leaderboard
-async function syncBuildersLeaderboard(timePeriod: string = 'all', maxPages: number = 30) {
-  console.log(`🔄 Syncing builders leaderboard (${timePeriod})...`);
-  
-  const allBuilders: any[] = [];
-  const limit = 50; // API max per request
-  
-  // Fetch all pages in parallel
-  const fetchPromises = Array.from({ length: maxPages }).map(async (_, page) => {
-    const offset = page * limit;
+  // Upsert data in batches (update existing, insert new) - no profile_image
+  for (let i = 0; i < allUsers.length; i += saveBatchSize) {
+    const batch = allUsers.slice(i, i + saveBatchSize);
+    const batchNum = Math.floor(i / saveBatchSize) + 1;
+    const totalBatches = Math.ceil(allUsers.length / saveBatchSize);
     
     try {
-      const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
-        params: {
-          timePeriod: timePeriod.toLowerCase(),
-          orderBy: 'VOL',
-          limit,
-          offset,
-        },
-        timeout: 10000,
-      });
+      // Use upsert to update existing records or insert new ones
+      // Conflict on username + time_period (unique constraint)
+      const { data, error } = await supabase
+        .from('leaderboard_users')
+        .upsert(batch, {
+          onConflict: 'username,time_period',
+          ignoreDuplicates: false,
+        })
+        .select();
       
-      const builders = response.data || [];
-      if (builders.length === 0) return [];
-      
-      return builders.map((builder: any) => ({
-        rank: builder.rank || offset + builders.indexOf(builder) + 1,
-        builder_name: builder.builderName || builder.name || builder.builder || 'Unknown',
-        volume: parseFloat(builder.vol || builder.volume || 0),
-        markets_created: parseInt(builder.marketsCreated || builder.markets || builder.marketsCreated || 0),
-        active_users: parseInt(builder.activeUsers || builder.activeUsers || 0),
-        verified: builder.verified === true || builder.verified === 'true' || false,
-        builder_logo: builder.builderLogo || builder.logo || builder.image || null,
-        time_period: timePeriod.toLowerCase(),
-      }));
+      if (error) {
+        console.error(`❌ Error upserting batch ${batchNum}/${totalBatches}:`, error.message);
+        totalErrors += batch.length;
+      } else {
+        totalSynced += batch.length;
+        console.log(`✓ Upserted batch ${batchNum}/${totalBatches} (${batch.length} users, returned ${data?.length || 0} rows)`);
+      }
     } catch (error: any) {
-      console.error(`❌ Error fetching page ${page + 1}:`, error.message);
-      return [];
+      console.error(`❌ Exception upserting batch ${batchNum}/${totalBatches}:`, error.message);
+      totalErrors += batch.length;
     }
-  });
+  }
   
-  const results = await Promise.all(fetchPromises);
-  results.forEach(pageData => {
-    if (Array.isArray(pageData)) {
-      allBuilders.push(...pageData);
+  const saveTime = Date.now() - saveStartTime;
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ Users sync complete: ${totalSynced} synced, ${totalErrors} errors (Total time: ${(totalTime / 1000).toFixed(2)}s, Save time: ${(saveTime / 1000).toFixed(2)}s)`);
+  return { synced: totalSynced, errors: totalErrors, totalFetched: allUsers.length, fetchTime, saveTime, totalTime };
+}
+
+// Sync builders leaderboard - fetches until zero data, uses upsert (update existing, insert new)
+async function syncBuildersLeaderboard(timePeriod: string = 'all') {
+  console.log(`🔄 Syncing builders leaderboard (${timePeriod}) - fetching ALL pages until zero data...`);
+  
+  const limit = 50; // API max per request
+  const fetchBatchSize = 10; // Fetch 10 pages at a time (increased for better performance)
+  const saveBatchSize = 200; // Save 200 records at a time (increased for better performance)
+  const delayBetweenBatches = 1500; // 1.5 seconds delay
+  const delayBetweenPages = 300; // 300ms delay between pages (reduced for faster sync)
+  
+  let page = 0;
+  let hasMoreData = true;
+  let totalSynced = 0;
+  let totalErrors = 0;
+  let totalFetched = 0;
+  const allBuilders: any[] = [];
+  const startTime = Date.now();
+  
+  // Fetch ALL pages until we get zero data (can handle 100+ pages)
+  while (hasMoreData) {
+    const batchStart = page;
+    const batchEnd = page + fetchBatchSize;
+    
+    console.log(`  📥 Fetching pages ${batchStart + 1}-${batchEnd}... (Total fetched so far: ${totalFetched})`);
+    
+    for (let batchIndex = 0; batchIndex < fetchBatchSize; batchIndex++) {
+      const currentPage = batchStart + batchIndex;
+      const offset = currentPage * limit;
+      
+      try {
+        if (batchIndex > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenPages));
+        }
+        
+        const response = await axios.get(`${POLYMARKET_DATA_API}/v1/builders/leaderboard`, {
+          params: {
+            timePeriod: timePeriod.toLowerCase(),
+            orderBy: 'VOL',
+            limit,
+            offset,
+          },
+          timeout: 15000,
+        });
+        
+        const builders = response.data || [];
+        if (builders.length === 0) {
+          hasMoreData = false;
+          console.log(`  ⚠️ Page ${currentPage + 1} returned no data - stopping fetch`);
+          break;
+        }
+        
+        const transformedBuilders = builders.map((builder: any) => ({
+          rank: builder.rank || offset + builders.indexOf(builder) + 1,
+          builder_name: builder.builderName || builder.name || builder.builder || 'Unknown',
+          volume: parseFloat(builder.vol || builder.volume || 0),
+          markets_created: parseInt(builder.marketsCreated || builder.markets || builder.marketsCreated || 0),
+          active_users: parseInt(builder.activeUsers || builder.activeUsers || 0),
+          verified: builder.verified === true || builder.verified === 'true' || false,
+          builder_logo: builder.builderLogo || builder.logo || builder.image || null,
+          time_period: timePeriod.toLowerCase(),
+        }));
+        
+        allBuilders.push(...transformedBuilders);
+        totalFetched += builders.length;
+        console.log(`    ✓ Page ${currentPage + 1}: ${builders.length} builders (total fetched: ${totalFetched}, in memory: ${allBuilders.length})`);
+      } catch (error: any) {
+        console.error(`    ❌ Error fetching page ${currentPage + 1}:`, error.message);
+        // Continue to next page instead of stopping (unless it's the first page)
+        if (currentPage === 0) {
+          hasMoreData = false;
+          break;
+        }
+        // For other pages, continue fetching
+      }
     }
-  });
+    
+    if (hasMoreData) {
+      page += fetchBatchSize;
+      await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+    }
+  }
+  
+  const fetchTime = Date.now() - startTime;
+  console.log(`✓ Fetched ${allBuilders.length} total builders from Polymarket API in ${(fetchTime / 1000).toFixed(2)}s`);
+  
+  if (allBuilders.length === 0) {
+    console.warn('⚠️ No builders to sync');
+    return { synced: 0, errors: 0, totalFetched: 0, fetchTime: fetchTime };
+  }
   
   // Sort by rank
   allBuilders.sort((a, b) => a.rank - b.rank);
   
-  console.log(`✓ Fetched ${allBuilders.length} builders from Polymarket API`);
+  console.log(`💾 Starting database upsert for ${allBuilders.length} builders (${Math.ceil(allBuilders.length / saveBatchSize)} batches)...`);
+  const saveStartTime = Date.now();
   
-  if (allBuilders.length === 0) {
-    console.warn('⚠️ No builders to sync');
-    return { synced: 0, errors: 0 };
-  }
-  
-  // Delete old data for this time period
-  const { error: deleteError } = await supabase
-    .from('leaderboard_builders')
-    .delete()
-    .eq('time_period', timePeriod.toLowerCase());
-  
-  if (deleteError) {
-    console.error('❌ Error deleting old builders:', deleteError);
-  } else {
-    console.log(`✓ Deleted old builders data for ${timePeriod}`);
-  }
-  
-  // Insert new data in batches of 100
-  let synced = 0;
-  let errors = 0;
-  const batchSize = 100;
-  
-  for (let i = 0; i < allBuilders.length; i += batchSize) {
-    const batch = allBuilders.slice(i, i + batchSize);
+  // Upsert data in batches (update existing, insert new)
+  for (let i = 0; i < allBuilders.length; i += saveBatchSize) {
+    const batch = allBuilders.slice(i, i + saveBatchSize);
+    const batchNum = Math.floor(i / saveBatchSize) + 1;
+    const totalBatches = Math.ceil(allBuilders.length / saveBatchSize);
     
-    const { error } = await supabase
-      .from('leaderboard_builders')
-      .insert(batch);
-    
-    if (error) {
-      console.error(`❌ Error inserting batch ${Math.floor(i / batchSize) + 1}:`, error);
-      errors += batch.length;
-    } else {
-      synced += batch.length;
-      console.log(`✓ Inserted batch ${Math.floor(i / batchSize) + 1} (${batch.length} builders)`);
+    try {
+      // Use upsert to update existing records or insert new ones
+      // Conflict on builder_name + time_period (unique constraint)
+      const { data, error } = await supabase
+        .from('leaderboard_builders')
+        .upsert(batch, {
+          onConflict: 'builder_name,time_period',
+          ignoreDuplicates: false,
+        })
+        .select();
+      
+      if (error) {
+        console.error(`❌ Error upserting batch ${batchNum}/${totalBatches}:`, error.message);
+        totalErrors += batch.length;
+      } else {
+        totalSynced += batch.length;
+        console.log(`✓ Upserted batch ${batchNum}/${totalBatches} (${batch.length} builders, returned ${data?.length || 0} rows)`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Exception upserting batch ${batchNum}/${totalBatches}:`, error.message);
+      totalErrors += batch.length;
     }
   }
   
-  console.log(`✅ Builders sync complete: ${synced} synced, ${errors} errors`);
-  return { synced, errors };
+  const saveTime = Date.now() - saveStartTime;
+  const totalTime = Date.now() - startTime;
+  console.log(`✅ Builders sync complete: ${totalSynced} synced, ${totalErrors} errors (Total time: ${(totalTime / 1000).toFixed(2)}s, Save time: ${(saveTime / 1000).toFixed(2)}s)`);
+  return { synced: totalSynced, errors: totalErrors, totalFetched: allBuilders.length, fetchTime, saveTime, totalTime };
 }
 
 // Health check function
@@ -250,6 +361,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Verify Supabase connection
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('❌ Missing Supabase credentials');
+    res.status(500).json({ 
+      error: 'Missing Supabase credentials',
+      message: 'SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment variables',
+      currentUrl: SUPABASE_URL || 'NOT SET'
+    });
+    return;
+  }
+  
+  console.log(`🔗 Sync endpoint called - Supabase URL: ${SUPABASE_URL.substring(0, 30)}...`);
+
   // Health check endpoint
   if (req.method === 'GET' && req.query.health === 'true') {
     try {
@@ -274,12 +398,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { type, timePeriod, maxPages } = req.query;
+    const { type, timePeriod } = req.query;
     const syncType = (type as string) || 'all'; // 'users', 'builders', or 'all'
     const period = (timePeriod as string) || 'all';
-    const pages = parseInt(maxPages as string) || 30;
 
-    console.log(`🚀 Starting leaderboard sync: type=${syncType}, timePeriod=${period}, maxPages=${pages}`);
+    console.log(`🚀 Starting leaderboard sync: type=${syncType}, timePeriod=${period} (fetching until zero data)`);
 
     const results: any = {
       timestamp: new Date().toISOString(),
@@ -310,7 +433,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         retryCount = 0;
         const usersResult = await syncWithRetry(
-          () => syncUsersLeaderboard(period, pages),
+          () => syncUsersLeaderboard(period),
           'Users'
         );
         results.users = usersResult;
@@ -324,7 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         retryCount = 0;
         const buildersResult = await syncWithRetry(
-          () => syncBuildersLeaderboard(period, pages),
+          () => syncBuildersLeaderboard(period),
           'Builders'
         );
         results.builders = buildersResult;
@@ -352,5 +475,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
-
-

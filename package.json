@@ -15,7 +15,9 @@
     "sync:leaderboard": "node scripts/trigger-sync.js",
     "sync:users": "node scripts/trigger-sync.js users",
     "sync:builders": "node scripts/trigger-sync.js builders",
-    "sync:health": "node scripts/check-sync-health.js"
+    "sync:health": "node scripts/check-sync-health.js",
+    "test:leaderboard": "node test-leaderboard-sync.js",
+    "test:vercel": "node test-vercel-sync.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",

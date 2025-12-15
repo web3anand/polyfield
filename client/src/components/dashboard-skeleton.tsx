@@ -9,7 +9,7 @@ interface DashboardSkeletonProps {
 
 export function DashboardSkeleton({ username, onDisconnect }: DashboardSkeletonProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pt-[clamp(48px,40px+2vw,64px)]">
       {/* Hero Section */}
       <div className="bg-gradient-to-b from-primary/5 to-background border-b border-border">
         <div className="container mx-auto px-4 py-8">
