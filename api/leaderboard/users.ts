@@ -37,7 +37,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const timePeriod = (req.query.timePeriod as string) || "all";
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 1000); // Cap at 1000
+    // Allow larger page sizes so the frontend can efficiently fetch many users.
+    // Still apply a reasonable safety cap to avoid accidental huge queries.
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 5000);
     const offset = Math.max(parseInt(req.query.offset as string) || 0, 0); // Ensure non-negative
 
     console.log(`📊 [VERCEL API] Fetching user leaderboard: timePeriod=${timePeriod}, limit=${limit}, offset=${offset}`);
@@ -102,4 +104,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
-

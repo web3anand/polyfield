@@ -894,7 +894,7 @@ export default function Leaderboard() {
                     </div>
                     {/* Pagination Controls */}
                     {totalPages > 1 && filteredUsers.length > 0 && (
-                      <div className="mt-6 flex items-center justify-center gap-2">
+                      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -906,9 +906,9 @@ export default function Leaderboard() {
                           Previous
                         </Button>
 
-                        <div className="flex items-center gap-1">
-                          {totalPages <= 100 ? (
-                            // Show all pages when 100 or fewer
+                        <div className="flex flex-wrap items-center gap-1">
+                          {totalPages <= 7 ? (
+                            // Show all pages when 7 or fewer
                             Array.from({ length: totalPages }, (_, i) => {
                               const pageNum = i + 1;
                               return (
@@ -925,7 +925,7 @@ export default function Leaderboard() {
                               );
                             })
                           ) : (
-                            // Smart pagination for more than 100 pages
+                            // Smart pagination for many pages - always show a compact window
                             Array.from({ length: 5 }, (_, i) => {
                               let pageNum;
                               if (currentPage <= 3) {
@@ -1105,7 +1105,7 @@ export default function Leaderboard() {
                     </div>
                     {/* Pagination Controls */}
                     {totalPages > 1 && filteredBuilders.length > 0 && (
-                      <div className="mt-6 flex items-center justify-center gap-2">
+                      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1117,9 +1117,9 @@ export default function Leaderboard() {
                           Previous
                         </Button>
 
-                        <div className="flex items-center gap-1">
-                          {totalPages <= 100 ? (
-                            // Show all pages when 100 or fewer
+                        <div className="flex flex-wrap items-center gap-1">
+                          {totalPages <= 7 ? (
+                            // Show all pages when 7 or fewer
                             Array.from({ length: totalPages }, (_, i) => {
                               const pageNum = i + 1;
                               return (
