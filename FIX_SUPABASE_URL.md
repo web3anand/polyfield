@@ -1,104 +1,48 @@
 # Fix: Supabase URL Environment Variable
 
-## Issue
-The sync function is trying to connect to the wrong Supabase URL:
-- ❌ **Wrong URL**: `orxyqgecymsuwuxtjdck.supabase.co` (DNS lookup fails)
-- ✅ **Correct URL**: `bzlxrggciehkcslchooe.supabase.co`
+This project now uses a single canonical Supabase project:
 
-## Error Message
-```
-Error: getaddrinfo ENOTFOUND orxyqgecymsuwuxtjdck.supabase.co
-```
+- **Supabase URL**: `https://bzlxrggciehkcslchooe.supabase.co`
 
-## Solution: Update Vercel Environment Variable
+If the leaderboard sync or API routes log DNS or connection errors for Supabase, it usually means `SUPABASE_URL` is missing or set incorrectly in your environment.
 
-### Step 1: Go to Vercel Dashboard
-1. Navigate to: https://vercel.com/dashboard
-2. Select your project (`polyfield`)
+## Step 1: Set `SUPABASE_URL` in Vercel
 
-### Step 2: Update Environment Variables
-1. Go to **Settings** → **Environment Variables**
-2. Find `SUPABASE_URL` in the list
-3. Click **Edit** (or delete and recreate if needed)
-4. Update the value to:
-   ```
-   https://bzlxrggciehkcslchooe.supabase.co
-   ```
-5. Make sure it's set for **all environments**:
-   - ✅ Production
-   - ✅ Preview  
-   - ✅ Development
-6. Click **Save**
+1. Go to `https://vercel.com/dashboard`
+2. Open your project (e.g. `polyfield`)
+3. Go to **Settings → Environment Variables**
+4. Add or edit:
+   - **Name**: `SUPABASE_URL`  
+   - **Value**: `https://bzlxrggciehkcslchooe.supabase.co`  
+   - **Environments**: Production, Preview, Development
+5. Click **Save**
 
-### Step 3: Verify Other Variables
-While you're there, verify these are also set correctly:
+## Step 2: Verify Keys
 
-1. **SUPABASE_SERVICE_KEY**
-   ```
-   eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAxMzc3NywiZXhwIjoyMDgwNTg5Nzc3fQ.FvLwD5yQwC5La8OWtNZatpnxXRft8vRTQXmQ9z66mNk
-   ```
+In the same screen, confirm:
 
-2. **SUPABASE_ANON_KEY**
-   ```
-   eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwMTM3NzcsImV4cCI6MjA4MDU4OTc3N30.vIcU83OafM_MGPRy-RjheuSQkQNRw-RcaI2aDXH4gM
-   ```
+- `SUPABASE_SERVICE_KEY` is set for the sync route
+- `SUPABASE_ANON_KEY` is set for read-only API routes
 
-### Step 4: Redeploy
-After updating environment variables:
-1. Go to **Deployments** tab
-2. Click **"..."** (three dots) on the latest deployment
-3. Click **"Redeploy"**
-4. Or trigger a new deployment by pushing a commit
+The values should match the keys from your Supabase dashboard for this project.
 
-### Step 5: Test
-After redeployment, test the sync:
-```bash
-curl https://YOUR_APP.vercel.app/api/leaderboard/sync
-```
+## Step 3: Redeploy
 
-Or check the health:
+Environment variable changes only apply on new deployments:
+
+1. In Vercel, go to **Deployments**
+2. Redeploy the latest build (or push a new commit)
+
+## Step 4: Test
+
+Use the health endpoint to confirm everything is wired correctly:
+
 ```bash
 curl https://YOUR_APP.vercel.app/api/leaderboard/sync?health=true
 ```
 
-## Quick Fix via Vercel CLI
+In the function logs you should see:
 
-If you prefer using CLI:
-
-```bash
-# Install Vercel CLI (if not installed)
-npm i -g vercel
-
-# Login
-vercel login
-
-# Link project
-vercel link
-
-# Set environment variable
-vercel env add SUPABASE_URL production
-# When prompted, enter: https://bzlxrggciehkcslchooe.supabase.co
-
-# Redeploy
-vercel --prod
+```text
+🔗 Using Supabase URL: https://bzlxrggciehkcslchooe.supabase.co
 ```
-
-## Verification
-
-After fixing, check the Vercel function logs:
-1. Go to **Functions** tab
-2. Click on `/api/leaderboard/sync`
-3. Check the logs - you should see:
-   ```
-   🔗 Using Supabase URL: https://bzlxrggciehkcslchooe.supabase.co
-   ```
-   Instead of the old URL.
-
-## Why This Happened
-
-The old Supabase project (`orxyqgecymsuwuxtjdck`) might have been:
-- Deleted
-- Suspended
-- Or you're using a different project now
-
-The code defaults to the correct URL, but if the environment variable is set to the old URL, it will override the default.

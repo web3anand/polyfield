@@ -1,7 +1,8 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://orxyqgecymsuwuxtjdck.supabase.co';
+// Updated to use new Supabase project by default
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bzlxrggciehkcslchooe.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);

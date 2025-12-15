@@ -1,5 +1,5 @@
 -- Leaderboard tables for caching Polymarket leaderboard data
--- Run this in Supabase SQL Editor: https://supabase.com/dashboard/project/orxyqgecymsuwuxtjdck/sql
+-- Run this in Supabase SQL Editor: https://supabase.com/dashboard/project/bzlxrggciehkcslchooe/sql
 
 -- Users leaderboard table
 CREATE TABLE IF NOT EXISTS leaderboard_users (

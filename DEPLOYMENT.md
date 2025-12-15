@@ -34,7 +34,7 @@ nano .env
 Add these lines (keep existing SUPABASE vars):
 ```env
 # Existing (don't change)
-SUPABASE_URL=https://orxyqgecymsuwuxtjdck.supabase.co
+SUPABASE_URL=https://bzlxrggciehkcslchooe.supabase.co
 SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 # New (add these)
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_oracles_llm_analysis ON oracles USING GIN (llm_an
 
 Option B - If you have psql installed:
 ```bash
-psql "postgresql://postgres.orxyqgecymsuwuxtjdck:Polystake!@aws-0-us-east-1.pooler.supabase.com:6543/postgres" -f /root/vps-bots/oracle/../../supabase-migrations/05-add-llm-analysis.sql
+psql "postgresql://postgres.bzlxrggciehkcslchooe:Polystake!@aws-0-us-east-1.pooler.supabase.com:6543/postgres" -f /root/vps-bots/oracle/../../supabase-migrations/05-add-llm-analysis.sql
 ```
 
 ### 5. Test Run (Optional)

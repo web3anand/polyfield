@@ -8,8 +8,9 @@ module.exports = {
         NODE_ENV: 'production',
         CONSENSUS_THRESHOLD: '75',
         SCAN_INTERVAL: '10000',
-        SUPABASE_URL: 'https://orxyqgecymsuwuxtjdck.supabase.co',
-        SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTYzMDE3NCwiZXhwIjoyMDc3MjA2MTc0fQ.rAsHr2LEV81Ry7DmuxQejKFvnk9qPpoTJJtRMF9ra1E'
+        // Updated to new Supabase project
+        SUPABASE_URL: 'https://bzlxrggciehkcslchooe.supabase.co',
+        SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAxMzc3NywiZXhwIjoyMDgwNTg5Nzc3fQ.FvLwD5yQwC5La8OWtNZatpnxXRft8vRTQXmQ9z66mNk'
       },
       instances: 1,
       autorestart: true,
@@ -30,8 +31,9 @@ module.exports = {
         MIN_LIQUIDITY: '10000',
         MAX_EXPIRY_HOURS: '24',
         SCAN_INTERVAL: '60000',
-        SUPABASE_URL: 'https://orxyqgecymsuwuxtjdck.supabase.co',
-        SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yeHlxZ2VjeW1zdXd1eHRqZGNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTYzMDE3NCwiZXhwIjoyMDc3MjA2MTc0fQ.rAsHr2LEV81Ry7DmuxQejKFvnk9qPpoTJJtRMF9ra1E'
+        // Updated to new Supabase project
+        SUPABASE_URL: 'https://bzlxrggciehkcslchooe.supabase.co',
+        SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6bHhyZ2djaWVoa2NzbGNob29lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTAxMzc3NywiZXhwIjoyMDgwNTg5Nzc3fQ.FvLwD5yQwC5La8OWtNZatpnxXRft8vRTQXmQ9z66mNk'
       },
       instances: 1,
       autorestart: true,
