@@ -4,9 +4,12 @@ import axios from 'axios';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 
-// Supabase config - prefer env, fall back to canonical project URL
+// Supabase config - support multiple env var naming conventions
+// Priority: SUPABASE_URL > NEXT_PUBLIC_SUPABASE_URL > default
 const SUPABASE_URL =
-  process.env.SUPABASE_URL || 'https://bzlxrggciehkcslchooe.supabase.co';
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://bzlxrggciehkcslchooe.supabase.co';
 
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
@@ -14,13 +17,25 @@ const SUPABASE_SERVICE_KEY =
 if (!SUPABASE_SERVICE_KEY) {
   console.error('❌ Missing SUPABASE_SERVICE_KEY environment variable');
   console.error('   SUPABASE_URL:', SUPABASE_URL);
+  console.error('   Checked: SUPABASE_SERVICE_KEY, SUPABASE_KEY');
   throw new Error('Missing SUPABASE_SERVICE_KEY - must be set in Vercel environment variables');
 }
 
+// Log what we're using (for debugging)
 console.log(`🔗 Using Supabase URL: ${SUPABASE_URL}`);
 console.log(`🔑 Service Key: ${SUPABASE_SERVICE_KEY ? `${SUPABASE_SERVICE_KEY.substring(0, 20)}...` : 'NOT SET'}`);
+console.log(`📋 Env vars checked: SUPABASE_URL=${process.env.SUPABASE_URL ? 'SET' : 'NOT SET'}, NEXT_PUBLIC_SUPABASE_URL=${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
 
-// Validate Supabase URL
+// Validate Supabase URL - reject old project
+if (SUPABASE_URL.includes('orxyqgecymsuwuxtjdck')) {
+  console.error(`❌ ERROR: Old Supabase project URL detected!`);
+  console.error(`   Found: ${SUPABASE_URL}`);
+  console.error(`   This project no longer exists. Please update Vercel environment variables:`);
+  console.error(`   - Set SUPABASE_URL to: https://bzlxrggciehkcslchooe.supabase.co`);
+  console.error(`   - Or set NEXT_PUBLIC_SUPABASE_URL to: https://bzlxrggciehkcslchooe.supabase.co`);
+  throw new Error('Invalid Supabase URL: old project detected. Update Vercel environment variables.');
+}
+
 if (!SUPABASE_URL.includes('bzlxrggciehkcslchooe')) {
   console.warn(`⚠️ WARNING: Supabase URL does not match expected project!`);
   console.warn(`   Expected: bzlxrggciehkcslchooe.supabase.co`);
