@@ -187,15 +187,30 @@ export default function Leaderboard() {
         }
       }
 
+      // Remove duplicates by username (keep first occurrence)
+      const uniqueUsersMap = new Map<string, UserLeaderboardEntry>();
+      allUsers.forEach(user => {
+        const key = user.userName?.toLowerCase() || user.walletAddress?.toLowerCase() || '';
+        if (key && !uniqueUsersMap.has(key)) {
+          uniqueUsersMap.set(key, user);
+        }
+      });
+      const uniqueUsers = Array.from(uniqueUsersMap.values());
+
       // Sort by rank
-      allUsers.sort((a, b) => {
+      uniqueUsers.sort((a, b) => {
         const rankA = parseInt(a.rank) || 0;
         const rankB = parseInt(b.rank) || 0;
         return rankA - rankB;
       });
 
-      console.log(`✅ Total users loaded: ${allUsers.length}`);
-      return allUsers;
+      // Recalculate ranks to ensure they're sequential and unique
+      uniqueUsers.forEach((user, index) => {
+        user.rank = String(index + 1);
+      });
+
+      console.log(`✅ Total users loaded: ${uniqueUsers.length} (removed ${allUsers.length - uniqueUsers.length} duplicates)`);
+      return uniqueUsers;
     },
     enabled: isUsersPage,
     staleTime: Infinity, // Never refetch - data is updated by cron job
@@ -739,7 +754,9 @@ export default function Leaderboard() {
                               </thead>
                               <tbody>
                                 {paginatedUsers.map((user, index) => {
-                                  const rankNum = parseInt(user.rank) || ((currentPage - 1) * itemsPerPage) + index + 1;
+                                  // Use the rank from user data, or calculate based on position in filtered list
+                                  const globalIndex = (currentPage - 1) * itemsPerPage + index;
+                                  const rankNum = parseInt(user.rank) || globalIndex + 1;
                                   const isTopThree = rankNum <= 3;
 
                                   return (
@@ -926,17 +943,34 @@ export default function Leaderboard() {
                             })
                           ) : (
                             // Smart pagination for many pages - always show a compact window
-                            Array.from({ length: 5 }, (_, i) => {
-                              let pageNum;
+                            (() => {
+                              const pageNumbers: number[] = [];
+                              const maxPagesToShow = 5;
+                              
                               if (currentPage <= 3) {
-                                pageNum = i + 1;
+                                // Near the beginning: show pages 1-5
+                                for (let i = 1; i <= Math.min(maxPagesToShow, totalPages); i++) {
+                                  pageNumbers.push(i);
+                                }
                               } else if (currentPage >= totalPages - 2) {
-                                pageNum = totalPages - 4 + i;
+                                // Near the end: show last 5 pages
+                                const start = Math.max(1, totalPages - maxPagesToShow + 1);
+                                for (let i = start; i <= totalPages; i++) {
+                                  pageNumbers.push(i);
+                                }
                               } else {
-                                pageNum = currentPage - 2 + i;
+                                // In the middle: show current page ± 2
+                                for (let i = currentPage - 2; i <= currentPage + 2; i++) {
+                                  if (i >= 1 && i <= totalPages) {
+                                    pageNumbers.push(i);
+                                  }
+                                }
                               }
-
-                              return (
+                              
+                              // Remove duplicates and sort
+                              const uniquePages = Array.from(new Set(pageNumbers)).sort((a, b) => a - b);
+                              
+                              return uniquePages.map(pageNum => (
                                 <Button
                                   key={pageNum}
                                   variant={currentPage === pageNum ? "default" : "outline"}
@@ -947,8 +981,8 @@ export default function Leaderboard() {
                                 >
                                   {pageNum}
                                 </Button>
-                              );
-                            })
+                              ));
+                            })()
                           )}
                         </div>
 
@@ -1136,18 +1170,35 @@ export default function Leaderboard() {
                               );
                             })
                           ) : (
-                            // Smart pagination for more than 100 pages
-                            Array.from({ length: 5 }, (_, i) => {
-                              let pageNum;
+                            // Smart pagination for many pages - always show a compact window
+                            (() => {
+                              const pageNumbers: number[] = [];
+                              const maxPagesToShow = 5;
+                              
                               if (currentPage <= 3) {
-                                pageNum = i + 1;
+                                // Near the beginning: show pages 1-5
+                                for (let i = 1; i <= Math.min(maxPagesToShow, totalPages); i++) {
+                                  pageNumbers.push(i);
+                                }
                               } else if (currentPage >= totalPages - 2) {
-                                pageNum = totalPages - 4 + i;
+                                // Near the end: show last 5 pages
+                                const start = Math.max(1, totalPages - maxPagesToShow + 1);
+                                for (let i = start; i <= totalPages; i++) {
+                                  pageNumbers.push(i);
+                                }
                               } else {
-                                pageNum = currentPage - 2 + i;
+                                // In the middle: show current page ± 2
+                                for (let i = currentPage - 2; i <= currentPage + 2; i++) {
+                                  if (i >= 1 && i <= totalPages) {
+                                    pageNumbers.push(i);
+                                  }
+                                }
                               }
-
-                              return (
+                              
+                              // Remove duplicates and sort
+                              const uniquePages = Array.from(new Set(pageNumbers)).sort((a, b) => a - b);
+                              
+                              return uniquePages.map(pageNum => (
                                 <Button
                                   key={pageNum}
                                   variant={currentPage === pageNum ? "default" : "outline"}
@@ -1158,8 +1209,8 @@ export default function Leaderboard() {
                                 >
                                   {pageNum}
                                 </Button>
-                              );
-                            })
+                              ));
+                            })()
                           )}
                         </div>
 
