@@ -82,6 +82,19 @@ export const userProfileSchema = z.object({
   walletAddress: z.string().optional(),
   xUsername: z.string().optional(),
   rank: z.string().optional(),
+  nationality: z.string().nullable().optional(),
+  affiliate: z.object({
+    username: z.string(),
+    profileImage: z.string(),
+    description: z.string(),
+  }).optional(),
+  latestTweet: z.object({
+    text: z.string(),
+    url: z.string(),
+    createdAt: z.string(),
+    likeCount: z.number(),
+    retweetCount: z.number(),
+  }).optional(),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;

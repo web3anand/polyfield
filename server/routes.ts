@@ -14,6 +14,7 @@ import type {
   PortfolioStats,
 } from "@shared/schema";
 import { fetchUserPnLData, generateFullPnLHistory } from "../api/utils/polymarket-pnl";
+import { getXUserAbout, getXUserLastTweet } from "../api/utils/x-api";
 
 // Simple in-memory cache and rate limiting
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -1715,6 +1716,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let totalVolume = leaderboard.volume || 0;
       const xUsername = leaderboard.xUsername || undefined;
       const rank = leaderboard.rank || undefined;
+
+      // Fetch X (Twitter) profile data if xUsername exists
+      console.log(`📍 [X API] xUsername: ${xUsername || 'NOT FOUND'}`);
+      let nationality = 'Unknown';
+      let affiliate: { username: string; profileImage: string; description: string } | undefined = undefined;
+      let latestTweet: { text: string; url: string; createdAt: string; likeCount: number; retweetCount: number } | undefined = undefined;
+
+      if (xUsername) {
+        try {
+          console.log(`📍 [X API] Fetching profile data for X username: ${xUsername}`);
+          
+          // Fetch user about data (contains nationality and affiliate info)
+          const aboutData = await getXUserAbout(xUsername);
+          if (aboutData?.accountBasedIn) {
+            nationality = aboutData.accountBasedIn;
+            console.log(`   ✅ [X API] Nationality found: ${nationality}`);
+          } else {
+            console.log(`   ⚠ [X API] No nationality found in user_about response`);
+          }
+          
+          if (aboutData?.affiliate) {
+            affiliate = aboutData.affiliate;
+            console.log(`   ✅ [X API] Affiliate found: @${affiliate.username}`);
+          }
+
+          // Fetch latest tweet (optional)
+          const tweetData = await getXUserLastTweet(xUsername);
+          if (tweetData) {
+            latestTweet = tweetData;
+            console.log(`   ✅ [X API] Latest tweet found: "${tweetData.text.substring(0, 50)}..."`);
+          } else {
+            console.log(`   ⚠ [X API] No latest tweet found`);
+          }
+        } catch (error: any) {
+          console.error(`   ❌ [X API] Error fetching X profile data:`, error.message);
+          // Keep nationality as 'Unknown' on error
+        }
+      } else {
+        console.log(`   ⚠ [X API] No X username found for user ${username}`);
+      }
       
       if (totalVolume === 0 && trades.length > 0) {
         console.log('   ⚠ Leaderboard volume is 0, calculating from trades as fallback...');
@@ -1824,6 +1865,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bio: userInfo.bio || undefined,
           xUsername: xUsername || undefined,
           rank: rank || undefined,
+          nationality: nationality, // Real nationality from X API or 'Unknown' as fallback
+          affiliate: affiliate || undefined, // Optional: Affiliate company info if available
+          latestTweet: latestTweet || undefined, // Optional: Latest tweet data if available
         },
         stats: {
           totalPnL: pnl.totalPnl || 0,

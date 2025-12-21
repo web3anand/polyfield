@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
+import { getXUserAbout, getXUserLastTweet } from '../utils/x-api.js';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
@@ -300,6 +301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     console.log(`📍 [VERCEL API ROUTE] Dashboard request for username: ${username}`);
+    console.log(`🚀🚀🚀 [CODE VERSION CHECK] Backend code is LATEST VERSION with nationality feature! 🚀🚀🚀`);
 
     // Find user by username
     let userInfo;
@@ -462,15 +464,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Fetch X profile data (nationality and latest tweet) if xUsername exists
+    let xProfileData: { nationality?: string | null; latestTweet?: { text: string; url: string; createdAt: string; likeCount: number; retweetCount: number } } = {};
+    
+    console.log(`📍 [X-API] Starting X profile data fetch. xUsername: ${xUsername || 'NOT FOUND'}`);
+    
+    if (xUsername) {
+      try {
+        console.log(`📍 [X-API] Fetching X profile data for @${xUsername}...`);
+        
+        // Direct API call to ensure it works
+        const response = await axios.get('https://api.twitterapi.io/twitter/user_about', {
+          params: {
+            userName: xUsername,
+          },
+          headers: {
+            'X-API-Key': process.env.TWITTER_API_KEY || process.env.X_API_KEY || 'new1_492f045b10da41aaa032a5bc1e00d504',
+          },
+          timeout: 10000,
+        });
+
+        console.log(`📍 [X-API] Direct API call status: ${response.data?.status || 'unknown'}`);
+        console.log(`📍 [X-API] Direct API response structure:`, JSON.stringify({
+          status: response.data?.status,
+          hasData: !!response.data?.data,
+          hasAboutProfile: !!response.data?.data?.about_profile,
+          accountBasedIn: response.data?.data?.about_profile?.account_based_in,
+        }, null, 2));
+
+        if (response.data?.status === 'success' && response.data?.data?.about_profile?.account_based_in) {
+          const accountBasedIn = response.data.data.about_profile.account_based_in;
+          xProfileData.nationality = accountBasedIn;
+          console.log(`✅ [X-API] Found nationality for @${xUsername}: "${accountBasedIn}"`);
+        } else {
+          console.log(`⚠️ [X-API] No nationality found in direct API call`);
+          xProfileData.nationality = 'Unknown'; // Use placeholder instead of empty string
+        }
+
+        // Try to get last tweet (optional, don't fail if it errors)
+        try {
+          const lastTweet = await getXUserLastTweet(xUsername);
+          if (lastTweet) {
+            xProfileData.latestTweet = lastTweet;
+            console.log(`✅ [X-API] Found latest tweet for @${xUsername}`);
+          }
+        } catch (tweetError: any) {
+          console.log(`⚠️ [X-API] Could not fetch last tweet: ${tweetError.message}`);
+        }
+        
+        console.log(`📍 [X-API] Final xProfileData:`, JSON.stringify(xProfileData, null, 2));
+      } catch (error: any) {
+        console.error(`❌ [X-API] Failed to fetch X profile data for @${xUsername}:`, error.message);
+        console.error(`❌ [X-API] Error details:`, error);
+        // Set nationality to placeholder explicitly so the field appears in JSON
+        xProfileData.nationality = 'Unknown';
+        // Continue without X data - don't fail the entire request
+      }
+    } else {
+      console.log(`📍 [X-API] No xUsername, skipping X profile data fetch`);
+      // Even if no xUsername, set nationality to placeholder so field appears in JSON
+      xProfileData.nationality = 'Unknown';
+    }
+
+    // Build profile data - ALWAYS include nationality field
+    console.log(`📍 [PROFILE BUILD] Building profile data...`);
+    const profileData: any = {
+      username,
+      walletAddress: userInfo.wallet,
+      profileImage: userInfo.profileImage,
+      bio: userInfo.bio,
+    };
+    
+    // Add optional fields only if they exist (otherwise they become undefined and get stripped)
+    if (xUsername) {
+      profileData.xUsername = xUsername;
+    }
+    if (rank) {
+      profileData.rank = rank;
+    }
+    
+    // CRITICAL: Always add nationality - use 'Unknown' as default, never null/undefined
+    profileData.nationality = xProfileData.nationality || 'Unknown';
+    console.log(`📍 [PROFILE BUILD] Set nationality to: "${profileData.nationality}"`);
+    
+    // Add latestTweet only if it exists
+    if (xProfileData.latestTweet) {
+      profileData.latestTweet = xProfileData.latestTweet;
+    }
+    
+    console.log(`📍 [PROFILE BUILD] profileData keys: ${Object.keys(profileData).join(', ')}`);
+    console.log(`📍 [PROFILE BUILD] profileData.nationality exists: ${('nationality' in profileData)}`);
+    console.log(`📍 [PROFILE BUILD] profileData.nationality value: "${profileData.nationality}"`);
+
     const dashboardData = {
-      profile: {
-        username,
-        walletAddress: userInfo.wallet,
-        profileImage: userInfo.profileImage,
-        bio: userInfo.bio,
-        xUsername: xUsername,
-        rank: rank,
-      },
+      profile: profileData,
       stats: {
         totalPnL: pnlData.totalPnl,
         realizedPnL: pnlData.realizedPnl,
@@ -511,16 +598,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })),
     };
 
-    console.log('Dashboard data prepared:', {
-      profile: dashboardData.profile,
-      stats: {
-        ...dashboardData.stats,
-        totalVolume: `$${dashboardData.stats.totalVolume.toLocaleString()} (${dashboardData.stats.totalVolume >= 1000000 ? `${(dashboardData.stats.totalVolume / 1000000).toFixed(2)}M` : `${(dashboardData.stats.totalVolume / 1000).toFixed(1)}K`})`
-      },
-      pnlHistoryCount: dashboardData.pnlHistory.length,
-      positionsCount: dashboardData.positions.length,
-      tradesCount: dashboardData.recentTrades.length,
-    });
+    // Final verification before sending response
+    console.log(`📍 [FINAL CHECK] About to send response...`);
+    console.log(`📍 [FINAL CHECK] Profile nationality: "${dashboardData.profile.nationality}"`);
+    console.log(`📍 [FINAL CHECK] Profile keys: ${Object.keys(dashboardData.profile).join(', ')}`);
+    
+    // Double-check nationality is present
+    if (!dashboardData.profile.nationality) {
+      console.error(`📍 [FINAL CHECK] ❌ ERROR: nationality is falsy! Forcing to 'Unknown'`);
+      dashboardData.profile.nationality = 'Unknown';
+    }
 
     res.status(200).json(dashboardData);
   } catch (error) {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
-import { Target, Trophy, Copy, Check, RefreshCw } from "lucide-react";
+import { Target, Trophy, Copy, Check, RefreshCw, MapPin } from "lucide-react";
 import type { DashboardData } from "@shared/schema";
 import { StatCard, AnimatedIcons } from "@/components/stat-card";
 import { PnLChart } from "@/components/pnl-chart";
@@ -63,6 +63,8 @@ export default function Dashboard() {
         
         const jsonData = await res.json();
         console.log('Dashboard API response:', jsonData);
+        console.log('📍 [FRONTEND] Profile nationality from API:', jsonData.profile?.nationality);
+        console.log('📍 [FRONTEND] Profile keys:', Object.keys(jsonData.profile || {}));
         
         if (!jsonData || !jsonData.profile) {
           console.error('Invalid response data - missing profile:', jsonData);
@@ -71,7 +73,10 @@ export default function Dashboard() {
         
         // Ensure all required fields exist with defaults
         const validatedData = {
-          profile: jsonData.profile || {},
+          profile: {
+            ...(jsonData.profile || {}),
+            // Preserve all profile fields including location
+          },
           stats: jsonData.stats || {
             totalPnL: 0,
             realizedPnL: 0,
@@ -332,6 +337,34 @@ export default function Dashboard() {
                       <span className="text-muted-foreground font-medium">Rank</span>
                       <span className="font-bold text-chart-2">#{profile.rank}</span>
                     </div>
+                  )}
+                  {/* Always show location/nationality field */}
+                  <div className="flex items-center gap-1 sm:gap-1.5 text-fluid-xs sm:text-fluid-sm">
+                    <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
+                    <span className="text-muted-foreground font-medium">Location:</span>
+                    <span className="font-semibold text-foreground bg-accent/30 px-2 py-0.5 rounded-md">
+                      {profile.nationality || 'Unknown'}
+                    </span>
+                  </div>
+                  {/* Affiliate company badge */}
+                  {profile.affiliate && (
+                    <a
+                      href={`https://twitter.com/${profile.affiliate.username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 sm:gap-2 text-fluid-xs sm:text-fluid-sm group transition-all hover:opacity-80"
+                      title={profile.affiliate.description || `Affiliated with @${profile.affiliate.username}`}
+                    >
+                      <img
+                        src={profile.affiliate.profileImage}
+                        alt={`@${profile.affiliate.username}`}
+                        className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-border group-hover:border-primary transition-colors"
+                      />
+                      <span className="text-muted-foreground font-medium">Affiliated with</span>
+                      <span className="font-semibold text-primary group-hover:underline">
+                        @{profile.affiliate.username}
+                      </span>
+                    </a>
                   )}
                   {profile.walletAddress && (
                     <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2">

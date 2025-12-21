@@ -963,13 +963,13 @@ export default function Leaderboard() {
                                 for (let i = currentPage - 2; i <= currentPage + 2; i++) {
                                   if (i >= 1 && i <= totalPages) {
                                     pageNumbers.push(i);
-                                  }
+                              }
                                 }
                               }
                               
                               // Remove duplicates and sort
                               const uniquePages = Array.from(new Set(pageNumbers)).sort((a, b) => a - b);
-                              
+
                               return uniquePages.map(pageNum => (
                                 <Button
                                   key={pageNum}
@@ -1191,13 +1191,13 @@ export default function Leaderboard() {
                                 for (let i = currentPage - 2; i <= currentPage + 2; i++) {
                                   if (i >= 1 && i <= totalPages) {
                                     pageNumbers.push(i);
-                                  }
+                              }
                                 }
                               }
                               
                               // Remove duplicates and sort
                               const uniquePages = Array.from(new Set(pageNumbers)).sort((a, b) => a - b);
-                              
+
                               return uniquePages.map(pageNum => (
                                 <Button
                                   key={pageNum}
