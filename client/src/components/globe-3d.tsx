@@ -101,36 +101,30 @@ const fetchLiveBets = async (): Promise<GlobeMarker[]> => {
     { country: 'Switzerland', lat: 46.8182, lng: 8.2275, betCount: 50, totalVolume: 1500000 },
   ];
   
-  const countryData = mockData;
+  // Convert country-grouped data to markers
+  return mockData.map((country) => {
+    // Size based on bet volume (min 0.4, max 1.8)
+    const size = Math.min(1.8, Math.max(0.4, 0.4 + (country.totalVolume / 10000)));
     
-    // Convert country-grouped data to markers
-    return countryData.map((country: any) => {
-      // Size based on bet volume (min 0.4, max 1.8)
-      const size = Math.min(1.8, Math.max(0.4, 0.4 + (country.totalVolume / 10000)));
-      
-      return {
-        id: `country-bet-${country.country}`,
-        lat: country.lat,
-        lng: country.lng,
-        size,
-        color: '#ffffff', // White for all bets
-        label: country.country,
-        type: 'bet' as const,
+    return {
+      id: `country-bet-${country.country}`,
+      lat: country.lat,
+      lng: country.lng,
+      size,
+      color: '#ffffff',
+      label: country.country,
+      type: 'bet' as const,
+      country: country.country,
+      count: country.betCount,
+      volume: country.totalVolume,
+      data: {
         country: country.country,
-        count: country.betCount,
-        volume: country.totalVolume,
-        data: {
-          country: country.country,
-          bets: country.bets,
-          betCount: country.betCount,
-          totalVolume: country.totalVolume,
-        },
-      };
-    });
-  } catch (error) {
-    console.error('Failed to fetch live bets:', error);
-    return [];
-  }
+        bets: [],
+        betCount: country.betCount,
+        totalVolume: country.totalVolume,
+      },
+    };
+  });
 };
 
 export function Globe3D({ height = '600px', width = '100%' }: Globe3DProps) {
