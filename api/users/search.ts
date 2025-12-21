@@ -169,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             profileImage: profileImage && typeof profileImage === 'string' ? profileImage.trim() : undefined,
           };
         })
-        .filter((item): item is { username: string; profileImage?: string } => item !== null)
+        .filter((item): item is { username: string; profileImage: string | undefined } => item !== null)
         .slice(0, 20); // Increased to 20 results
 
       console.log(`[Search] Query: "${query}" → Found ${userResults.length} profiles (from ${profiles.length} total API results)`);

@@ -51,67 +51,57 @@ interface Globe3DProps {
 }
 
 
-// Fetch verified accounts with locations (now grouped by country)
+// Mock verified accounts data (API endpoints removed to reduce serverless function count)
 const fetchVerifiedAccounts = async (): Promise<GlobeMarker[]> => {
-  try {
-    const response = await fetch('/api/globe/verified-accounts');
-    if (!response.ok) {
-      console.warn('Failed to fetch verified accounts:', response.status, response.statusText);
-      return [];
-    }
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.warn('Response is not JSON:', text.substring(0, 200));
-      return [];
-    }
-    const countryData = await response.json();
+  // Return sample data for major trading hubs
+  const mockData = [
+    { country: 'United States', lat: 37.0902, lng: -95.7129, accountCount: 150, totalVolume: 5000000 },
+    { country: 'United Kingdom', lat: 51.5074, lng: -0.1278, accountCount: 80, totalVolume: 2500000 },
+    { country: 'Germany', lat: 51.1657, lng: 10.4515, accountCount: 60, totalVolume: 1800000 },
+    { country: 'France', lat: 46.2276, lng: 2.2137, accountCount: 50, totalVolume: 1500000 },
+    { country: 'Japan', lat: 36.2048, lng: 138.2529, accountCount: 45, totalVolume: 1200000 },
+    { country: 'Singapore', lat: 1.3521, lng: 103.8198, accountCount: 40, totalVolume: 1000000 },
+    { country: 'Australia', lat: -25.2744, lng: 133.7751, accountCount: 35, totalVolume: 900000 },
+  ];
+  
+  return mockData.map((country) => {
+    const size = Math.min(2.0, Math.max(0.5, 0.5 + (country.accountCount / 20)));
     
-    // Convert country-grouped data to markers
-    return countryData.map((country: any) => {
-      // Size based on account count (min 0.5, max 2.0)
-      const size = Math.min(2.0, Math.max(0.5, 0.5 + (country.accountCount / 20)));
-      
-      return {
-        id: `country-account-${country.country}`,
-        lat: country.lat,
-        lng: country.lng,
-        size,
-        color: '#ffffff', // White for verified accounts
-        label: country.country,
-        type: 'account' as const,
+    return {
+      id: `country-account-${country.country}`,
+      lat: country.lat,
+      lng: country.lng,
+      size,
+      color: '#ffffff',
+      label: country.country,
+      type: 'account' as const,
+      country: country.country,
+      count: country.accountCount,
+      volume: country.totalVolume,
+      data: {
         country: country.country,
-        count: country.accountCount,
-        volume: country.totalVolume,
-        data: {
-          country: country.country,
-          accounts: country.accounts,
-          accountCount: country.accountCount,
-          totalVolume: country.totalVolume,
-        },
-      };
-    });
-  } catch (error) {
-    console.error('Failed to fetch verified accounts:', error);
-    return [];
-  }
+        accounts: [],
+        accountCount: country.accountCount,
+        totalVolume: country.totalVolume,
+      },
+    };
+  });
 };
 
-// Fetch live bets with locations (now grouped by country)
+// Mock live bets data (API endpoints removed to reduce serverless function count)
 const fetchLiveBets = async (): Promise<GlobeMarker[]> => {
-  try {
-    const response = await fetch('/api/globe/live-bets');
-    if (!response.ok) {
-      console.warn('Failed to fetch live bets:', response.status, response.statusText);
-      return [];
-    }
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.warn('Response is not JSON:', text.substring(0, 200));
-      return [];
-    }
-    const countryData = await response.json();
+  // Return sample data for active trading regions
+  const mockData = [
+    { country: 'United States', lat: 37.0902, lng: -95.7129, betCount: 250, totalVolume: 8000000 },
+    { country: 'United Kingdom', lat: 51.5074, lng: -0.1278, betCount: 120, totalVolume: 3500000 },
+    { country: 'Germany', lat: 51.1657, lng: 10.4515, betCount: 90, totalVolume: 2800000 },
+    { country: 'France', lat: 46.2276, lng: 2.2137, betCount: 75, totalVolume: 2200000 },
+    { country: 'Canada', lat: 56.1304, lng: -106.3468, betCount: 65, totalVolume: 1900000 },
+    { country: 'Netherlands', lat: 52.1326, lng: 5.2913, betCount: 55, totalVolume: 1600000 },
+    { country: 'Switzerland', lat: 46.8182, lng: 8.2275, betCount: 50, totalVolume: 1500000 },
+  ];
+  
+  const countryData = mockData;
     
     // Convert country-grouped data to markers
     return countryData.map((country: any) => {
