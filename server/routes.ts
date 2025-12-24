@@ -14,7 +14,7 @@ import type {
   PortfolioStats,
 } from "@shared/schema";
 import { fetchUserPnLData, generateFullPnLHistory } from "../api/utils/polymarket-pnl";
-import { getXUserAbout, getXUserLastTweet } from "../api/utils/x-api";
+import { getXUserAbout } from "../api/utils/x-api";
 
 // Simple in-memory cache and rate limiting
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -835,6 +835,168 @@ function calculateRealizedPnLFromTrades(trades: Trade[]): {
   };
 }
 
+// Helper to fetch closed positions for profitable trades calculation
+async function fetchClosedPositionsForProfitableTrades(walletAddress: string, limit: number = 5000): Promise<any[]> {
+  try {
+    console.log(`📊 Fetching closed positions for profitable trades (limit: ${limit})...`);
+    
+    // API max is 50 per request, so use 50 as page size
+    const pageSize = 50;
+    const firstPageResponse = await axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
+      params: {
+        user: walletAddress,
+        limit: pageSize,
+        offset: 0
+      },
+      timeout: 10000
+    }).catch(() => ({ data: [] }));
+    
+    const firstBatch = firstPageResponse.data || [];
+    if (firstBatch.length === 0) {
+      console.log(`   ✓ No closed positions found`);
+      return [];
+    }
+    
+    const allPositions: any[] = [...firstBatch];
+    console.log(`   Fetched page 1: ${firstBatch.length} positions (total: ${allPositions.length})`);
+    
+    // If first page is full (50 items), fetch remaining pages in parallel batches
+    // Continue fetching even if first page has less than pageSize, as long as we haven't reached the limit
+    if (firstBatch.length >= pageSize || allPositions.length < limit) {
+      const maxPages = Math.ceil(limit / pageSize);
+      const parallelBatchSize = 20; // Fetch 20 pages at a time in parallel (20 * 50 = 1000 positions per batch)
+      let offset = pageSize;
+      let pageCount = 1;
+      
+      while (pageCount < maxPages && allPositions.length < limit) {
+        // Create parallel requests for next batch of pages
+        const batchPromises = [];
+        const remainingPages = maxPages - pageCount;
+        const pagesToFetch = Math.min(parallelBatchSize, remainingPages);
+        
+        for (let i = 0; i < pagesToFetch && allPositions.length < limit; i++) {
+          batchPromises.push(
+            axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
+              params: {
+                user: walletAddress,
+                limit: pageSize,
+                offset: offset + (i * pageSize)
+              },
+              timeout: 10000
+            }).catch(() => ({ data: [] }))
+          );
+        }
+        
+        const batchResults = await Promise.all(batchPromises);
+        let hasMore = false;
+        let fetchedInBatch = 0;
+        
+        for (let i = 0; i < batchResults.length; i++) {
+          const batch = batchResults[i].data || [];
+          if (Array.isArray(batch) && batch.length > 0) {
+            allPositions.push(...batch);
+            pageCount++;
+            fetchedInBatch += batch.length;
+            console.log(`   Fetched page ${pageCount}: ${batch.length} positions (total: ${allPositions.length})`);
+            
+            if (batch.length === pageSize) {
+              hasMore = true;
+            }
+          }
+        }
+        
+        // If we got no new data in this batch, stop
+        if (fetchedInBatch === 0) {
+          console.log(`   No more positions available, stopping at ${allPositions.length} total`);
+          break;
+        }
+        
+        // If we've reached the limit or no more pages, stop
+        if (allPositions.length >= limit || !hasMore) {
+          break;
+        }
+        
+        offset += pagesToFetch * pageSize;
+      }
+    }
+    
+    console.log(`   ✓ Fetched ${allPositions.length} total closed positions`);
+    return allPositions;
+  } catch (error) {
+    console.error('Error fetching closed positions:', error);
+    return [];
+  }
+}
+
+// Helper to calculate profitable trades from closed positions
+function calculateProfitableTradesFromClosedPositions(closedPositions: any[]): any[] {
+  // Filter only profitable trades (realizedPnl > 0)
+  const profitable = closedPositions
+    .filter(pos => {
+      const pnl = parseFloat(pos.realizedPnl || 0);
+      return pnl > 0;
+    })
+    .map(pos => {
+      const avgPrice = parseFloat(pos.avgPrice || 0);
+      const totalBought = parseFloat(pos.totalBought || 0);
+      const realizedPnl = parseFloat(pos.realizedPnl || 0);
+      
+      // Buy Amount = avgPrice * totalBought
+      const buyAmount = avgPrice * totalBought;
+      
+      // Sell Amount = Buy Amount + Profit (for profitable trades)
+      const sellAmount = buyAmount + realizedPnl;
+      
+      // Net Profit = realizedPnl
+      const netProfit = realizedPnl;
+      
+      // Build Polymarket URL - prefer eventSlug, fallback to slug, then conditionId
+      const marketUrl = pos.eventSlug 
+        ? `https://polymarket.com/event/${pos.eventSlug}`
+        : pos.slug 
+        ? `https://polymarket.com/event/${pos.slug}`
+        : pos.conditionId
+        ? `https://polymarket.com/condition/${pos.conditionId}`
+        : null;
+      
+      return {
+        id: pos.asset || pos.conditionId || `position-${Date.now()}-${Math.random()}`,
+        marketName: pos.title || 'Unknown Market',
+        marketImage: pos.icon || null,
+        marketUrl: marketUrl,
+        outcome: pos.outcome || 'YES',
+        endDate: pos.endDate,
+        timestamp: pos.timestamp,
+        
+        // Raw values from API
+        avgPrice: avgPrice,
+        totalBought: totalBought,
+        realizedPnl: realizedPnl,
+        
+        // Calculated values
+        buyAmount: parseFloat(buyAmount.toFixed(2)),
+        sellAmount: parseFloat(sellAmount.toFixed(2)),
+        netProfit: parseFloat(netProfit.toFixed(2)),
+        profit: parseFloat(netProfit.toFixed(2)), // Alias for compatibility
+        
+        // Additional info
+        slug: pos.slug,
+        eventSlug: pos.eventSlug,
+        conditionId: pos.conditionId,
+        
+        // For compatibility with existing schema
+        betAmount: parseFloat(buyAmount.toFixed(2)),
+        closePositionValue: parseFloat(sellAmount.toFixed(2)),
+        type: 'SELL' as const,
+        size: totalBought,
+        price: avgPrice
+      };
+    })
+    .sort((a, b) => b.netProfit - a.netProfit); // Sort by profit descending
+  
+  return profitable;
+}
+
 // Helper to fetch user volume and additional data from leaderboard API
 async function fetchUserVolume(walletAddress: string): Promise<{ volume: number; xUsername?: string; rank?: string }> {
   try {
@@ -1593,7 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const tradePnLMap = new Map<string, number>();
+        const tradePnLMap = new Map<string, { profit: number; betAmount: number; closePositionValue: number }>();
 
         // Match buys with sells to calculate realized PnL using proper FIFO
         for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
@@ -1632,7 +1794,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const totalProceeds = sellPrice * totalMatchedSize;
               const pnl = totalProceeds - totalCostBasis;
               const tradeId = sell.id;
-              tradePnLMap.set(tradeId, pnl);
+              tradePnLMap.set(tradeId, {
+                profit: pnl,
+                betAmount: totalCostBasis,
+                closePositionValue: totalProceeds
+              });
             }
           }
         }
@@ -1642,13 +1808,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
           
           if (side === "SELL" && tradePnLMap.has(tradeId)) {
+            const pnlData = tradePnLMap.get(tradeId)!;
             return {
               ...trade,
-              profit: parseFloat(tradePnLMap.get(tradeId)!.toFixed(2))
+              profit: parseFloat(pnlData.profit.toFixed(2)),
+              betAmount: parseFloat(pnlData.betAmount.toFixed(2)),
+              closePositionValue: parseFloat(pnlData.closePositionValue.toFixed(2)),
+              netProfit: parseFloat(pnlData.profit.toFixed(2))
             };
           }
           return trade;
         });
+      }
+
+      // Helper function to fetch ALL trades with optimized parallel pagination
+      async function fetchAllTrades(walletAddress: string): Promise<any[]> {
+        console.log(`📊 Fetching ALL trades for wallet: ${walletAddress}...`);
+        
+        // First, fetch first page to determine total count
+        const firstPageResponse = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
+          params: {
+            user: walletAddress,
+            limit: 100,
+            offset: 0,
+          },
+          timeout: 10000,
+        }).catch(() => ({ data: [] }));
+        
+        const firstBatch = firstPageResponse.data || [];
+        if (!Array.isArray(firstBatch) || firstBatch.length === 0) {
+          console.log(`   ✓ No trades found`);
+          return [];
+        }
+        
+        const allTrades: any[] = [...firstBatch];
+        let pageCount = 1; // Track total pages fetched
+        console.log(`   Fetched page 1: ${firstBatch.length} trades (total: ${allTrades.length})`);
+        
+        // If first page is full, fetch remaining pages in parallel batches
+        if (firstBatch.length === 100) {
+          const pageSize = 100;
+          const maxPages = 200; // Safety limit
+          const parallelBatchSize = 30; // Fetch 30 pages at a time in parallel (increased for speed)
+          
+          let offset = 100;
+          
+          while (pageCount < maxPages) {
+            // Create parallel requests for next batch of pages
+            const batchPromises = [];
+            for (let i = 0; i < parallelBatchSize && pageCount < maxPages; i++) {
+              batchPromises.push(
+                axios.get(`${POLYMARKET_DATA_API}/trades`, {
+                  params: {
+                    user: walletAddress,
+                    limit: pageSize,
+                    offset: offset + (i * pageSize),
+                  },
+                  timeout: 8000, // Reduced timeout for faster failure detection
+                }).catch(() => ({ data: [] }))
+              );
+            }
+            
+            const batchResults = await Promise.all(batchPromises);
+            let hasMore = false;
+            
+            for (let i = 0; i < batchResults.length; i++) {
+              const batch = batchResults[i].data || [];
+              if (Array.isArray(batch) && batch.length > 0) {
+                allTrades.push(...batch);
+                pageCount++;
+                console.log(`   Fetched page ${pageCount}: ${batch.length} trades (total: ${allTrades.length})`);
+                
+                if (batch.length === pageSize) {
+                  hasMore = true;
+                }
+              }
+            }
+            
+            if (!hasMore) break;
+            offset += parallelBatchSize * pageSize;
+          }
+        }
+        
+        console.log(`   ✓ Fetched ${allTrades.length} total trades across ${pageCount} pages`);
+        return allTrades;
       }
 
       // Fetch user data in parallel with individual error handling
@@ -1656,7 +1899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // but we need raw API responses for the dashboard format
       console.log(`📊 Fetching dashboard data for wallet: ${userInfo.wallet}`);
       
-      const [positionsRaw, tradesRaw, pnlData, leaderboardData] = await Promise.allSettled([
+      const [positionsRaw, tradesRaw, pnlData, leaderboardData, closedPositionsRaw] = await Promise.allSettled([
         axios.get(`${POLYMARKET_DATA_API}/positions`, {
           params: { user: userInfo.wallet, limit: 1000 },
           timeout: 15000,
@@ -1664,29 +1907,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Error fetching positions:', err.message);
           return [];
         }),
-        axios.get(`${POLYMARKET_DATA_API}/trades`, {
-          params: { user: userInfo.wallet, limit: 50 },
-          timeout: 15000,
-        }).then(res => res.data || []).catch((err) => {
-          console.error('Error fetching trades:', err.message);
+        fetchAllTrades(userInfo.wallet).catch((err) => {
+          console.error('Error fetching all trades:', err.message);
           return [];
         }),
         fetchUserPnLData(userInfo.wallet).catch((err) => {
           console.error('Error fetching PnL data:', err.message);
-          return {
-            realizedPnl: 0,
-            unrealizedPnl: 0,
-            totalPnl: 0,
-            portfolioValue: 0,
-            closedPositions: 0,
-            openPositions: 0,
-            closedPositionsHistory: [],
-            allClosedPositions: [],
-          };
+          return { totalPnl: 0, realizedPnl: 0, unrealizedPnl: 0, portfolioValue: 0, openPositions: 0, closedPositions: 0, allClosedPositions: [], closedPositionsHistory: [] };
         }),
         fetchUserVolume(userInfo.wallet).catch((err) => {
           console.error('Error fetching volume:', err.message);
           return { volume: 0 };
+        }),
+        fetchClosedPositionsForProfitableTrades(userInfo.wallet, 5000).catch((err) => {
+          console.error('Error fetching closed positions:', err.message);
+          return [];
         })
       ]);
 
@@ -1708,6 +1943,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allClosedPositions: [],
       };
       const leaderboard: { volume: number; xUsername?: string; rank?: string } = leaderboardData.status === 'fulfilled' ? leaderboardData.value : { volume: 0 };
+      const closedPositions = Array.isArray(closedPositionsRaw.status === 'fulfilled' ? closedPositionsRaw.value : []) 
+        ? (closedPositionsRaw.status === 'fulfilled' ? closedPositionsRaw.value : [])
+        : [];
 
       // Filter positions to only those with size > 0
       const filteredPositions = positions.filter((pos: any) => parseFloat(pos.size || 0) > 0);
@@ -1721,14 +1959,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`📍 [X API] xUsername: ${xUsername || 'NOT FOUND'}`);
       let nationality = 'Unknown';
       let affiliate: { username: string; profileImage: string; description: string } | undefined = undefined;
-      let latestTweet: { text: string; url: string; createdAt: string; likeCount: number; retweetCount: number } | undefined = undefined;
 
       if (xUsername) {
         try {
           console.log(`📍 [X API] Fetching profile data for X username: ${xUsername}`);
           
           // Fetch user about data (contains nationality and affiliate info)
-          const aboutData = await getXUserAbout(xUsername);
+          // Use Promise.race with timeout to prevent blocking (X API has 12s timeout, use 15s buffer)
+          const xApiPromise = getXUserAbout(xUsername).catch(() => null);
+          const timeoutPromise = new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), 15000);
+          });
+          
+          const aboutData = await Promise.race([xApiPromise, timeoutPromise]);
+          
           if (aboutData?.accountBasedIn) {
             nationality = aboutData.accountBasedIn;
             console.log(`   ✅ [X API] Nationality found: ${nationality}`);
@@ -1741,14 +1985,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`   ✅ [X API] Affiliate found: @${affiliate.username}`);
           }
 
-          // Fetch latest tweet (optional)
-          const tweetData = await getXUserLastTweet(xUsername);
-          if (tweetData) {
-            latestTweet = tweetData;
-            console.log(`   ✅ [X API] Latest tweet found: "${tweetData.text.substring(0, 50)}..."`);
-          } else {
-            console.log(`   ⚠ [X API] No latest tweet found`);
-          }
         } catch (error: any) {
           console.error(`   ❌ [X API] Error fetching X profile data:`, error.message);
           // Keep nationality as 'Unknown' on error
@@ -1867,7 +2103,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rank: rank || undefined,
           nationality: nationality, // Real nationality from X API or 'Unknown' as fallback
           affiliate: affiliate || undefined, // Optional: Affiliate company info if available
-          latestTweet: latestTweet || undefined, // Optional: Latest tweet data if available
         },
         stats: {
           totalPnL: pnl.totalPnl || 0,
@@ -1883,20 +2118,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           worstTrade: worstTrade || 0,
         },
         pnlHistory,
-        positions: filteredPositions.map((pos: any) => ({
-          id: pos.id || `pos-${Math.random()}`,
-          marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
-          marketId: pos.marketId || pos.market?.id || "",
-          marketSlug: pos.marketSlug || pos.market?.slug || "",
-          eventSlug: pos.eventSlug || pos.market?.eventSlug || "",
-          outcome: pos.outcome || "YES",
-          size: parseFloat(pos.size || 0),
-          entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
-          currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
-          unrealizedPnL: parseFloat(pos.cashPnl || 0),
-          status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
-          openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
-        })),
+        positions: filteredPositions.map((pos: any) => {
+          // Extract slug from various possible fields (consistent with fetchUserPositions logic)
+          const slug = pos.slug || pos.market?.slug || pos.eventSlug || pos.market?.eventSlug || pos.market?.id || "";
+          // Condition ID for marketId
+          const conditionId = pos.conditionId || pos.market?.condition_id || pos.condition_id || pos.market?.conditionId || pos.marketId || pos.market?.id || "";
+          
+          return {
+            id: pos.id || pos.asset || `pos-${Math.random()}`,
+            marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
+            marketId: conditionId,
+            marketSlug: slug,
+            eventSlug: slug, // Use slug for both eventSlug and marketSlug (Polymarket URL structure)
+            outcome: pos.outcome || "YES",
+            size: parseFloat(pos.size || 0),
+            entryPrice: parseFloat(pos.avgPrice || pos.average_price || pos.price || 0),
+            currentPrice: parseFloat(pos.curPrice || pos.current_price || pos.price || 0),
+            unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || 0),
+            status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
+            openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
+          };
+        }),
         recentTrades: tradesWithPnL.slice(0, 10).map((trade: any) => ({
           id: trade.id || `trade-${Math.random()}`,
           marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
@@ -1907,6 +2149,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL",
           profit: trade.profit !== undefined ? trade.profit : undefined,
         })),
+        profitableTrades: (() => {
+          // Use closed positions API directly for accurate profitable trades
+          // This is the most accurate source with correct buy/sell amounts
+          const profitable = calculateProfitableTradesFromClosedPositions(closedPositions);
+          
+          console.log(`💰 Profitable trades found: ${profitable.length}`);
+          if (profitable.length > 0) {
+            console.log(`   Top 3 profitable trades:`, profitable.slice(0, 3).map((t: any) => ({
+              market: t.marketName.substring(0, 50),
+              profit: t.netProfit,
+              buyAmount: t.buyAmount,
+              sellAmount: t.sellAmount
+            })));
+          }
+          return profitable;
+        })(),
       };
 
       console.log('Dashboard data prepared:', {
@@ -1918,6 +2176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pnlHistoryCount: dashboardData.pnlHistory.length,
         positionsCount: dashboardData.positions.length,
         tradesCount: dashboardData.recentTrades.length,
+        profitableTradesCount: dashboardData.profitableTrades?.length || 0,
       });
 
       // Clear timeout and ensure response is sent

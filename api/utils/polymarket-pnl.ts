@@ -58,40 +58,70 @@ interface ClosedPosition {
  * Note: API has pagination limits, so we fetch multiple pages
  */
 export async function fetchClosedPositionsHistory(userAddress: string, limit: number = 5000): Promise<ClosedPosition[]> {
-  console.log(`📊 Fetching up to ${limit} closed positions with timestamps...`);
+  console.log(`📊 Fetching up to ${limit} closed positions with timestamps (parallel)...`);
   
   try {
-    // Fetch multiple pages to get complete history
-    const allPositions: any[] = [];
-    let offset = 0;
+    // First, fetch first page to determine how many pages we need
     const pageSize = 100; // API seems to limit to ~100 per page
-    const maxPages = Math.ceil(limit / pageSize);
+    const firstPageResponse = await axios.get(`${DATA_API}/closed-positions`, {
+      params: {
+        user: userAddress,
+        limit: pageSize,
+        offset: 0
+      },
+      timeout: 8000
+    }).catch(() => ({ data: [] }));
     
-    for (let page = 0; page < maxPages; page++) {
-      try {
-        const response = await axios.get(`${DATA_API}/closed-positions`, {
-          params: {
-            user: userAddress,
-            limit: pageSize,
-            offset
-          },
-          timeout: 8000
-        });
+    const firstBatch = firstPageResponse.data || [];
+    if (firstBatch.length === 0) {
+      console.log(`   ✓ No closed positions found`);
+      return [];
+    }
+    
+    const allPositions: any[] = [...firstBatch];
+    console.log(`   Fetched page 1: ${firstBatch.length} positions (total: ${allPositions.length})`);
+    
+    // If first page is full, fetch remaining pages in parallel batches
+    if (firstBatch.length === pageSize) {
+      const maxPages = Math.ceil(limit / pageSize);
+      const parallelBatchSize = 20; // Fetch 20 pages at a time in parallel
+      let offset = pageSize;
+      let pageCount = 1;
+      
+      while (pageCount < maxPages && allPositions.length < limit) {
+        // Create parallel requests for next batch of pages
+        const batchPromises = [];
+        for (let i = 0; i < parallelBatchSize && pageCount < maxPages && allPositions.length < limit; i++) {
+          batchPromises.push(
+            axios.get(`${DATA_API}/closed-positions`, {
+              params: {
+                user: userAddress,
+                limit: pageSize,
+                offset: offset + (i * pageSize)
+              },
+              timeout: 8000
+            }).catch(() => ({ data: [] }))
+          );
+        }
         
-        const batch = response.data || [];
-        if (batch.length === 0) break; // No more data
+        const batchResults = await Promise.all(batchPromises);
+        let hasMore = false;
         
-        allPositions.push(...batch);
-        console.log(`   Fetched page ${page + 1}: ${batch.length} positions (total: ${allPositions.length})`);
+        for (let i = 0; i < batchResults.length; i++) {
+          const batch = batchResults[i].data || [];
+          if (Array.isArray(batch) && batch.length > 0) {
+            allPositions.push(...batch);
+            pageCount++;
+            console.log(`   Fetched page ${pageCount}: ${batch.length} positions (total: ${allPositions.length})`);
+            
+            if (batch.length === pageSize) {
+              hasMore = true;
+            }
+          }
+        }
         
-        if (batch.length < pageSize) break; // Last page
-        offset += pageSize;
-        
-        // Small delay to avoid rate limiting
-        await delay(50);
-      } catch (error) {
-        console.error(`Error fetching page ${page + 1}:`, error);
-        break;
+        if (!hasMore || allPositions.length >= limit) break;
+        offset += parallelBatchSize * pageSize;
       }
     }
     
@@ -108,7 +138,10 @@ export async function fetchClosedPositionsHistory(userAddress: string, limit: nu
       .map((p: any) => ({
         realizedPnl: parseFloat(p.realizedPnl || 0),
         endDate: p.endDate,
-        title: p.title
+        title: p.title,
+        initialValue: parseFloat(p.initialValue || 0),
+        currentValue: parseFloat(p.currentValue || p.totalValue || 0),
+        outcome: p.outcome || "YES"
       }));
     
     console.log(`   ✓ Sorted ${sortedPositions.length} positions chronologically`);
@@ -160,7 +193,7 @@ export async function fetchRealizedPnl(userAddress: string): Promise<RealizedPnL
         if (positions.length < pageSize) hasMore = false;
       }
       
-      await delay(50);
+      // Removed delay for faster fetching
     } catch (error) {
       console.error('Error fetching realized PnL batch:', error);
       break;

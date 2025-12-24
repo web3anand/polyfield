@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Position } from "@shared/schema";
-import { TrendingUp, TrendingDown, ArrowUpDown, ExternalLink } from "lucide-react";
+import { ArrowUpDown, ExternalLink } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,29 +19,26 @@ type SortOption = "pnl-desc" | "pnl-asc" | "size-desc" | "size-asc" | "market-as
 
 // Generate Polymarket URL
 function getPolymarketUrl(eventSlug?: string, marketSlug?: string, marketId?: string): string {
-  // Polymarket URL format: https://polymarket.com/event/[eventSlug]/[marketSlug]?tid=[conditionId]
-  // Note: eventSlug and marketSlug are often the same value
-  const slug = marketSlug || eventSlug;
+  // Polymarket URL format: https://polymarket.com/event/[eventSlug]
+  // Prefer eventSlug, fallback to marketSlug, then use marketId if available
+  // This matches the format used in profitable trades
   
-  if (slug && marketId) {
-    // Convert conditionId hex to decimal for tid parameter
-    let tid: string;
+  if (eventSlug) {
+    return `https://polymarket.com/event/${eventSlug}`;
+  }
+  
+  if (marketSlug) {
+    return `https://polymarket.com/event/${marketSlug}`;
+  }
+  
+  // If we have marketId (conditionId), try to use it as a fallback
+  if (marketId) {
+    // If it's a hex conditionId, we can try to use it directly
+    // But typically we need a slug, so this is a last resort
     if (marketId.startsWith('0x')) {
-      // Hex format - convert to decimal
-      try {
-        tid = BigInt(marketId).toString();
-      } catch (e) {
-        // If BigInt conversion fails, try removing 0x and using as-is
-        tid = marketId.replace('0x', '');
-      }
-    } else {
-      // Already decimal or string format
-      tid = marketId.toString();
+      // Try to construct a condition URL
+      return `https://polymarket.com/condition/${marketId}`;
     }
-    
-    // Use the slug for both event and market (as per Polymarket URL structure)
-    const finalSlug = slug.trim();
-    return `https://polymarket.com/event/${finalSlug}/${finalSlug}?tid=${tid}`;
   }
   
   // Fallback if missing data
@@ -176,16 +173,9 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                       {position.size.toLocaleString()}
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {isProfitable ? (
-                          <TrendingUp className="w-4 h-4 text-chart-2" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-destructive" />
-                        )}
-                        <span className={`font-bold tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
-                          {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
+                      <span className={`font-bold tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
+                        {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -236,16 +226,9 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground">Unrealized PnL</p>
-                    <div className="flex items-center gap-1">
-                      {isProfitable ? (
-                        <TrendingUp className="w-3 h-3 text-chart-2" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3 text-destructive" />
-                      )}
-                      <p className={`font-bold text-sm tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
-                        {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
+                    <p className={`font-bold text-sm tabular-nums ${isProfitable ? 'text-chart-2' : 'text-destructive'}`}>
+                      {isProfitable ? '+' : ''}${position.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                   </div>
                 </div>
               </div>

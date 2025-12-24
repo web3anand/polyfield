@@ -24,11 +24,16 @@ export const tradeSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   marketName: z.string(),
+  marketImage: z.string().nullable().optional(), // Market image/icon URL
+  marketUrl: z.string().nullable().optional(), // Polymarket URL to the market
   type: z.enum(["BUY", "SELL"]),
   outcome: z.enum(["YES", "NO"]),
   price: z.number(),
   size: z.number(),
   profit: z.number().optional(),
+  betAmount: z.number().optional(), // Cost basis from BUY
+  closePositionValue: z.number().optional(), // Proceeds from SELL
+  netProfit: z.number().optional(), // Net profit (closePositionValue - betAmount)
 });
 
 export type Trade = z.infer<typeof tradeSchema>;
@@ -88,13 +93,6 @@ export const userProfileSchema = z.object({
     profileImage: z.string(),
     description: z.string(),
   }).optional(),
-  latestTweet: z.object({
-    text: z.string(),
-    url: z.string(),
-    createdAt: z.string(),
-    likeCount: z.number(),
-    retweetCount: z.number(),
-  }).optional(),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
@@ -106,6 +104,7 @@ export const dashboardDataSchema = z.object({
   pnlHistory: z.array(pnlDataPointSchema),
   positions: z.array(positionSchema),
   recentTrades: z.array(tradeSchema),
+  profitableTrades: z.array(tradeSchema).optional(),
 });
 
 export type DashboardData = z.infer<typeof dashboardDataSchema>;

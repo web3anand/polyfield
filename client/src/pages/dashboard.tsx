@@ -7,6 +7,7 @@ import { StatCard, AnimatedIcons } from "@/components/stat-card";
 import { PnLChart } from "@/components/pnl-chart";
 import { PositionsTable } from "@/components/positions-table";
 import { RecentActivity } from "@/components/recent-activity";
+import { ProfitableTradesHistory } from "@/components/profitable-trades-history";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import { UsernameInput } from "@/components/username-input";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default function Dashboard() {
     queryFn: async () => {
       // Create an AbortController for timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout (reduced for faster feedback)
       
       try {
         const res = await fetch(`/api/dashboard/username?username=${encodeURIComponent(connectedUsername)}`, {
@@ -93,9 +94,14 @@ export default function Dashboard() {
           pnlHistory: jsonData.pnlHistory || [],
           positions: jsonData.positions || [],
           recentTrades: jsonData.recentTrades || [],
+          profitableTrades: jsonData.profitableTrades || [],
         };
         
         console.log('Validated dashboard data:', validatedData);
+        console.log('💰 Profitable trades received:', validatedData.profitableTrades?.length || 0);
+        if (validatedData.profitableTrades && validatedData.profitableTrades.length > 0) {
+          console.log('   Sample profitable trade:', validatedData.profitableTrades[0]);
+        }
         return validatedData;
       } catch (error: any) {
         clearTimeout(timeoutId);
@@ -283,7 +289,7 @@ export default function Dashboard() {
     );
   }
 
-  const { profile, stats, pnlHistory, positions, recentTrades } = data;
+  const { profile, stats, pnlHistory, positions, recentTrades, profitableTrades } = data;
 
   return (
     <div className="min-h-screen bg-background pt-[clamp(48px,40px+2vw,64px)]">
@@ -423,7 +429,7 @@ export default function Dashboard() {
                 {stats.realizedPnL >= 0 ? '+' : ''}${stats.realizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </Card>
-            <Card className="p-fluid-card border-2 border-primary/30 rounded-b-xl">
+            <Card className="p-fluid-card border-2 border-primary/30">
               <p className="text-fluid-xs font-medium text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 uppercase tracking-wide">Unrealized PnL</p>
               <p className={`text-fluid-xl sm:text-fluid-2xl lg:text-fluid-3xl font-bold tabular-nums ${stats.unrealizedPnL >= 0 ? 'text-chart-2' : 'text-destructive'}`} data-testid="text-unrealized-pnl">
                 {stats.unrealizedPnL >= 0 ? '+' : ''}${stats.unrealizedPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -481,6 +487,9 @@ export default function Dashboard() {
 
           {/* Active Positions */}
           <PositionsTable positions={positions.filter((p: any) => p.status === "ACTIVE")} />
+
+          {/* Profitable Trades History */}
+          <ProfitableTradesHistory trades={profitableTrades || []} />
 
           {/* Recent Activity */}
           <RecentActivity trades={recentTrades} />

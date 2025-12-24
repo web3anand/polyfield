@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 import { fetchUserPnLData } from '../utils/polymarket-pnl.js';
-import { getXUserAbout, getXUserLastTweet } from '../utils/x-api.js';
+import { getXUserAbout } from '../utils/x-api.js';
 
 const POLYMARKET_DATA_API = "https://data-api.polymarket.com";
 const POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com";
@@ -93,22 +93,80 @@ async function fetchUserPositions(walletAddress: string): Promise<any[]> {
   }
 }
 
-// Helper to fetch user trades
-async function fetchUserTrades(walletAddress: string): Promise<any[]> {
+// Helper to fetch ALL user trades with optimized parallel pagination
+async function fetchAllUserTrades(walletAddress: string): Promise<any[]> {
   try {
-    console.log(`Fetching trades for wallet: ${walletAddress}`);
+    console.log(`📊 Fetching ALL trades for wallet: ${walletAddress}...`);
     
-    const response = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
+    // First, fetch first page to determine total count
+    const firstPageResponse = await axios.get(`${POLYMARKET_DATA_API}/trades`, {
       params: {
         user: walletAddress,
-        limit: 50,
+        limit: 100,
+        offset: 0,
       },
       timeout: 10000,
-    });
-
-    return response.data || [];
+    }).catch(() => ({ data: [] }));
+    
+    const firstBatch = firstPageResponse.data || [];
+    if (!Array.isArray(firstBatch) || firstBatch.length === 0) {
+      console.log(`   ✓ No trades found`);
+      return [];
+    }
+    
+    const allTrades: any[] = [...firstBatch];
+    let pageCount = 1; // Track total pages fetched
+    console.log(`   Fetched page 1: ${firstBatch.length} trades (total: ${allTrades.length})`);
+    
+    // If first page is full, fetch remaining pages in parallel batches
+    if (firstBatch.length === 100) {
+      const pageSize = 100;
+      const maxPages = 200; // Safety limit
+      const parallelBatchSize = 30; // Fetch 30 pages at a time in parallel (increased for speed)
+      
+      let offset = 100;
+      
+      while (pageCount < maxPages) {
+        // Create parallel requests for next batch of pages
+        const batchPromises = [];
+        for (let i = 0; i < parallelBatchSize && pageCount < maxPages; i++) {
+          batchPromises.push(
+            axios.get(`${POLYMARKET_DATA_API}/trades`, {
+              params: {
+                user: walletAddress,
+                limit: pageSize,
+                offset: offset + (i * pageSize),
+              },
+              timeout: 8000, // Reduced timeout for faster failure detection
+            }).catch(() => ({ data: [] }))
+          );
+        }
+        
+        const batchResults = await Promise.all(batchPromises);
+        let hasMore = false;
+        
+        for (let i = 0; i < batchResults.length; i++) {
+          const batch = batchResults[i].data || [];
+          if (Array.isArray(batch) && batch.length > 0) {
+            allTrades.push(...batch);
+            pageCount++;
+            console.log(`   Fetched page ${pageCount}: ${batch.length} trades (total: ${allTrades.length})`);
+            
+            if (batch.length === pageSize) {
+              hasMore = true;
+            }
+          }
+        }
+        
+        if (!hasMore) break;
+        offset += parallelBatchSize * pageSize;
+      }
+    }
+    
+    console.log(`   ✓ Fetched ${allTrades.length} total trades across ${pageCount} pages`);
+    return allTrades;
   } catch (error) {
-    console.error('Error fetching trades:', error);
+    console.error('Error fetching all trades:', error);
     return [];
   }
 }
@@ -154,7 +212,7 @@ function calculateTradesWithPnL(trades: any[]): any[] {
     }
   }
 
-  const tradePnLMap = new Map<string, number>(); // Map trade ID to PnL
+  const tradePnLMap = new Map<string, { profit: number; betAmount: number; closePositionValue: number }>(); // Map trade ID to PnL data
 
   // Match buys with sells to calculate realized PnL using proper FIFO
   for (const [key, { buys, sells }] of Object.entries(marketPositions)) {
@@ -203,10 +261,14 @@ function calculateTradesWithPnL(trades: any[]): any[] {
         const totalProceeds = sellPrice * totalMatchedSize;
         const pnl = totalProceeds - totalCostBasis;
         
-        // Store PnL for this sell trade
+        // Store PnL data for this sell trade
         const tradeId = sell.id;
-        tradePnLMap.set(tradeId, pnl);
-        console.log(`       SELL ${totalMatchedSize.toFixed(2)} @ $${sellPrice.toFixed(3)} → Cost: $${totalCostBasis.toFixed(2)}, PnL: $${pnl.toFixed(2)}`);
+        tradePnLMap.set(tradeId, {
+          profit: pnl,
+          betAmount: totalCostBasis,
+          closePositionValue: totalProceeds
+        });
+        console.log(`       SELL ${totalMatchedSize.toFixed(2)} @ $${sellPrice.toFixed(3)} → Cost: $${totalCostBasis.toFixed(2)}, Proceeds: $${totalProceeds.toFixed(2)}, PnL: $${pnl.toFixed(2)}`);
       } else {
         console.log(`       SELL ${parseFloat(sell.outcomeTokenAmount || sell.size || 0).toFixed(2)} @ $${sellPrice.toFixed(3)} → No matching BUYs!`);
       }
@@ -221,13 +283,179 @@ function calculateTradesWithPnL(trades: any[]): any[] {
     const side = (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL";
     
     if (side === "SELL" && tradePnLMap.has(tradeId)) {
+      const pnlData = tradePnLMap.get(tradeId)!;
       return {
         ...trade,
-        profit: parseFloat(tradePnLMap.get(tradeId)!.toFixed(2))
+        profit: parseFloat(pnlData.profit.toFixed(2)),
+        betAmount: parseFloat(pnlData.betAmount.toFixed(2)),
+        closePositionValue: parseFloat(pnlData.closePositionValue.toFixed(2)),
+        netProfit: parseFloat(pnlData.profit.toFixed(2))
       };
     }
     return trade;
   });
+}
+
+// Helper to fetch closed positions for profitable trades calculation
+async function fetchClosedPositionsForProfitableTrades(walletAddress: string, limit: number = 5000): Promise<any[]> {
+  try {
+    console.log(`📊 Fetching closed positions for profitable trades (limit: ${limit})...`);
+    
+    // API max is 50 per request, so use 50 as page size
+    const pageSize = 50;
+    const firstPageResponse = await axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
+      params: {
+        user: walletAddress,
+        limit: pageSize,
+        offset: 0
+      },
+      timeout: 10000
+    }).catch(() => ({ data: [] }));
+    
+    const firstBatch = firstPageResponse.data || [];
+    if (firstBatch.length === 0) {
+      console.log(`   ✓ No closed positions found`);
+      return [];
+    }
+    
+    const allPositions: any[] = [...firstBatch];
+    console.log(`   Fetched page 1: ${firstBatch.length} positions (total: ${allPositions.length})`);
+    
+    // If first page is full (50 items), fetch remaining pages in parallel batches
+    // Continue fetching even if first page has less than pageSize, as long as we haven't reached the limit
+    if (firstBatch.length >= pageSize || allPositions.length < limit) {
+      const maxPages = Math.ceil(limit / pageSize);
+      const parallelBatchSize = 20; // Fetch 20 pages at a time in parallel (20 * 50 = 1000 positions per batch)
+      let offset = pageSize;
+      let pageCount = 1;
+      
+      while (pageCount < maxPages && allPositions.length < limit) {
+        // Create parallel requests for next batch of pages
+        const batchPromises = [];
+        const remainingPages = maxPages - pageCount;
+        const pagesToFetch = Math.min(parallelBatchSize, remainingPages);
+        
+        for (let i = 0; i < pagesToFetch && allPositions.length < limit; i++) {
+          batchPromises.push(
+            axios.get(`${POLYMARKET_DATA_API}/closed-positions`, {
+              params: {
+                user: walletAddress,
+                limit: pageSize,
+                offset: offset + (i * pageSize)
+              },
+              timeout: 10000
+            }).catch(() => ({ data: [] }))
+          );
+        }
+        
+        const batchResults = await Promise.all(batchPromises);
+        let hasMore = false;
+        let fetchedInBatch = 0;
+        
+        for (let i = 0; i < batchResults.length; i++) {
+          const batch = batchResults[i].data || [];
+          if (Array.isArray(batch) && batch.length > 0) {
+            allPositions.push(...batch);
+            pageCount++;
+            fetchedInBatch += batch.length;
+            console.log(`   Fetched page ${pageCount}: ${batch.length} positions (total: ${allPositions.length})`);
+            
+            if (batch.length === pageSize) {
+              hasMore = true;
+            }
+          }
+        }
+        
+        // If we got no new data in this batch, stop
+        if (fetchedInBatch === 0) {
+          console.log(`   No more positions available, stopping at ${allPositions.length} total`);
+          break;
+        }
+        
+        // If we've reached the limit or no more pages, stop
+        if (allPositions.length >= limit || !hasMore) {
+          break;
+        }
+        
+        offset += pagesToFetch * pageSize;
+      }
+    }
+    
+    console.log(`   ✓ Fetched ${allPositions.length} total closed positions`);
+    return allPositions;
+  } catch (error) {
+    console.error('Error fetching closed positions:', error);
+    return [];
+  }
+}
+
+// Helper to calculate profitable trades from closed positions
+function calculateProfitableTradesFromClosedPositions(closedPositions: any[]): any[] {
+  // Filter only profitable trades (realizedPnl > 0)
+  const profitable = closedPositions
+    .filter(pos => {
+      const pnl = parseFloat(pos.realizedPnl || 0);
+      return pnl > 0;
+    })
+    .map(pos => {
+      const avgPrice = parseFloat(pos.avgPrice || 0);
+      const totalBought = parseFloat(pos.totalBought || 0);
+      const realizedPnl = parseFloat(pos.realizedPnl || 0);
+      
+      // Buy Amount = avgPrice * totalBought
+      const buyAmount = avgPrice * totalBought;
+      
+      // Sell Amount = Buy Amount + Profit (for profitable trades)
+      const sellAmount = buyAmount + realizedPnl;
+      
+      // Net Profit = realizedPnl
+      const netProfit = realizedPnl;
+      
+      // Build Polymarket URL - prefer eventSlug, fallback to slug, then conditionId
+      const marketUrl = pos.eventSlug 
+        ? `https://polymarket.com/event/${pos.eventSlug}`
+        : pos.slug 
+        ? `https://polymarket.com/event/${pos.slug}`
+        : pos.conditionId
+        ? `https://polymarket.com/condition/${pos.conditionId}`
+        : null;
+      
+      return {
+        id: pos.asset || pos.conditionId || `position-${Date.now()}-${Math.random()}`,
+        marketName: pos.title || 'Unknown Market',
+        marketImage: pos.icon || null,
+        marketUrl: marketUrl,
+        outcome: pos.outcome || 'YES',
+        endDate: pos.endDate,
+        timestamp: pos.timestamp,
+        
+        // Raw values from API
+        avgPrice: avgPrice,
+        totalBought: totalBought,
+        realizedPnl: realizedPnl,
+        
+        // Calculated values
+        buyAmount: parseFloat(buyAmount.toFixed(2)),
+        sellAmount: parseFloat(sellAmount.toFixed(2)),
+        netProfit: parseFloat(netProfit.toFixed(2)),
+        profit: parseFloat(netProfit.toFixed(2)), // Alias for compatibility
+        
+        // Additional info
+        slug: pos.slug,
+        eventSlug: pos.eventSlug,
+        conditionId: pos.conditionId,
+        
+        // For compatibility with existing schema
+        betAmount: parseFloat(buyAmount.toFixed(2)),
+        closePositionValue: parseFloat(sellAmount.toFixed(2)),
+        type: 'SELL' as const,
+        size: totalBought,
+        price: avgPrice
+      };
+    })
+    .sort((a, b) => b.netProfit - a.netProfit); // Sort by profit descending
+  
+  return profitable;
 }
 
 // Helper to fetch user volume and additional data from leaderboard API
@@ -322,12 +550,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw error;
     }
 
-    // Fetch user data in parallel
-    const [positions, trades, pnlData, leaderboardData] = await Promise.all([
+    // Fetch user data in parallel (including closed positions for profitable trades)
+    const [positions, trades, pnlData, leaderboardData, closedPositions] = await Promise.all([
       fetchUserPositions(userInfo.wallet),
-      fetchUserTrades(userInfo.wallet),
+      fetchAllUserTrades(userInfo.wallet),
       fetchUserPnLData(userInfo.wallet),
-      fetchUserVolume(userInfo.wallet)
+      fetchUserVolume(userInfo.wallet),
+        fetchClosedPositionsForProfitableTrades(userInfo.wallet, 5000)
     ]);
     
     // Use leaderboard volume if available, otherwise calculate from trades as fallback
@@ -464,65 +693,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Fetch X profile data (nationality and latest tweet) if xUsername exists
-    let xProfileData: { nationality?: string | null; latestTweet?: { text: string; url: string; createdAt: string; likeCount: number; retweetCount: number } } = {};
-    
-    console.log(`📍 [X-API] Starting X profile data fetch. xUsername: ${xUsername || 'NOT FOUND'}`);
+    // Fetch X profile data (nationality and affiliate) if xUsername exists
+    // Non-blocking: Start the call but don't wait more than 15 seconds (X API has 12s timeout)
+    let xProfileData: { nationality?: string | null; affiliate?: { username: string; profileImage: string; description: string } } = {};
     
     if (xUsername) {
-      try {
-        console.log(`📍 [X-API] Fetching X profile data for @${xUsername}...`);
-        
-        // Direct API call to ensure it works
-        const response = await axios.get('https://api.twitterapi.io/twitter/user_about', {
-          params: {
-            userName: xUsername,
-          },
-          headers: {
-            'X-API-Key': process.env.TWITTER_API_KEY || process.env.X_API_KEY || 'new1_492f045b10da41aaa032a5bc1e00d504',
-          },
-          timeout: 10000,
+      console.log(`📍 [X API] Starting fetch for @${xUsername}...`);
+      // Start X API call with a max wait time
+      const xApiPromise = getXUserAbout(xUsername).catch((err) => {
+        console.error(`📍 [X API] Error in getXUserAbout for @${xUsername}:`, err?.message || err);
+        return null;
+      });
+      
+      // Don't wait more than 15 seconds for X API (X API has 12s timeout, so 15s gives buffer)
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.log(`📍 [X API] Timeout reached for @${xUsername} after 15s`);
+          resolve(null);
+        }, 15000);
+      });
+      
+      // Race: get result or timeout after 15 seconds
+      const xData = await Promise.race([xApiPromise, timeoutPromise]);
+      
+      if (xData) {
+        console.log(`📍 [X API] Successfully fetched data for @${xUsername}:`, {
+          accountBasedIn: xData.accountBasedIn,
+          hasAffiliate: !!xData.affiliate
         });
-
-        console.log(`📍 [X-API] Direct API call status: ${response.data?.status || 'unknown'}`);
-        console.log(`📍 [X-API] Direct API response structure:`, JSON.stringify({
-          status: response.data?.status,
-          hasData: !!response.data?.data,
-          hasAboutProfile: !!response.data?.data?.about_profile,
-          accountBasedIn: response.data?.data?.about_profile?.account_based_in,
-        }, null, 2));
-
-        if (response.data?.status === 'success' && response.data?.data?.about_profile?.account_based_in) {
-          const accountBasedIn = response.data.data.about_profile.account_based_in;
-          xProfileData.nationality = accountBasedIn;
-          console.log(`✅ [X-API] Found nationality for @${xUsername}: "${accountBasedIn}"`);
-        } else {
-          console.log(`⚠️ [X-API] No nationality found in direct API call`);
-          xProfileData.nationality = 'Unknown'; // Use placeholder instead of empty string
+        xProfileData.nationality = xData.accountBasedIn || 'Unknown';
+        if (xData.affiliate) {
+          xProfileData.affiliate = xData.affiliate;
+          console.log(`📍 [X API] Affiliate data:`, xData.affiliate);
         }
-
-        // Try to get last tweet (optional, don't fail if it errors)
-        try {
-          const lastTweet = await getXUserLastTweet(xUsername);
-          if (lastTweet) {
-            xProfileData.latestTweet = lastTweet;
-            console.log(`✅ [X-API] Found latest tweet for @${xUsername}`);
-          }
-        } catch (tweetError: any) {
-          console.log(`⚠️ [X-API] Could not fetch last tweet: ${tweetError.message}`);
-        }
-        
-        console.log(`📍 [X-API] Final xProfileData:`, JSON.stringify(xProfileData, null, 2));
-      } catch (error: any) {
-        console.error(`❌ [X-API] Failed to fetch X profile data for @${xUsername}:`, error.message);
-        console.error(`❌ [X-API] Error details:`, error);
-        // Set nationality to placeholder explicitly so the field appears in JSON
+      } else {
+        console.log(`📍 [X API] No data returned for @${xUsername} (timeout or error)`);
         xProfileData.nationality = 'Unknown';
-        // Continue without X data - don't fail the entire request
       }
     } else {
-      console.log(`📍 [X-API] No xUsername, skipping X profile data fetch`);
-      // Even if no xUsername, set nationality to placeholder so field appears in JSON
+      console.log(`📍 [X API] No xUsername provided, setting nationality to 'Unknown'`);
       xProfileData.nationality = 'Unknown';
     }
 
@@ -547,14 +756,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     profileData.nationality = xProfileData.nationality || 'Unknown';
     console.log(`📍 [PROFILE BUILD] Set nationality to: "${profileData.nationality}"`);
     
-    // Add latestTweet only if it exists
-    if (xProfileData.latestTweet) {
-      profileData.latestTweet = xProfileData.latestTweet;
+    // Add affiliate if available
+    if (xProfileData.affiliate) {
+      profileData.affiliate = xProfileData.affiliate;
+      console.log(`📍 [PROFILE BUILD] Set affiliate to: @${xProfileData.affiliate.username}`);
     }
     
     console.log(`📍 [PROFILE BUILD] profileData keys: ${Object.keys(profileData).join(', ')}`);
     console.log(`📍 [PROFILE BUILD] profileData.nationality exists: ${('nationality' in profileData)}`);
     console.log(`📍 [PROFILE BUILD] profileData.nationality value: "${profileData.nationality}"`);
+    console.log(`📍 [PROFILE BUILD] profileData.affiliate exists: ${('affiliate' in profileData)}`);
 
     const dashboardData = {
       profile: profileData,
@@ -572,20 +783,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         worstTrade,
       },
       pnlHistory,
-      positions: positions.map((pos: any) => ({
-        id: pos.id || `pos-${Math.random()}`,
-        marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
-        marketId: pos.marketId || pos.market?.id || "",
-        marketSlug: pos.marketSlug || pos.market?.slug || "",
-        eventSlug: pos.eventSlug || pos.market?.eventSlug || "",
-        outcome: pos.outcome || "YES",
-        size: parseFloat(pos.size || 0),
-        entryPrice: parseFloat(pos.avgPrice || pos.price || 0),
-        currentPrice: parseFloat(pos.curPrice || pos.currentPrice || pos.price || 0),
-        unrealizedPnL: parseFloat(pos.cashPnl || 0), // Use API's calculated PnL
-        status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
-        openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
-      })),
+      positions: positions.map((pos: any) => {
+        // Extract slug from various possible fields (matching server/routes.ts logic)
+        const slug = pos.slug || pos.market?.slug || pos.eventSlug || pos.market?.eventSlug || pos.market?.id || "";
+        // Condition ID for marketId
+        const conditionId = pos.conditionId || pos.market?.condition_id || pos.condition_id || pos.market?.conditionId || pos.marketId || pos.market?.id || "";
+        
+        return {
+          id: pos.id || pos.asset || `pos-${Math.random()}`,
+          marketName: (typeof pos.market === 'object' ? (pos.market?.question || pos.market?.title) : pos.market) || pos.title || "Unknown Market",
+          marketId: conditionId,
+          marketSlug: slug,
+          eventSlug: slug, // Use slug for both eventSlug and marketSlug (Polymarket URL structure)
+          outcome: pos.outcome || "YES",
+          size: parseFloat(pos.size || 0),
+          entryPrice: parseFloat(pos.avgPrice || pos.average_price || pos.price || 0),
+          currentPrice: parseFloat(pos.curPrice || pos.current_price || pos.price || 0),
+          unrealizedPnL: parseFloat(pos.cashPnl || pos.pnl || 0), // Use API's calculated PnL
+          status: parseFloat(pos.size || 0) > 0 ? "ACTIVE" : "CLOSED",
+          openedAt: pos.createdAt || pos.created_at || new Date().toISOString(),
+        };
+      }),
       recentTrades: tradesWithPnL.slice(0, 10).map((trade: any) => ({
         id: trade.id || `trade-${Math.random()}`,
         marketName: (typeof trade.market === 'object' ? (trade.market?.question || trade.market?.title) : trade.market) || trade.title || "Unknown Market",
@@ -596,17 +814,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: (trade.side === "BUY" || trade.side === "buy" || trade.type === "BUY") ? "BUY" : "SELL",
         profit: trade.profit !== undefined ? trade.profit : undefined, // Use calculated PnL
       })),
+      profitableTrades: (() => {
+        // Use closed positions API directly for accurate profitable trades
+        // This is the most accurate source with correct buy/sell amounts
+        console.log(`📊 [PROFITABLE TRADES] Total closed positions fetched: ${closedPositions.length}`);
+        const profitable = calculateProfitableTradesFromClosedPositions(closedPositions);
+        
+        console.log(`💰 Profitable trades found: ${profitable.length}`);
+        if (profitable.length > 0) {
+          console.log(`   Top 3 profitable trades:`, profitable.slice(0, 3).map((t: any) => ({
+            market: t.marketName.substring(0, 50),
+            profit: t.netProfit,
+            buyAmount: t.buyAmount,
+            sellAmount: t.sellAmount
+          })));
+        }
+        console.log(`📊 [PROFITABLE TRADES] Returning ${profitable.length} profitable trades to frontend`);
+        return profitable;
+      })(),
     };
 
     // Final verification before sending response
     console.log(`📍 [FINAL CHECK] About to send response...`);
     console.log(`📍 [FINAL CHECK] Profile nationality: "${dashboardData.profile.nationality}"`);
     console.log(`📍 [FINAL CHECK] Profile keys: ${Object.keys(dashboardData.profile).join(', ')}`);
+    console.log(`📍 [FINAL CHECK] Profitable trades count: ${dashboardData.profitableTrades?.length || 0}`);
     
     // Double-check nationality is present
     if (!dashboardData.profile.nationality) {
       console.error(`📍 [FINAL CHECK] ❌ ERROR: nationality is falsy! Forcing to 'Unknown'`);
       dashboardData.profile.nationality = 'Unknown';
+    }
+
+    // Check response size (Vercel has 4.5MB limit for serverless functions)
+    const responseString = JSON.stringify(dashboardData);
+    const responseSizeMB = Buffer.byteLength(responseString, 'utf8') / (1024 * 1024);
+    console.log(`📍 [FINAL CHECK] Response size: ${responseSizeMB.toFixed(2)} MB`);
+    
+    if (responseSizeMB > 4.0) {
+      console.warn(`⚠️ [FINAL CHECK] Response size is close to Vercel limit (4.5MB). Consider pagination.`);
     }
 
     res.status(200).json(dashboardData);

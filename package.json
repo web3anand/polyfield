@@ -17,7 +17,10 @@
     "sync:builders": "node scripts/trigger-sync.js builders",
     "sync:health": "node scripts/check-sync-health.js",
     "test:leaderboard": "node test-leaderboard-sync.js",
-    "test:vercel": "node test-vercel-sync.js"
+    "test:vercel": "node test-vercel-sync.js",
+    "test:profitable-trades": "node test-profitable-trades.js",
+    "test:profitable-trades-correct": "node test-profitable-trades-correct.cjs",
+    "test:x-api": "node test-x-api.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
