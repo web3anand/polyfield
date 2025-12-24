@@ -5,6 +5,22 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/oracle/stats",
+      "destination": "/api/oracle?endpoint=stats"
+    },
+    {
+      "source": "/api/oracle/markets",
+      "destination": "/api/oracle?endpoint=markets"
+    },
+    {
+      "source": "/api/leaderboard/pnl",
+      "destination": "/api/leaderboard/wallet-data?endpoint=pnl"
+    },
+    {
+      "source": "/api/leaderboard/wallet",
+      "destination": "/api/leaderboard/wallet-data?endpoint=wallet"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
