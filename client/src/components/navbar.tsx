@@ -18,13 +18,14 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: "01", label: "TRACKER", href: "/", isActive: false },
-  { id: "02", label: "ORACLE", href: "/oracle", isActive: false },
-  { 
-    id: "03", 
-    label: "LEADERBOARD", 
-    href: "/leaderboard/builders", 
-    isActive: false, 
+  { id: "01", label: "Home", href: "/", isActive: false },
+  { id: "02", label: "Tracker", href: "/dashboard", isActive: false },
+  { id: "03", label: "Oracle", href: "/oracle", isActive: false },
+  {
+    id: "04",
+    label: "Leaderboard",
+    href: "/leaderboard/builders",
+    isActive: false,
     hasDropdown: true,
     subItems: [
       { label: "Builders", href: "/leaderboard/builders" },
@@ -55,27 +56,27 @@ export function Navbar() {
 
   useEffect(() => {
     if (!openDropdown) return;
-    
+
     function handleClickOutside(event: MouseEvent) {
       if (isClickingDropdown.current) {
         isClickingDropdown.current = false;
         return;
       }
-      
+
       const target = event.target as HTMLElement;
-      
+
       let clickedInside = false;
       dropdownRefs.current.forEach((ref) => {
         if (ref && ref.contains(target)) {
           clickedInside = true;
         }
       });
-      
+
       if (!clickedInside) {
         setOpenDropdown(null);
       }
     }
-    
+
     document.addEventListener("click", handleClickOutside);
     return () => {
       document.removeEventListener("click", handleClickOutside);
@@ -93,7 +94,7 @@ export function Navbar() {
     if (!container) {
       container = document.createElement('div');
       container.id = 'navbar-root';
-      
+
       const rootElement = document.getElementById('root');
       if (rootElement) {
         document.body.insertBefore(container, rootElement);
@@ -104,7 +105,7 @@ export function Navbar() {
 
     setContainerReady(true);
 
-    return () => {};
+    return () => { };
   }, []);
 
   const handleItemClick = (itemId: string) => {
@@ -117,7 +118,7 @@ export function Navbar() {
   };
 
   const navbarContent = (
-    <nav 
+    <nav
       data-navbar="fixed"
       className="navbar-fixed w-full bg-black/95 backdrop-blur-md border-b border-gray-800/50 shadow-lg transition-responsive"
       ref={(el) => {
@@ -130,21 +131,24 @@ export function Navbar() {
         <div className="flex items-center justify-center h-fluid-navbar relative">
           {/* POLYFEILD BETA Brand - Fixed Left */}
           <div className="absolute left-2 sm:left-3 md:left-4 flex items-center gap-1 sm:gap-1.5 md:gap-2">
-            <h2 className="text-fluid-sm sm:text-fluid-base md:text-fluid-lg lg:text-fluid-xl tracking-tight">
-              <span className="poly-scramble text-green-400 drop-shadow-lg">POLY</span>
-              <span className="field-scramble text-gray-300">FIELD</span>
-            </h2>
-            <span className="text-fluid-xs font-bold px-1.5 sm:px-2 py-0.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 border border-green-500/40 rounded-md shadow-sm hidden xs:inline-block">
+            <div className="flex items-center gap-2">
+              <img src="/polyfield-logo.png" alt="PolyField Logo" className="w-8 h-8 md:w-10 md:h-10 object-contain" />
+              <h2 className="text-fluid-sm sm:text-fluid-base md:text-fluid-lg lg:text-fluid-xl tracking-tight font-bold">
+                <span className="text-white">POLY</span>
+                <span className="text-gray-400">FIELD</span>
+              </h2>
+            </div>
+            <span className="text-fluid-xs font-bold px-1.5 sm:px-2 py-0.5 bg-primary/20 text-primary border border-primary/40 rounded-md shadow-sm hidden xs:inline-block">
               BETA
             </span>
           </div>
-          
+
           {/* Desktop Navigation Items - Centered */}
           <div className="hidden md:flex items-center gap-fluid-sm lg:gap-fluid-md">
             {navItems.map((item) => (
-              <div 
-                key={item.id} 
-                className="relative" 
+              <div
+                key={item.id}
+                className="relative"
                 ref={(el) => {
                   if (el && item.hasDropdown) {
                     dropdownRefs.current.set(item.id, el);
@@ -153,44 +157,42 @@ export function Navbar() {
                   }
                 }}
               >
-                    {item.hasDropdown && item.subItems ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOpenDropdown(openDropdown === item.id ? null : item.id);
-                          }}
-                          className={`
+                {item.hasDropdown && item.subItems ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenDropdown(openDropdown === item.id ? null : item.id);
+                      }}
+                      className={`
                             relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
                             min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
-                            ${
-                              activeItem === item.id
-                                ? "text-white opacity-100"
-                                : "text-gray-400 hover:text-white"
-                            }
+                            ${activeItem === item.id
+                          ? "text-white opacity-100"
+                          : "text-gray-400 hover:text-white"
+                        }
                           `}
-                        >
+                    >
                       <span className="text-gray-500 text-fluid-xs">[{item.id}]</span>
                       <span className="text-gray-500 text-fluid-xs">//</span>
                       <span className="tracking-wide text-fluid-xs">{item.label}</span>
                       <ChevronDown className={`w-3 h-3 lg:w-3.5 lg:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
-                      
-                      <div 
+
+                      <div
                         className={`
                           absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                          ${
-                            activeItem === item.id 
-                              ? "w-full opacity-100" 
-                              : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
+                          ${activeItem === item.id
+                            ? "w-full opacity-100"
+                            : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
                           }
                         `}
                       />
                     </button>
-                    
+
                     {openDropdown === item.id && (
-                      <div 
+                      <div
                         className="absolute top-full left-0 mt-2 w-48 lg:w-56 bg-black/95 backdrop-blur-md border border-gray-800/50 shadow-2xl z-[100] overflow-hidden"
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => e.stopPropagation()}
@@ -214,23 +216,21 @@ export function Navbar() {
                               }}
                               className={`
                                 w-full text-left flex items-center gap-1.5 px-3 lg:px-4 py-2.5 lg:py-3 text-fluid-xs lg:text-fluid-sm font-mono transition-all duration-200 cursor-pointer relative group
-                                ${
-                                  location === subItem.href
-                                    ? "text-white"
-                                    : "text-gray-400 hover:text-white"
+                                ${location === subItem.href
+                                  ? "text-white"
+                                  : "text-gray-400 hover:text-white"
                                 }
                               `}
                             >
                               <span className="text-gray-500 text-fluid-xs">[{String(idx + 1).padStart(2, '0')}]</span>
                               <span className="text-gray-500 text-fluid-xs">//</span>
                               <span className="tracking-wide">{subItem.label.toUpperCase()}</span>
-                              <div 
+                              <div
                                 className={`
                                   absolute bottom-0 left-3 right-3 h-0.5 bg-white transition-all duration-300 ease-out
-                                  ${
-                                    location === subItem.href 
-                                      ? "opacity-100" 
-                                      : "opacity-0 group-hover:opacity-100"
+                                  ${location === subItem.href
+                                    ? "opacity-100"
+                                    : "opacity-0 group-hover:opacity-100"
                                   }
                                 `}
                               />
@@ -247,10 +247,9 @@ export function Navbar() {
                     className={`
                       relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
                       min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
-                      ${
-                        activeItem === item.id
-                          ? "text-white opacity-100"
-                          : "text-gray-400 hover:text-white"
+                      ${activeItem === item.id
+                        ? "text-white opacity-100"
+                        : "text-gray-400 hover:text-white"
                       }
                     `}
                   >
@@ -260,16 +259,15 @@ export function Navbar() {
                     {item.hasDropdown && (
                       <ChevronDown className="w-3 h-3 lg:w-3.5 lg:h-3.5" strokeWidth={2.5} />
                     )}
-                    
-                    <div 
+
+                    <div
                       className={`
                         absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                        ${
-                          clickedItem === item.id 
-                            ? "w-full opacity-100" 
-                            : activeItem === item.id 
-                              ? "w-full opacity-100" 
-                              : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
+                        ${clickedItem === item.id
+                          ? "w-full opacity-100"
+                          : activeItem === item.id
+                            ? "w-full opacity-100"
+                            : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
                         }
                       `}
                     />
@@ -278,7 +276,7 @@ export function Navbar() {
               </div>
             ))}
           </div>
-          
+
           {/* Mobile Menu Button - Fixed Right */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -291,7 +289,7 @@ export function Navbar() {
             )}
           </button>
         </div>
-        
+
         {/* Mobile Navigation Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-800 bg-black">
@@ -310,10 +308,9 @@ export function Navbar() {
                         className={`
                           w-full flex items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
                           transition-all duration-200
-                          ${
-                            activeItem === item.id
-                              ? "text-white bg-gray-800"
-                              : "text-gray-400 hover:text-white hover:bg-gray-900"
+                          ${activeItem === item.id
+                            ? "text-white bg-gray-800"
+                            : "text-gray-400 hover:text-white hover:bg-gray-900"
                           }
                         `}
                       >
@@ -324,7 +321,7 @@ export function Navbar() {
                         </div>
                         <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                       </button>
-                      
+
                       {openDropdown === item.id && (
                         <div className="ml-3 sm:ml-4 border-l border-gray-800">
                           {item.subItems.map((subItem, idx) => {
@@ -342,10 +339,9 @@ export function Navbar() {
                                 }}
                                 className={`
                                   w-full text-left block px-2.5 sm:px-3 py-1.5 sm:py-2 text-fluid-xs sm:text-fluid-sm font-mono cursor-pointer
-                                  ${
-                                    location === subItem.href
-                                      ? "text-white bg-gray-900"
-                                      : "text-gray-400 hover:text-white hover:bg-gray-900"
+                                  ${location === subItem.href
+                                    ? "text-white bg-gray-900"
+                                    : "text-gray-400 hover:text-white hover:bg-gray-900"
                                   }
                                 `}
                               >
@@ -363,10 +359,9 @@ export function Navbar() {
                       className={`
                         w-full flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
                         transition-all duration-200 group relative
-                        ${
-                          activeItem === item.id
-                            ? "text-white bg-gray-800"
-                            : "text-gray-400 hover:text-white hover:bg-gray-900"
+                        ${activeItem === item.id
+                          ? "text-white bg-gray-800"
+                          : "text-gray-400 hover:text-white hover:bg-gray-900"
                         }
                       `}
                     >
@@ -376,16 +371,15 @@ export function Navbar() {
                       {item.hasDropdown && (
                         <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-1" strokeWidth={2.5} />
                       )}
-                      
-                      <div 
+
+                      <div
                         className={`
                           absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                          ${
-                            clickedItem === item.id 
-                              ? "w-full opacity-100" 
-                              : activeItem === item.id 
-                                ? "w-full opacity-100" 
-                                : "w-0 opacity-0"
+                          ${clickedItem === item.id
+                            ? "w-full opacity-100"
+                            : activeItem === item.id
+                              ? "w-full opacity-100"
+                              : "w-0 opacity-0"
                           }
                         `}
                       />
