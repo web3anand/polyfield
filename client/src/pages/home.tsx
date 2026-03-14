@@ -1,134 +1,399 @@
+import { useState, useEffect, useRef, Suspense, Component, lazy, type ReactNode } from "react";
 import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Play, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, BarChart3, Shield, Zap, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
+
+const Hero3D = lazy(() => import("../components/Hero3D"));
+
+class Hero3DErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean }> {
+  state = { crashed: false };
+  static getDerivedStateFromError() { return { crashed: true }; }
+  render() {
+    if (this.state.crashed) return null;
+    return this.props.children;
+  }
+}
+
+function useCounter(target: number, duration = 2000) {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && !started) setStarted(true); },
+      { threshold: 0.5 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [started]);
+
+  useEffect(() => {
+    if (!started) return;
+    let startTime: number;
+    const step = (ts: number) => {
+      if (!startTime) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [started, target, duration]);
+
+  return { count, ref };
+}
+
+const TICKER_ITEMS = [
+  { label: "US Elections 2024", vol: "$209M", change: "+12.4%", up: true },
+  { label: "Bitcoin > $100K",   vol: "$89M",  change: "+5.2%",  up: true },
+  { label: "Fed Rate Cut",       vol: "$45M",  change: "-3.1%",  up: false },
+  { label: "Super Bowl Winner",  vol: "$34M",  change: "+8.7%",  up: true },
+  { label: "GPT-5 Release",      vol: "$28M",  change: "+22.3%", up: true },
+  { label: "Recession in 2025",  vol: "$67M",  change: "-1.8%",  up: false },
+  { label: "Trump Win",          vol: "$312M", change: "+4.1%",  up: true },
+  { label: "Oil > $100",         vol: "$19M",  change: "-7.2%",  up: false },
+];
+
+const FEATURES = [
+  { icon: BarChart3,  title: "Real-Time Analytics",  description: "Track every position, P&L swing, and market movement the instant it happens." },
+  { icon: Shield,     title: "Oracle Intelligence",   description: "AI-powered signals that surface winning positions before the crowd catches on." },
+  { icon: TrendingUp, title: "Portfolio Insights",    description: "Deep analytics on your win rate, volume, and performance trends over time." },
+  { icon: Zap,        title: "Instant Access",        description: "No wallet, no signup. Just open the app and see everything instantly." },
+];
+
+/* ─── reusable style tokens ───────────────────────────────────────────────── */
+const METALLIC_BORDER_CARD = {
+  background: "linear-gradient(#0a0a0a, #0a0a0a) padding-box, linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 40%, rgba(255,255,255,0.12) 100%) border-box",
+  border: "1px solid transparent",
+} as const;
+
+const PLAY_SVG = (
+  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3.18 23.76c.35.19.76.19 1.12 0l10.64-6.13-2.37-2.37L3.18 23.76zM.49 1.48C.18 1.84 0 2.38 0 3.07v17.86c0 .69.18 1.23.49 1.59l.08.08 10-10v-.24L.57 1.4l-.08.08zM20.49 10.13l-2.87-1.66-2.66 2.66 2.66 2.66 2.88-1.66c.82-.47.82-1.24-.01-1.7v.7zM4.3.24L14.94 6.37l-2.37 2.37L3.18.24C3.54.05 3.95.05 4.3.24z" />
+  </svg>
+);
 
 export default function Home() {
-    return (
-        <div className="min-h-screen bg-black text-white font-sans selection:bg-[#bef202] selection:text-black flex items-center justify-center p-4 lg:p-8 overflow-hidden">
+  const stat1 = useCounter(2400000);
+  const stat2 = useCounter(89);
+  const stat3 = useCounter(312);
 
-            {/* Background Grain Animation */}
-            <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-0 mix-blend-overlay">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-repeat opacity-50"></div>
-            </div>
+  return (
+    <div className="bg-[#080808] text-white overflow-x-hidden selection:bg-white selection:text-black" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
-            {/* Main Container - Visual styles removed, minimal layout only */}
-            <div className="w-full max-w-[1600px] relative min-h-[90vh] flex flex-col z-10 animate-in fade-in zoom-in-95 duration-1000">
+      {/* ── HERO ─────────────────────────────────────────────────────────── */}
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-20 text-center overflow-hidden">
 
-                <div className="flex-1 grid lg:grid-cols-2 gap-0 relative">
+        {/* ambient glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(201,169,110,0.07) 0%, transparent 70%)" }} />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 50% 100%, rgba(201,169,110,0.04) 0%, transparent 70%)" }} />
 
-                    {/* Left Column: Content */}
-                    <div className="p-12 lg:p-24 flex flex-col justify-center relative z-10">
+        {/* 3D coins */}
+        <Hero3DErrorBoundary>
+          <Suspense fallback={null}>
+            <Hero3D />
+          </Suspense>
+        </Hero3DErrorBoundary>
 
-                        {/* Animated Badge - 12px rounded */}
-                        <div className="mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-[12px] bg-white/[0.02] border border-white/[0.08] backdrop-blur-xl shadow-lg hover:bg-white/[0.05] transition-colors cursor-default">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#bef202] opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#bef202]"></span>
-                                </span>
-                                <span className="text-[10px] font-mono text-[#bef202] tracking-widest uppercase">SYSTEM_ONLINE // V2.0</span>
-                            </div>
-                        </div>
+        <div className="relative z-10 flex flex-col items-center max-w-3xl mx-auto">
 
-                        <h1 className="text-6xl md:text-7xl lg:text-8xl font-medium tracking-tighter leading-[0.9] mb-12 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-                            Master the <br />
-                            <span className="text-zinc-500 relative">
-                                Prediction
-                                <span className="absolute -bottom-2 left-0 w-full h-1 bg-[#bef202]/30 blur-sm"></span>
-                            </span> <br />
-                            Economy.
-                        </h1>
+          {/* pill badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-10"
+            style={{ ...METALLIC_BORDER_CARD, background: "linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.1) 100%) border-box" }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-mono text-zinc-400 tracking-widest uppercase">Now on Google Play</span>
+          </motion.div>
 
-                        <p className="text-xl text-zinc-400 mb-12 max-w-lg leading-relaxed font-light animate-in fade-in slide-in-from-bottom-8 duration-700 delay-400">
-                            Take control of your portfolio with the ultimate analytics dashboard.
-                            Real-time data that cuts through the noise.
-                        </p>
+          {/* headline */}
+          <motion.h1
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
+            className="text-white mb-5 leading-[1.04]"
+            style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)", fontWeight: 800, letterSpacing: "-0.035em" }}
+          >
+            Your Gateway to<br />
+            <span style={{ background: "linear-gradient(135deg, #e8d5a3 0%, #c9a96e 40%, #a87c3e 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              Smarter Markets.
+            </span>
+          </motion.h1>
 
-                        <div className="flex flex-col sm:flex-row items-center gap-6 mb-24 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-500">
-                            <Link href="/dashboard">
-                                <Button className="h-16 px-10 rounded-[12px] bg-[#bef202] text-black text-sm font-bold tracking-widest hover:bg-[#d4ff33] transition-all transform hover:-translate-y-1 shadow-[0_10px_30px_-10px_rgba(190,242,2,0.3)] active:scale-95 group border border-transparent hover:border-[#bef202]">
-                                    INITIALIZE
-                                    <ArrowUpRight className="w-4 h-4 ml-2 opacity-50 group-hover:opacity-100 transition-all" />
-                                </Button>
-                            </Link>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.3 }}
+            className="text-zinc-500 text-lg max-w-md mx-auto mb-10 leading-relaxed font-light"
+          >
+            Trade, win, and rise — with real-time prediction market analytics in your pocket.
+          </motion.p>
 
-                            <Link href="/oracle">
-                                <Button variant="ghost" className="h-16 px-10 rounded-[12px] text-zinc-300 text-sm font-medium hover:bg-white/[0.05] border border-white/10 gap-3 group backdrop-blur-md transition-all hover:border-white/20 hover:text-white">
-                                    <div className="w-8 h-8 rounded-[8px] bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-                                        <Play className="w-3 h-3 fill-current ml-0.5" />
-                                    </div>
-                                    WATCH_DEMO
-                                </Button>
-                            </Link>
-                        </div>
-                    </div>
+          {/* CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+            className="flex flex-col sm:flex-row items-center gap-3"
+          >
+            {/* primary — white */}
+            <a
+              href="https://play.google.com/store/apps/details?id=com.polyfield.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-2.5 h-14 px-8 rounded-2xl font-semibold text-sm text-black bg-white hover:bg-zinc-100 active:scale-[0.98] transition-all duration-150"
+              style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.3), 0 16px 48px rgba(0,0,0,0.5)" }}
+            >
+              {PLAY_SVG}
+              Get Started on Google Play
+              <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
+          </motion.div>
 
-                    {/* Right Column: Visuals */}
-                    <div className="relative overflow-hidden min-h-[500px] lg:min-h-auto flex items-center justify-center p-8 lg:p-0">
-                        {/* Glass Background Panel for Right Side */}
-                        <div className="absolute inset-4 lg:inset-12 bg-white/[0.01] rounded-[24px] border border-white/5 backdrop-blur-sm -z-10"></div>
-
-                        {/* Blob Effect - Toned down for 'cleaner' look */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] bg-[#bef202] aspect-square rounded-full blur-[120px] opacity-20 animate-pulse-slow pointer-events-none" />
-
-                        {/* Main Mockup Container */}
-                        <div className="relative z-10 transform translate-x-8 lg:translate-x-0 group perspective-[2000px]">
-
-                            {/* Reflection / Glow behind phones */}
-                            <div className="absolute inset-0 bg-gradient-to-tr from-[#bef202]/10 to-transparent blur-3xl -z-10"></div>
-
-                            {/* Back Phone (Ghost) - Showing Portfolio */}
-                            <div className="absolute top-[-30px] right-[-90px] w-[280px] md:w-[320px] h-[600px] bg-[#050505] rounded-[32px] border border-zinc-800 shadow-2xl opacity-40 grayscale-[20%] group-hover:grayscale-0 transform rotate-12 translate-z-[-50px] transition-all duration-700 group-hover:translate-x-8 group-hover:rotate-[15deg] overflow-hidden hidden lg:block ring-1 ring-white/10">
-                                <img
-                                    src="/screenshot-portfolio.png"
-                                    alt="Portfolio Interface"
-                                    className="w-full h-full object-cover opacity-60 mix-blend-screen"
-                                />
-                            </div>
-
-                            {/* Front Phone (Hero) - Showing Market */}
-                            <div className="relative w-[300px] md:w-[340px] h-[640px] bg-black rounded-[32px] border-[4px] border-zinc-900 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden transform -rotate-3 transition-transform duration-700 group-hover:rotate-0 group-hover:scale-[1.01] ring-1 ring-white/10">
-                                {/* Simple Notch Area */}
-                                <div className="absolute top-0 w-full h-6 bg-black z-30 flex justify-center">
-                                    <div className="w-16 h-4 bg-zinc-900 rounded-b-md"></div>
-                                </div>
-
-                                {/* Screen Content - Actual Screenshot */}
-                                <div className="w-full h-full bg-[#090909] overflow-hidden relative">
-                                    <img
-                                        src="/screenshot-market.png"
-                                        alt="Market Interface"
-                                        className="w-full h-full object-cover filter contrast-[1.1] brightness-[0.9]"
-                                    />
-
-                                    {/* Illiquid Glass Gloss Effect */}
-                                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/20 pointer-events-none z-20 mix-blend-overlay" />
-                                    <div className="absolute -left-[100%] top-[-100%] w-[200%] h-[200%] bg-gradient-to-br from-transparent via-white/[0.03] to-transparent rotate-45 pointer-events-none" />
-                                </div>
-                            </div>
-
-                            {/* Floating Element - Category Pill - 12px Rounded Glass */}
-                            <div className="absolute -bottom-8 -left-12 bg-black/60 border border-white/10 p-3 rounded-[12px] shadow-2xl backdrop-blur-xl animate-float-delayed hidden lg:flex items-center gap-4 z-30 ring-1 ring-white/5">
-                                <div className="w-12 h-12 rounded-[8px] overflow-hidden relative group-hover:scale-110 transition-transform duration-500 shadow-md">
-                                    <img src="/screenshot-category.png" className="w-full h-full object-cover" alt="Category" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                                </div>
-                                <div className="pr-4">
-                                    <div className="text-white font-mono text-xs uppercase tracking-wider mb-0.5">US Elections</div>
-                                    <div className="text-[#bef202] text-[10px] font-mono tracking-widest">$209M VOL</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Quick Footer Links (Outside the card) */}
-            <div className="fixed bottom-4 left-0 w-full text-center text-[10px] text-zinc-600 pointer-events-none flex justify-center gap-4 font-mono tracking-widest opacity-50">
-                <span>SCROLL TO EXPLORE</span>
-                <span>//</span>
-                <span>v2.0.4</span>
-            </div>
+          {/* trust pill */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="text-xs text-zinc-700 font-mono mt-6 tracking-wider"
+          >
+            FREE · NO WALLET · NO SIGN-UP
+          </motion.p>
         </div>
-    );
+      </section>
+
+      {/* ── STATS BAR ────────────────────────────────────────────────────── */}
+      <div ref={stat1.ref} className="py-12 px-6"
+        style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0.008) 100%)", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+      >
+        <div className="max-w-3xl mx-auto grid grid-cols-3 gap-3">
+          {[
+            { ref: stat1.ref as React.RefObject<HTMLDivElement>, val: `$${(stat1.count / 1_000_000).toFixed(1)}M+`, label: "Volume Tracked" },
+            { ref: stat2.ref as React.RefObject<HTMLDivElement>, val: `${stat2.count}%`,                             label: "Accuracy Rate" },
+            { ref: stat3.ref as React.RefObject<HTMLDivElement>, val: `$${stat3.count}M+`,                          label: "Active Markets" },
+          ].map((s, i) => (
+            <div key={i} ref={s.ref} className="text-center py-6 px-4 rounded-2xl" style={METALLIC_BORDER_CARD}>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums mb-1"
+                style={{ background: "linear-gradient(135deg, #fff 0%, #a0a0a0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                {s.val}
+              </div>
+              <div className="text-[10px] text-zinc-600 tracking-widest uppercase font-mono">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── TICKER ───────────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden py-3.5"
+        style={{ background: "#060606", borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+      >
+        <div className="absolute left-0 top-0 h-full w-20 z-10 pointer-events-none"
+          style={{ background: "linear-gradient(to right, #060606, transparent)" }} />
+        <div className="absolute right-0 top-0 h-full w-20 z-10 pointer-events-none"
+          style={{ background: "linear-gradient(to left, #060606, transparent)" }} />
+        <div className="flex whitespace-nowrap" style={{ animation: "marquee 42s linear infinite" }}>
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((m, i) => (
+            <div key={i} className="inline-flex items-center gap-4 px-8 shrink-0">
+              <span className="w-1 h-1 rounded-full bg-zinc-700 shrink-0" />
+              <span className="text-zinc-500 text-xs font-mono">{m.label}</span>
+              <span className="text-zinc-300 text-xs font-mono font-semibold">{m.vol}</span>
+              <span className="text-xs font-mono font-semibold" style={{ color: m.up ? "#86efac" : "#f87171" }}>{m.change}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── APP SHOWCASE ─────────────────────────────────────────────────── */}
+      <section className="py-32 relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 50% 50%, rgba(201,169,110,0.04) 0%, transparent 70%)" }} />
+
+        {/* section header */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="text-center px-6 mb-16"
+        >
+          <p className="text-[11px] font-mono tracking-widest uppercase mb-5" style={{ color: "#c9a96e" }}>Mobile App</p>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight mb-5">
+            Your entire trading edge,<br />always with you.
+          </h2>
+          <p className="text-zinc-500 leading-relaxed max-w-sm mx-auto mb-8">
+            Real-time P&L tracking, smart signals, and deep analytics — beautifully optimised for mobile.
+          </p>
+          <a
+            href="https://play.google.com/store/apps/details?id=com.polyfield.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 h-12 px-6 rounded-xl text-sm font-semibold text-zinc-200 hover:text-white active:scale-[0.98] transition-all duration-150"
+            style={{ ...METALLIC_BORDER_CARD, boxShadow: "0 8px 32px rgba(0,0,0,0.4)" }}
+          >
+            {PLAY_SVG}
+            Get it on Google Play
+          </a>
+        </motion.div>
+
+        {/* scrolling screenshot strip */}
+        <div className="relative">
+          <div className="absolute left-0 top-0 h-full w-32 z-10 pointer-events-none"
+            style={{ background: "linear-gradient(to right, #080808, transparent)" }} />
+          <div className="absolute right-0 top-0 h-full w-32 z-10 pointer-events-none"
+            style={{ background: "linear-gradient(to left, #080808, transparent)" }} />
+          <div className="flex gap-5 whitespace-nowrap" style={{ animation: "screensScroll 40s linear infinite" }}>
+            {[...Array(2)].map((_, setIdx) => (
+              [1, 2, 3, 4, 5, 6].map((n) => (
+                <div
+                  key={`${setIdx}-${n}`}
+                  className="inline-block shrink-0 rounded-3xl overflow-hidden relative"
+                  style={{
+                    width: 220,
+                    height: 440,
+                    boxShadow: "0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)",
+                    background: "linear-gradient(135deg, #111 0%, #0d0d0d 100%)",
+                  }}
+                >
+                  {/* shimmer skeleton shown while loading */}
+                  <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+                    <div style={{ animation: "shimmer 1.8s infinite", background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)", backgroundSize: "200% 100%", height: "100%" }} />
+                  </div>
+                  <img
+                    src={`/screenshots/screen-${n}.png`}
+                    alt={`App screenshot ${n}`}
+                    className="w-full h-full object-cover block relative"
+                    style={{ zIndex: 1 }}
+                    draggable={false}
+                    onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0"; }}
+                  />
+                </div>
+              ))
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FEATURES ─────────────────────────────────────────────────────── */}
+      <section className="py-32 px-6"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+      >
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+            className="mb-16"
+          >
+            <p className="text-[11px] font-mono tracking-widest uppercase mb-4" style={{ color: "#c9a96e" }}>Features</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight">
+              Everything you need,<br />nothing you don't.
+            </h2>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-3">
+            {FEATURES.map((f, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="p-6 rounded-2xl group cursor-default transition-all duration-300 hover:-translate-y-1"
+                style={{ ...METALLIC_BORDER_CARD, boxShadow: "0 2px 24px rgba(0,0,0,0.3)" }}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
+                  style={{ background: "linear-gradient(135deg, rgba(201,169,110,0.12), rgba(201,169,110,0.04))", border: "1px solid rgba(201,169,110,0.2)" }}
+                >
+                  <f.icon className="w-4 h-4" style={{ color: "#c9a96e" }} />
+                </div>
+                <h3 className="text-sm font-semibold text-white mb-2">{f.title}</h3>
+                <p className="text-zinc-600 text-xs leading-relaxed">{f.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ──────────────────────────────────────────────────────────── */}
+      <section className="py-32 px-6 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] pointer-events-none"
+          style={{ background: "radial-gradient(ellipse, rgba(201,169,110,0.06) 0%, transparent 70%)" }} />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="max-w-xl mx-auto text-center relative z-10"
+        >
+          <p className="text-[11px] font-mono tracking-widest uppercase mb-6" style={{ color: "#c9a96e" }}>Get Started Free</p>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight mb-5">
+            Start trading smarter<br />today.
+          </h2>
+          <p className="text-zinc-500 leading-relaxed mb-10 max-w-sm mx-auto">
+            Download the app — no wallet, no signup, instant access to every market.
+          </p>
+
+          <a
+            href="https://play.google.com/store/apps/details?id=com.polyfield.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center gap-2.5 h-14 px-8 rounded-2xl font-semibold text-sm text-black bg-white hover:bg-zinc-100 active:scale-[0.98] transition-all duration-150"
+            style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.3), 0 20px 60px rgba(0,0,0,0.6)" }}
+          >
+            {PLAY_SVG}
+            Download on Google Play
+            <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+          </a>
+
+          <p className="text-xs text-zinc-700 font-mono mt-6 tracking-wider">FREE · NO WALLET · NO LOGIN</p>
+        </motion.div>
+      </section>
+
+      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
+      <footer className="py-8 px-6" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <img src="/polyfield-logo.png" alt="PolyField" className="w-5 h-5 object-contain opacity-60" />
+            <span className="text-sm font-bold tracking-tight">
+              <span className="text-white">POLY</span><span className="text-zinc-700">FIELD</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-6">
+            <Link href="/privacy">
+              <span className="text-xs text-zinc-700 hover:text-zinc-400 transition-colors cursor-pointer font-mono">Privacy</span>
+            </Link>
+            <Link href="/terms">
+              <span className="text-xs text-zinc-700 hover:text-zinc-400 transition-colors cursor-pointer font-mono">Terms</span>
+            </Link>
+            <span className="text-xs text-zinc-800 font-mono">v2.0.4</span>
+          </div>
+        </div>
+      </footer>
+
+      <style>{`
+        @keyframes marquee {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        @keyframes screensScroll {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-50%); }
+        }
+        @keyframes shimmer {
+          from { background-position: 200% 0; }
+          to   { background-position: -200% 0; }
+        }
+      `}</style>
+    </div>
+  );
 }

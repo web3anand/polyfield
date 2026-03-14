@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@600;700&family=Roboto+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Rajdhani:wght@600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -164,9 +164,9 @@
   --chart-4: 147.1429 78.5047% 41.9608%;
   --chart-5: 341.4894 75.2000% 50.9804%;
 
-  --font-sans: 'Inter', sans-serif;
-  --font-serif: 'Inter', sans-serif;
-  --font-mono: Menlo, monospace;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', 'Fira Code', Menlo, monospace;
   --font-gaming: 'Rajdhani', sans-serif;
 
   --radius: 0.75rem;
@@ -361,7 +361,7 @@
   }
 
   .field-scramble {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     font-weight: 400;
     letter-spacing: 0.02em;
     font-style: italic;
@@ -609,7 +609,7 @@ body::-webkit-scrollbar {
     color: #6b7280 !important; /* Muted gray text */
     font-weight: 600 !important;
     text-transform: uppercase !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     font-size: 12px !important;
     letter-spacing: 0.5px !important;
     padding: 0 !important;
@@ -738,7 +738,7 @@ body::-webkit-scrollbar {
 
   /* LayerZero-inspired nav link styles */
   .nav-link-layerzero {
-    font-family: 'Roboto Mono', monospace;
+    font-family: 'DM Mono', 'SF Mono', monospace;
     font-weight: 500;
     font-size: clamp(0.65rem, 0.55rem + 0.5vw, 0.75rem);
     letter-spacing: 0.05em;
@@ -754,7 +754,7 @@ body::-webkit-scrollbar {
 
   /* LayerZero-inspired button */
   .btn-layerzero {
-    font-family: 'Roboto Mono', monospace;
+    font-family: 'DM Mono', 'SF Mono', monospace;
     font-weight: 700;
     font-size: clamp(0.625rem, 0.5rem + 0.5vw, 0.75rem);
     letter-spacing: 0.1em;

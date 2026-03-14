@@ -1,409 +1,235 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, AlignJustify, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 interface SubItem {
-  label: string;
-  href: string;
+    label: string;
+    href: string;
 }
 
 interface NavItem {
-  id: string;
-  label: string;
-  href: string;
-  isActive?: boolean;
-  hasDropdown?: boolean;
-  subItems?: SubItem[];
+    id: string;
+    label: string;
+    href: string;
+    hasDropdown?: boolean;
+    subItems?: SubItem[];
 }
 
 const navItems: NavItem[] = [
-  { id: "01", label: "Home", href: "/", isActive: false },
-  { id: "02", label: "Tracker", href: "/dashboard", isActive: false },
-  { id: "03", label: "Oracle", href: "/oracle", isActive: false },
-  {
-    id: "04",
-    label: "Leaderboard",
-    href: "/leaderboard/builders",
-    isActive: false,
-    hasDropdown: true,
-    subItems: [
-      { label: "Builders", href: "/leaderboard/builders" },
-      { label: "Users", href: "/leaderboard/users" }
-    ]
-  },
+    { id: "01", label: "Home", href: "/" },
 ];
 
 export function Navbar() {
-  const [location, setLocation] = useLocation();
-  const [clickedItem, setClickedItem] = useState<string | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [containerReady, setContainerReady] = useState(false);
-  const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const navRef = useRef<HTMLElement | null>(null);
-  const isClickingDropdown = useRef<boolean>(false);
+    const [location, setLocation] = useLocation();
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [containerReady, setContainerReady] = useState(false);
+    const dropdownRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+    const isClickingDropdown = useRef(false);
 
-  const activeItem = useMemo(() => {
-    const found = navItems.find(item => {
-      if (item.subItems) {
-        return item.subItems.some(sub => sub.href === location);
-      }
-      return item.href === location;
-    });
-    return found?.id || "01";
-  }, [location]);
+    const activeItem = useMemo(() => {
+        const found = navItems.find(item =>
+            item.subItems
+                ? item.subItems.some(s => s.href === location)
+                : item.href === location
+        );
+        return found?.id ?? "01";
+    }, [location]);
 
-  useEffect(() => {
-    if (!openDropdown) return;
-
-    function handleClickOutside(event: MouseEvent) {
-      if (isClickingDropdown.current) {
-        isClickingDropdown.current = false;
-        return;
-      }
-
-      const target = event.target as HTMLElement;
-
-      let clickedInside = false;
-      dropdownRefs.current.forEach((ref) => {
-        if (ref && ref.contains(target)) {
-          clickedInside = true;
+    useEffect(() => {
+        if (!openDropdown) return;
+        function handleOutside(e: MouseEvent) {
+            if (isClickingDropdown.current) { isClickingDropdown.current = false; return; }
+            let inside = false;
+            dropdownRefs.current.forEach(ref => { if (ref?.contains(e.target as Node)) inside = true; });
+            if (!inside) setOpenDropdown(null);
         }
-      });
+        document.addEventListener("click", handleOutside);
+        return () => document.removeEventListener("click", handleOutside);
+    }, [openDropdown]);
 
-      if (!clickedInside) {
-        setOpenDropdown(null);
-      }
-    }
+    useEffect(() => { setOpenDropdown(null); setMobileOpen(false); }, [location]);
 
-    document.addEventListener("click", handleClickOutside);
-    return () => {
-      document.removeEventListener("click", handleClickOutside);
-    };
-  }, [openDropdown]);
-
-  useEffect(() => {
-    setOpenDropdown(null);
-  }, [location]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    let container = document.getElementById('navbar-root');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'navbar-root';
-
-      const rootElement = document.getElementById('root');
-      if (rootElement) {
-        document.body.insertBefore(container, rootElement);
-      } else {
-        document.body.insertBefore(container, document.body.firstChild);
-      }
-    }
-
-    setContainerReady(true);
-
-    return () => { };
-  }, []);
-
-  const handleItemClick = (itemId: string) => {
-    setClickedItem(itemId);
-    setIsMobileMenuOpen(false);
-    setOpenDropdown(null);
-    setTimeout(() => {
-      setClickedItem(null);
-    }, 600);
-  };
-
-  const navbarContent = (
-    <nav
-      data-navbar="fixed"
-      className="navbar-fixed w-full bg-black/95 backdrop-blur-md border-b border-gray-800/50 shadow-lg transition-responsive"
-      ref={(el) => {
-        if (el) {
-          navRef.current = el;
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        let container = document.getElementById("navbar-root");
+        if (!container) {
+            container = document.createElement("div");
+            container.id = "navbar-root";
+            const root = document.getElementById("root");
+            document.body.insertBefore(container, root ?? document.body.firstChild);
         }
-      }}
-    >
-      <div className="w-full px-fluid-sm sm:px-4 md:px-6 lg:px-8">
-        <div className="flex items-center justify-center h-fluid-navbar relative">
-          {/* POLYFEILD BETA Brand - Fixed Left */}
-          <div className="absolute left-2 sm:left-3 md:left-4 flex items-center gap-1 sm:gap-1.5 md:gap-2">
-            <div className="flex items-center gap-2">
-              <img src="/polyfield-logo.png" alt="PolyField Logo" className="w-8 h-8 md:w-10 md:h-10 object-contain" />
-              <h2 className="text-fluid-sm sm:text-fluid-base md:text-fluid-lg lg:text-fluid-xl tracking-tight font-bold">
-                <span className="text-white">POLY</span>
-                <span className="text-gray-400">FIELD</span>
-              </h2>
-            </div>
-            <span className="text-fluid-xs font-bold px-1.5 sm:px-2 py-0.5 bg-primary/20 text-primary border border-primary/40 rounded-md shadow-sm hidden xs:inline-block">
-              BETA
-            </span>
-          </div>
+        setContainerReady(true);
+    }, []);
 
-          {/* Desktop Navigation Items - Centered */}
-          <div className="hidden md:flex items-center gap-fluid-sm lg:gap-fluid-md">
-            {navItems.map((item) => (
-              <div
-                key={item.id}
-                className="relative"
-                ref={(el) => {
-                  if (el && item.hasDropdown) {
-                    dropdownRefs.current.set(item.id, el);
-                  } else if (!el && item.hasDropdown) {
-                    dropdownRefs.current.delete(item.id);
-                  }
-                }}
-              >
-                {item.hasDropdown && item.subItems ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setOpenDropdown(openDropdown === item.id ? null : item.id);
-                      }}
-                      className={`
-                            relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
-                            min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
-                            ${activeItem === item.id
-                          ? "text-white opacity-100"
-                          : "text-gray-400 hover:text-white"
-                        }
-                          `}
-                    >
-                      <span className="text-gray-500 text-fluid-xs">[{item.id}]</span>
-                      <span className="text-gray-500 text-fluid-xs">//</span>
-                      <span className="tracking-wide text-fluid-xs">{item.label}</span>
-                      <ChevronDown className={`w-3 h-3 lg:w-3.5 lg:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
+    const navbarContent = (
+        <nav
+            data-navbar="fixed"
+            className="navbar-fixed w-full border-b border-white/[0.07] bg-[#0c0c0c]/95 backdrop-blur-md"
+        >
+            <div className="max-w-6xl mx-auto px-5 sm:px-6">
+                <div className="flex items-center justify-between h-14">
 
-                      <div
-                        className={`
-                          absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                          ${activeItem === item.id
-                            ? "w-full opacity-100"
-                            : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
-                          }
-                        `}
-                      />
-                    </button>
-
-                    {openDropdown === item.id && (
-                      <div
-                        className="absolute top-full left-0 mt-2 w-48 lg:w-56 bg-black/95 backdrop-blur-md border border-gray-800/50 shadow-2xl z-[100] overflow-hidden"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {item.subItems.map((subItem, idx) => {
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                isClickingDropdown.current = true;
-                              }}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                isClickingDropdown.current = false;
-                                setLocation(subItem.href);
-                                handleItemClick(item.id);
-                                setOpenDropdown(null);
-                              }}
-                              className={`
-                                w-full text-left flex items-center gap-1.5 px-3 lg:px-4 py-2.5 lg:py-3 text-fluid-xs lg:text-fluid-sm font-mono transition-all duration-200 cursor-pointer relative group
-                                ${location === subItem.href
-                                  ? "text-white"
-                                  : "text-gray-400 hover:text-white"
-                                }
-                              `}
-                            >
-                              <span className="text-gray-500 text-fluid-xs">[{String(idx + 1).padStart(2, '0')}]</span>
-                              <span className="text-gray-500 text-fluid-xs">//</span>
-                              <span className="tracking-wide">{subItem.label.toUpperCase()}</span>
-                              <div
-                                className={`
-                                  absolute bottom-0 left-3 right-3 h-0.5 bg-white transition-all duration-300 ease-out
-                                  ${location === subItem.href
-                                    ? "opacity-100"
-                                    : "opacity-0 group-hover:opacity-100"
-                                  }
-                                `}
-                              />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={() => handleItemClick(item.id)}
-                    className={`
-                      relative flex items-center justify-center gap-1.5 px-2 lg:px-3 py-1.5 lg:py-2 nav-link-layerzero
-                      min-w-[90px] lg:min-w-[110px] h-8 lg:h-10 transition-all duration-300 group
-                      ${activeItem === item.id
-                        ? "text-white opacity-100"
-                        : "text-gray-400 hover:text-white"
-                      }
-                    `}
-                  >
-                    <span className="text-gray-500 text-fluid-xs">[{item.id}]</span>
-                    <span className="text-gray-500 text-fluid-xs">//</span>
-                    <span className="tracking-wide text-fluid-xs">{item.label}</span>
-                    {item.hasDropdown && (
-                      <ChevronDown className="w-3 h-3 lg:w-3.5 lg:h-3.5" strokeWidth={2.5} />
-                    )}
-
-                    <div
-                      className={`
-                        absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                        ${clickedItem === item.id
-                          ? "w-full opacity-100"
-                          : activeItem === item.id
-                            ? "w-full opacity-100"
-                            : "w-0 opacity-0 group-hover:w-full group-hover:opacity-100"
-                        }
-                      `}
-                    />
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Mobile Menu Button - Fixed Right */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="absolute right-2 sm:right-3 md:right-4 md:hidden p-1.5 sm:p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all duration-200"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} />
-            ) : (
-              <AlignJustify className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2.5} />
-            )}
-          </button>
-        </div>
-
-        {/* Mobile Navigation Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-800 bg-black">
-            <div className="px-1 pt-1 pb-2 space-y-0.5">
-              {navItems.map((item) => (
-                <div key={item.id}>
-                  {item.hasDropdown && item.subItems ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setOpenDropdown(openDropdown === item.id ? null : item.id);
-                        }}
-                        className={`
-                          w-full flex items-center justify-between gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
-                          transition-all duration-200
-                          ${activeItem === item.id
-                            ? "text-white bg-gray-800"
-                            : "text-gray-400 hover:text-white hover:bg-gray-900"
-                          }
-                        `}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-500">[{item.id}]</span>
-                          <span className="text-gray-500">//</span>
-                          <span className="uppercase tracking-wide">{item.label}</span>
+                    {/* Brand */}
+                    <Link href="/">
+                        <div className="flex items-center gap-2 cursor-pointer">
+                            <img src="/polyfield-logo.png" alt="PolyField" className="w-6 h-6 object-contain opacity-80" />
+                            <span className="text-sm font-bold tracking-tight">
+                                <span className="text-white">POLY</span><span className="text-zinc-600">FIELD</span>
+                            </span>
                         </div>
-                        <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 ${openDropdown === item.id ? 'rotate-180' : ''}`} strokeWidth={2.5} />
-                      </button>
-
-                      {openDropdown === item.id && (
-                        <div className="ml-3 sm:ml-4 border-l border-gray-800">
-                          {item.subItems.map((subItem, idx) => {
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setLocation(subItem.href);
-                                  handleItemClick(item.id);
-                                  setIsMobileMenuOpen(false);
-                                  setOpenDropdown(null);
-                                }}
-                                className={`
-                                  w-full text-left block px-2.5 sm:px-3 py-1.5 sm:py-2 text-fluid-xs sm:text-fluid-sm font-mono cursor-pointer
-                                  ${location === subItem.href
-                                    ? "text-white bg-gray-900"
-                                    : "text-gray-400 hover:text-white hover:bg-gray-900"
-                                  }
-                                `}
-                              >
-                                {subItem.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      onClick={() => handleItemClick(item.id)}
-                      className={`
-                        w-full flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-2.5 text-fluid-xs sm:text-fluid-sm font-mono
-                        transition-all duration-200 group relative
-                        ${activeItem === item.id
-                          ? "text-white bg-gray-800"
-                          : "text-gray-400 hover:text-white hover:bg-gray-900"
-                        }
-                      `}
-                    >
-                      <span className="text-gray-500">[{item.id}]</span>
-                      <span className="text-gray-500">//</span>
-                      <span className="uppercase tracking-wide">{item.label}</span>
-                      {item.hasDropdown && (
-                        <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-1" strokeWidth={2.5} />
-                      )}
-
-                      <div
-                        className={`
-                          absolute bottom-0 left-0 h-0.5 bg-white transition-all duration-300 ease-out
-                          ${clickedItem === item.id
-                            ? "w-full opacity-100"
-                            : activeItem === item.id
-                              ? "w-full opacity-100"
-                              : "w-0 opacity-0"
-                          }
-                        `}
-                      />
                     </Link>
-                  )}
+
+                    {/* Desktop nav */}
+                    <div className="hidden md:flex items-center gap-1">
+                        {navItems.map(item => (
+                            <div
+                                key={item.id}
+                                className="relative"
+                                ref={el => {
+                                    if (el && item.hasDropdown) dropdownRefs.current.set(item.id, el);
+                                    else if (!el) dropdownRefs.current.delete(item.id);
+                                }}
+                            >
+                                {item.hasDropdown && item.subItems ? (
+                                    <>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setOpenDropdown(openDropdown === item.id ? null : item.id); }}
+                                            className={`flex items-center gap-1 px-3.5 py-2 rounded-md text-sm transition-colors duration-150 ${
+                                                activeItem === item.id
+                                                    ? "text-white"
+                                                    : "text-zinc-500 hover:text-zinc-200"
+                                            }`}
+                                        >
+                                            {item.label}
+                                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${openDropdown === item.id ? "rotate-180" : ""}`} />
+                                        </button>
+
+                                        {openDropdown === item.id && (
+                                            <div
+                                                className="absolute top-full left-0 mt-1.5 w-44 rounded-lg border border-white/[0.08] bg-[#111] overflow-hidden z-50"
+                                                onMouseDown={e => e.stopPropagation()}
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                {item.subItems.map((sub, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onMouseDown={() => { isClickingDropdown.current = true; }}
+                                                        onClick={() => { isClickingDropdown.current = false; setLocation(sub.href); setOpenDropdown(null); }}
+                                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors duration-150 ${
+                                                            location === sub.href
+                                                                ? "text-white bg-white/[0.04]"
+                                                                : "text-zinc-500 hover:text-white hover:bg-white/[0.03]"
+                                                        }`}
+                                                    >
+                                                        {sub.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <Link href={item.href}>
+                                        <span className={`flex items-center px-3.5 py-2 rounded-md text-sm transition-colors duration-150 cursor-pointer ${
+                                            activeItem === item.id
+                                                ? "text-white"
+                                                : "text-zinc-500 hover:text-zinc-200"
+                                        }`}>
+                                            {item.label}
+                                        </span>
+                                    </Link>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Right: Privacy/Terms links + mobile toggle */}
+                    <div className="flex items-center gap-2">
+                        <div className="hidden md:flex items-center gap-1">
+                            <Link href="/privacy">
+                                <span className={`px-3 py-2 rounded-md text-xs transition-colors duration-150 cursor-pointer ${location === "/privacy" ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}>
+                                    Privacy
+                                </span>
+                            </Link>
+                            <Link href="/terms">
+                                <span className={`px-3 py-2 rounded-md text-xs transition-colors duration-150 cursor-pointer ${location === "/terms" ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}>
+                                    Terms
+                                </span>
+                            </Link>
+                        </div>
+                        <button
+                            onClick={() => setMobileOpen(!mobileOpen)}
+                            className="md:hidden p-1.5 rounded-md text-zinc-500 hover:text-white transition-colors"
+                        >
+                            {mobileOpen ? <X className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} /> : <Menu style={{ width: 18, height: 18 }} />}
+                        </button>
+                    </div>
                 </div>
-              ))}
+
+                {/* Mobile menu */}
+                {mobileOpen && (
+                    <div className="md:hidden border-t border-white/[0.07] py-2">
+                        {navItems.map(item => (
+                            <div key={item.id}>
+                                {item.hasDropdown && item.subItems ? (
+                                    <>
+                                        <button
+                                            onClick={() => setOpenDropdown(openDropdown === item.id ? null : item.id)}
+                                            className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-zinc-500 hover:text-white transition-colors"
+                                        >
+                                            {item.label}
+                                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${openDropdown === item.id ? "rotate-180" : ""}`} />
+                                        </button>
+                                        {openDropdown === item.id && (
+                                            <div className="pl-4 border-l border-white/[0.07] ml-3 mb-1">
+                                                {item.subItems.map((sub, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => { setLocation(sub.href); setMobileOpen(false); }}
+                                                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                                                            location === sub.href ? "text-white" : "text-zinc-500 hover:text-white"
+                                                        }`}
+                                                    >
+                                                        {sub.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <Link href={item.href}>
+                                        <span className={`block px-3 py-2.5 text-sm transition-colors cursor-pointer ${
+                                            activeItem === item.id ? "text-white" : "text-zinc-500 hover:text-white"
+                                        }`}>
+                                            {item.label}
+                                        </span>
+                                    </Link>
+                                )}
+                            </div>
+                        ))}
+                        <div className="border-t border-white/[0.05] mt-1 pt-1 flex gap-1">
+                            <Link href="/privacy">
+                                <span className={`block px-3 py-2 text-xs transition-colors cursor-pointer ${location === "/privacy" ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}>
+                                    Privacy
+                                </span>
+                            </Link>
+                            <Link href="/terms">
+                                <span className={`block px-3 py-2 text-xs transition-colors cursor-pointer ${location === "/terms" ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}>
+                                    Terms
+                                </span>
+                            </Link>
+                        </div>
+                    </div>
+                )}
             </div>
-          </div>
-        )}
-      </div>
-    </nav>
-  );
+        </nav>
+    );
 
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  if (containerReady) {
-    const container = document.getElementById('navbar-root');
-    if (container) {
-      return createPortal(navbarContent, container);
+    if (typeof document === "undefined") return null;
+    if (containerReady) {
+        const container = document.getElementById("navbar-root");
+        if (container) return createPortal(navbarContent, container);
     }
-  }
-
-  return navbarContent;
+    return navbarContent;
 }

@@ -4,9 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Navbar } from "@/components/navbar";
-import Dashboard from "@/pages/dashboard";
-import OracleBot from "@/pages/oracle";
-import Leaderboard from "@/pages/leaderboard";
 import Home from "@/pages/home";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
@@ -16,12 +13,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/dashboard" component={Dashboard} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
-      <Route path="/oracle" component={OracleBot} />
-      <Route path="/leaderboard/builders" component={Leaderboard} />
-      <Route path="/leaderboard/users" component={Leaderboard} />
       <Route component={NotFound} />
     </Switch>
   );

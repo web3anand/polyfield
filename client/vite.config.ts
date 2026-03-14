@@ -31,7 +31,7 @@ export default defineConfig({
               }));
             }
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (_proxyReq, req, _res) => {
             console.log(`[Proxy] ${req.method} ${req.url} -> http://localhost:3000${req.url}`);
           });
         },
